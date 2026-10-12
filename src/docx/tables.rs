@@ -279,6 +279,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // Each side: the table's own, then its style's (estonian_community's
     // TableGrid zeroes them), then Word's default.
     let own_mar = tbl_pr.and_then(|pr| wml(pr, "tblCellMar"));
+    let has_style_or_cell_mar =
+        tbl_style.is_some() || ctx.styles.has_default_table_style || own_mar.is_some();
+    // Word's 5.4pt default comes with a table style: a table with neither a
+    // style nor its own tblCellMar gets 0.5pt side margins and so no visible
+    // outdent (Word probes on case200/case213 with cell borders: the border
+    // at the margin, the text 0.5pt inside it and a right-aligned line
+    // ending ~0.5pt short of the right border; case131's nested table text
+    // 1.0pt inside the parent's, its second column 0.58pt inside; an empty
+    // default table style brings the 5.4pt back).
+    let default_side = if has_style_or_cell_mar { 5.4 } else { 0.5 };
     let side = |i: usize, a: &str, b: &str, default: f32| {
         own_mar
             .and_then(|mar| margin_twips(mar, a, b))
@@ -287,9 +297,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     };
     let cell_margins = CellMargins {
         top: side(0, "top", "top", 0.0),
-        left: side(1, "left", "start", 5.4),
+        left: side(1, "left", "start", default_side),
         bottom: side(2, "bottom", "bottom", 0.0),
-        right: side(3, "right", "end", 5.4),
+        right: side(3, "right", "end", default_side),
     };
     let style_space_before = style_chain().find_map(|s| s.space_before);
     let style_space_after = style_chain().find_map(|s| s.space_after);
@@ -897,9 +907,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         rows,
         table_indent,
         table_indent_explicit,
-        has_style_or_cell_mar: tbl_style.is_some()
-            || ctx.styles.has_default_table_style
-            || own_mar.is_some(),
+        has_style_or_cell_mar,
         cell_margins,
         position: table_position,
         alignment,
@@ -1043,9 +1051,9 @@ mod border_conflict_tests {
     }
 
     #[test]
-    fn style_or_cell_mar_flag_follows_word_probes() {
+    fn default_side_margins_need_a_style_or_tbl_cell_mar() {
         use std::io::{Cursor, Write};
-        let flag = |styles: Option<&str>, tbl_pr: &str| {
+        let left = |styles: Option<&str>, tbl_pr: &str| {
             let xml = format!(
                 r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr>{tbl_pr}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcMar><w:right w:w="108"/></w:tcMar></w:tcPr><w:p/></w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
             );
@@ -1062,19 +1070,25 @@ mod border_conflict_tests {
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("expected table")
             };
-            table.has_style_or_cell_mar
+            (table.cell_margins.left, table.cell_margins.right)
         };
         let default_style = r#"<w:style w:type="table" w:default="1" w:styleId="TableNormal"/>"#;
         let named_style = r#"<w:style w:type="table" w:styleId="Plain"/>"#;
-        assert!(!flag(None, ""));
-        assert!(!flag(None, r#"<w:tblInd w:w="0" w:type="dxa"/>"#));
-        assert!(!flag(Some(named_style), ""));
-        assert!(flag(Some(named_style), r#"<w:tblStyle w:val="Plain"/>"#));
-        assert!(flag(Some(default_style), ""));
-        assert!(flag(
-            None,
-            r#"<w:tblCellMar><w:left w:w="108"/></w:tblCellMar>"#
-        ));
+        assert_eq!(left(None, ""), (0.5, 0.5));
+        assert_eq!(
+            left(None, r#"<w:tblInd w:w="0" w:type="dxa"/>"#),
+            (0.5, 0.5)
+        );
+        assert_eq!(left(Some(named_style), ""), (0.5, 0.5));
+        assert_eq!(
+            left(Some(named_style), r#"<w:tblStyle w:val="Plain"/>"#),
+            (5.4, 5.4)
+        );
+        assert_eq!(left(Some(default_style), ""), (5.4, 5.4));
+        assert_eq!(
+            left(None, r#"<w:tblCellMar><w:left w:w="108"/></w:tblCellMar>"#),
+            (5.4, 5.4)
+        );
     }
 
     fn border(style: BorderStyle, is_override: bool) -> CellBorder {

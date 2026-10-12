@@ -1665,10 +1665,11 @@ fn aligned_table_left(
         TableAlignment::Right => area_left + area_width - total_width,
         // Before Word 2013 layout, tblInd positions the first cell's text, so
         // the edge sits one cell margin further out, even for an explicit
-        // tblInd of 0 (chinese_costume). Word 2013+ (compat 15) does not
-        // outdent a table with a style or its own cell margins: the border
-        // sits at the margin and the text inside it.
-        TableAlignment::Left if compat_mode >= 15 && table.has_style_or_cell_mar => {
+        // tblInd of 0 (chinese_costume). Word 2013+ (compat 15) never outdents:
+        // the border sits at the margin and the text inside it. Nor does any
+        // layout outdent a table without a style or tblCellMar (case131's
+        // second column at the margin + 300pt + its 0.5pt cell margin).
+        TableAlignment::Left if compat_mode >= 15 || !table.has_style_or_cell_mar => {
             area_left + table.table_indent + word2013_border_shift(table)
         }
         TableAlignment::Left => area_left + table.table_indent - table.first_cell_left_margin(),
