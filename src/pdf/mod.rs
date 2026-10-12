@@ -2587,22 +2587,32 @@ fn render_paragraph_block(
             },
         )
     };
+    let prev_floating_table = block_idx
+        .checked_sub(1)
+        .and_then(|i| section_blocks.get(i))
+        .and_then(|b| match b {
+            Block::Table(t) => t.position.as_ref().map(|pos| (t, pos)),
+            _ => None,
+        });
     // A clearing break that opens the anchor paragraph of the floating table
     // above it sits beside that table's top; only what follows the break comes
     // below the table (indigenous_innovation's defined terms: one line, not two).
     if para.clears_floats
-        // A floating table that broke across pages leaves no zone; keep the
-        // one-line rule then. ponytail: assumes such a table left a side strip;
-        // carry its extent past the page break if a full-width one shows up.
-        && state.pb.float_zone.as_ref().is_none_or(|zone| {
-            (zone.obj_left - zone.left_from_text - col_x)
-                .max(col_x + col_w - zone.obj_right - zone.right_from_text)
-                >= MIN_EMPTY_STRIP
-        })
-        && block_idx
-            .checked_sub(1)
-            .and_then(|i| section_blocks.get(i))
-            .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()))
+        && let Some((table, pos)) = prev_floating_table
+        // A floating table that broke across pages, or one too wide to leave
+        // a strip beside it, registers no zone; ask the table itself then
+        // (case129's full-width table: both lines below it).
+        && match state.pb.float_zone.as_ref() {
+            Some(zone) => {
+                (zone.obj_left - zone.left_from_text - col_x)
+                    .max(col_x + col_w - zone.obj_right - zone.right_from_text)
+                    >= MIN_EMPTY_STRIP
+            }
+            None => {
+                let table_w: f32 = table.col_widths.iter().sum();
+                col_w - table_w - pos.left_from_text.min(pos.right_from_text) >= MIN_EMPTY_STRIP
+            }
+        }
         && lines.len() > 1
         && lines[0].ends_with_break
         && lines[0].chunks.is_empty()
