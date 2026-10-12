@@ -16,15 +16,12 @@ regressions. Still open where WordCraft leads:
 - ~~**Comic Sans MS Italic missing**~~ Done 2026-10-13: the Microsoft 365
   build is in `fonts/` and assets `eed459d`; greek_history J 49.1 -> 78.2,
   nothing else moved (door_air uses no Comic Sans).
-- **indonesian_school_admission (0.4-0.5pt low)**: the "Format 12"
-  paragraph-relative topAndBottom text box (Word probes 2026-10-13, removing
-  it levels us with Word). Three parts: Word measures the box's offset from
-  the paragraph top before its space-before (the box stays put for before
-  = 0, 10 or 200 twips; ours moves with it, and sits 0.83pt high even at 0);
-  when the anchor's own line would overlap the box Word moves that line below
-  it (before=200: Word +22.5pt, us +10pt); and we resume text 0.72pt further
-  below the box than Word. Reservation code: `pdf/mod.rs` `for tb in
-  &para.textboxes` (`v_offset + height + dist_bottom`).
+- ~~**indonesian_school_admission (0.4-0.5pt low)**~~ Done 2026-10-13: a
+  paragraph-relative drawing hangs from below the previous paragraph's space
+  after but above its own space before (`ParaAnchor`), an empty anchor's line
+  that would overlap a topAndBottom box moves below it, and drawings on the
+  line (inline canvases, inline text boxes: `on_line`) stay on the line.
+  indonesian J 54.5 -> 72.1, arizona +1.6, indigenous +0.9; nothing down.
 - **Nested floating tables in a cell** (case145/148): the cell's trailing
   empty paragraphs don't matter (Word and ours both ignore them), the second
   floating table does. Without the paragraph between the two tables Word

@@ -140,6 +140,9 @@ pub struct FloatingImage {
     /// Position among the paragraph's floating pictures and textboxes in XML
     /// order: their tags follow the anchors' order, not the drawing order.
     pub anchor_seq: u32,
+    /// Flattened from an inline canvas: its offset counts from the line top,
+    /// as for `Textbox::on_line`.
+    pub on_line: bool,
 }
 
 /// Covers all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).
@@ -418,8 +421,10 @@ pub struct Textbox {
     pub z_index: u32,
     /// See `FloatingImage::anchor_seq`.
     pub anchor_seq: u32,
-    /// Children flattened from an *inline* drawing canvas flow at the
-    /// paragraph's text-start, so their Column-relative x must include the
-    /// paragraph's left indent. Genuine anchored floats ignore the indent.
-    pub indent_relative: bool,
+    /// Sits on the line rather than hanging from a paragraph anchor: children
+    /// flattened from an *inline* drawing canvas, and inline text boxes. They
+    /// flow at the paragraph's text-start, so their Column-relative x includes
+    /// the paragraph's left indent, and their offsets count from the line top
+    /// below the space before. Genuine anchored floats do neither.
+    pub on_line: bool,
 }

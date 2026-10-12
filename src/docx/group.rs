@@ -126,7 +126,7 @@ struct BaseAnchor {
     z_index: u32,
     /// True for inline canvases — their flattened children flow at the
     /// paragraph text-start and so must pick up the paragraph's left indent.
-    indent_relative: bool,
+    on_line: bool,
 }
 
 /// Detect and flatten a canvas/group drawing. Returns None when the container
@@ -152,7 +152,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             v_rel,
             behind_doc,
             z_index,
-            indent_relative: false,
+            on_line: false,
         }
     } else {
         BaseAnchor {
@@ -162,7 +162,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             v_rel: VRelativeFrom::Paragraph,
             behind_doc: false,
             z_index: 0,
-            indent_relative: true,
+            on_line: true,
         }
     };
 
@@ -192,7 +192,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             height_pt: display_h,
             wrap_type: WrapType::TopAndBottom,
             no_text_wrap: true,
-            indent_relative: true,
+            on_line: true,
             ..Textbox::default()
         }));
     }
@@ -286,7 +286,7 @@ fn emit_wsp<R: Read + Seek>(
             v_relative_from: base.v_rel,
             behind_doc: base.behind_doc,
             z_index: base.z_index,
-            indent_relative: base.indent_relative,
+            on_line: base.on_line,
             ..Textbox::from(shape)
         }));
     }
@@ -311,7 +311,8 @@ fn emit_pic<R: Read + Seek>(
     };
     if let Some(img) = read_image_from_zip(embed_id, ctx.rels, ctx.zip, w, h) {
         // ponytail: pics flattened from an *inline* canvas don't pick up the
-        // paragraph's left indent (no indent_relative on FloatingImage yet).
+        // paragraph's left indent (FloatingImage::on_line only moves the
+        // vertical anchor).
         // Add it the way Textbox does if a fixture ever needs an indented
         // inline canvas with picture children.
         out.push(RunDrawingResult::Floating(FloatingImage {
@@ -330,6 +331,7 @@ fn emit_pic<R: Read + Seek>(
             dist_right: 0.0,
             z_index: base.z_index,
             anchor_seq: 0,
+            on_line: base.on_line,
         }));
     }
 }

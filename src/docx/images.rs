@@ -635,6 +635,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     dist_right: emu_attr(container, "distR"),
                     z_index,
                     anchor_seq: 0,
+                    on_line: false,
                 }));
             }
             // A wrapNone diagram floats at its anchor, the paragraph's text laid
@@ -669,6 +670,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 width_pt: display_w,
                 height_pt: display_h,
                 wrap_type: WrapType::TopAndBottom,
+                on_line: true,
                 ..Textbox::from(wsp)
             }));
         }
@@ -950,6 +952,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         // Word writes the DrawingML relativeHeight here, negated when behind.
         z_index: z_index.unsigned_abs().min(u32::MAX as u64) as u32,
         anchor_seq: 0,
+        on_line: false,
     })
 }
 

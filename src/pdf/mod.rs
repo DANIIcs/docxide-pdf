@@ -680,6 +680,39 @@ fn update_styleref_from_para(
 /// strips) stacks them below.
 const MIN_EMPTY_STRIP: f32 = 18.0;
 
+/// The part of a collapsed paragraph gap that is the paragraph's own space
+/// before, beyond the previous paragraph's space after.
+fn own_space_before(gap: f32, prev_space_after: f32) -> f32 {
+    (gap - prev_space_after).max(0.0)
+}
+
+/// Where a paragraph's drawings hang from. Paragraph-relative offsets count
+/// from below the previous paragraph's space after but above this one's own
+/// space before: Word keeps indonesian_school's "Format 12" box in place for
+/// before = 0, 10 and 200 twips, and case124's stamp below the section-break
+/// paragraph's 8pt. Drawings on the line (inline canvases, inline text boxes)
+/// count from the line top, below the space before.
+#[derive(Clone, Copy)]
+pub(super) struct ParaAnchor {
+    float: f32,
+    on_line: f32,
+}
+
+impl ParaAnchor {
+    /// `pending`: a floating table's one-shot override for its anchor
+    /// paragraph; `line_top`: the first line's top, below the space before.
+    fn new(pending: Option<f32>, line_top: f32, own_before: f32) -> Self {
+        Self {
+            float: pending.unwrap_or(line_top + own_before),
+            on_line: pending.unwrap_or(line_top),
+        }
+    }
+
+    pub(super) fn top(self, on_line: bool) -> f32 {
+        if on_line { self.on_line } else { self.float }
+    }
+}
+
 pub(super) struct FloatTableExtent {
     pub(super) left: f32,
     pub(super) right: f32,
@@ -1424,7 +1457,7 @@ impl PageBuilder {
     ) -> Option<f32> {
         (!self.all_contents.is_empty() && self.is_at_page_top(sp)).then(|| {
             if self.is_first_page_of_section {
-                (space_before - prev_space_after).max(0.0)
+                own_space_before(space_before, prev_space_after)
             } else {
                 0.0
             }
@@ -2138,6 +2171,14 @@ fn render_paragraph_block(
     };
 
     let mut inter_gap = f32::max(state.prev_space_after, effective_space_before);
+    // The anchor the wrap and reservation passes below see, before a page
+    // break or a page top's suppressed space before is known (peeked here,
+    // taken when the drawings render).
+    let pre_anchor = ParaAnchor::new(
+        state.pb.pending_float_anchor,
+        state.pb.slot_top - inter_gap,
+        own_space_before(inter_gap, state.prev_space_after),
+    );
 
     let (mut font_size, mut tallest_lhr, tallest_ar) =
         tallest_glyph_run_metrics(&para.runs, ctx.fonts);
@@ -2264,8 +2305,7 @@ fn render_paragraph_block(
         // The previous paragraph may have re-wrapped around this float and
         // grown; the float stays where that look-ahead anchored it
         // (peeked here, taken below).
-        let anchor_top = state.pb.pending_float_anchor.unwrap_or(state.pb.slot_top);
-        let fi_y_top = resolve_fi_y_top(fi, sp, anchor_top);
+        let fi_y_top = resolve_fi_y_top(fi, sp, pre_anchor.top(fi.on_line));
         state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
         // Re-narrow para_text_x / para_text_width using the
         // new float zone (same logic as the block above).
@@ -2374,7 +2414,7 @@ fn render_paragraph_block(
             .skip(1)
             .map(|fi| {
                 let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                let fi_y_top = resolve_fi_y_top(fi, sp, state.pb.slot_top);
+                let fi_y_top = resolve_fi_y_top(fi, sp, pre_anchor.top(fi.on_line));
                 FloatZone::for_float(fi, fi_x, fi_y_top)
             })
             .collect()
@@ -2567,7 +2607,7 @@ fn render_paragraph_block(
             .iter()
             .filter(|fi| fi.wrap_type.wraps_beside())
             .filter_map(|fi| {
-                let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
+                let fi_y_top = resolve_fi_y_top(fi, sp, pre_anchor.top(fi.on_line));
                 let fi_y_bottom = fi_y_top - fi.image.display_height;
                 // Only images vertically overlapping the first line band.
                 if fi_y_bottom > slot_top + 2.0 || fi_y_top < slot_top - 40.0 {
@@ -2826,7 +2866,7 @@ fn render_paragraph_block(
             // bottom, and Word probes with paragraph- and margin-relative
             // offsets, square and topAndBottom wrapping all do the same.
             let content_top = state.pb.slot_top - inter_gap;
-            let anchor = state.pb.pending_float_anchor.unwrap_or(state.pb.slot_top);
+            let anchor = pre_anchor.top(fi.on_line);
             let zone = FloatZone::for_float(
                 fi,
                 resolve_fi_x(fi, sp, col_x, col_w, text_width),
@@ -2860,8 +2900,25 @@ fn render_paragraph_block(
         if reserve {
             let tb_bottom = tb.v_offset_pt + tb.height_pt + tb.dist_bottom;
             match tb.v_relative_from {
-                VRelativeFrom::Paragraph => {
+                // The offset counts from above the paragraph's own space
+                // before, which already sits above the content. An empty
+                // anchor's own line that would overlap the box moves below it,
+                // keeping that space (indonesian_school's "Format 12" with
+                // before=200 twips: Word +22.5pt = 10 + box bottom 33.18 +
+                // line - 33.18).
+                // Drawings on the line count from it (isla_language's lesson
+                // canvas).
+                VRelativeFrom::Paragraph if tb.on_line => {
                     content_h = content_h.max(tb_bottom);
+                }
+                VRelativeFrom::Paragraph => {
+                    let before = own_space_before(inter_gap, state.prev_space_after);
+                    let line_overlaps = tb.v_offset_pt < before + content_h && tb_bottom > before;
+                    content_h = if text_empty && line_overlaps {
+                        tb_bottom + content_h
+                    } else {
+                        content_h.max(tb_bottom - before)
+                    };
                 }
                 _ => {
                     content_h += tb_bottom;
@@ -3388,11 +3445,18 @@ fn render_paragraph_block(
     // A floating table pushed onto a fresh page hands its anchor paragraph the
     // page-body top so paragraph-relative shapes anchor there (the flow cursor
     // stays below the table). One-shot: consumed by this, the next, paragraph.
-    let float_anchor_top = state
-        .pb
-        .pending_float_anchor
-        .take()
-        .unwrap_or(state.pb.slot_top);
+    let anchor = ParaAnchor::new(
+        state.pb.pending_float_anchor.take(),
+        state.pb.slot_top,
+        own_space_before(applied_inter_gap, state.prev_space_after),
+    );
+    let tb_col_x = |tb: &crate::model::Textbox| {
+        if tb.on_line {
+            col_x + para.indent_left
+        } else {
+            col_x
+        }
+    };
     // Hand the look-ahead float's anchor to the next paragraph (the one that
     // actually carries it) only after this paragraph has taken its own.
     state.pb.pending_float_anchor = lookahead.map(|(anchor_top, _)| anchor_top);
@@ -3434,24 +3498,19 @@ fn render_paragraph_block(
         col_x,
         col_w,
         text_width,
-        float_anchor_top,
+        anchor,
         &mut state.pb.content,
         &mut state.pb.tags,
         page,
     );
     for tb in sorted_by_z(para.textboxes.iter().filter(|t| t.behind_doc)) {
-        let tb_col_x = if tb.indent_relative {
-            col_x + para.indent_left
-        } else {
-            col_x
-        };
         render_single_textbox(
             tb,
             sp,
-            tb_col_x,
+            tb_col_x(tb),
             col_w,
             text_width,
-            float_anchor_top,
+            anchor.top(tb.on_line),
             &mut state.pb.content,
             &mut state.pb.gradient_specs,
             ctx,
@@ -3512,7 +3571,7 @@ fn render_paragraph_block(
         col_x,
         col_w,
         text_width,
-        float_anchor_top,
+        anchor,
         &mut state.pb.deferred_shapes,
         &mut state.pb.tags,
         page,
@@ -3530,7 +3589,7 @@ fn render_paragraph_block(
         .filter(|fi| wraps_in_column(fi, sp, col_x, col_w, text_width))
     {
         let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-        let fi_y_top = resolve_fi_y_top(fi, sp, float_anchor_top);
+        let fi_y_top = resolve_fi_y_top(fi, sp, anchor.top(fi.on_line));
         state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
     }
 
@@ -3542,19 +3601,14 @@ fn render_paragraph_block(
         // Render into a per-shape buffer; flush_page paints these above the
         // page's text layer sorted by relativeHeight (Word's z-order for
         // floating shapes spans paragraphs).
-        let tb_col_x = if tb.indent_relative {
-            col_x + para.indent_left
-        } else {
-            col_x
-        };
         let mut shape_content = tagging::artifact_content();
         render_single_textbox(
             tb,
             sp,
-            tb_col_x,
+            tb_col_x(tb),
             col_w,
             text_width,
-            float_anchor_top,
+            anchor.top(tb.on_line),
             &mut shape_content,
             &mut state.pb.gradient_specs,
             ctx,
