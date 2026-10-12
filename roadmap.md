@@ -13,15 +13,33 @@ regressions. Still open where WordCraft leads:
 
 - **Office Math layout** (pendulum_mechanics, J 18 vs 36): we linearize OMML
   into text runs; fractions, radicals and scripts change line heights.
-- **Comic Sans MS Italic missing** (greek_history, J 49 vs 65): the online
-  reference uses the real italic; `fonts/` lacks `comici.ttf`, so we shear
-  87/256 (the local-export rule from `f47b2afb`). Adding the face would also
-  change door_air, a local reference.
-- **indonesian_school_admission (0.4-0.5pt low)** from just below the title
-  through the table; cause not found.
-- **Nested floating table rows** (case145/148, 0.3-0.6pt per row).
+- ~~**Comic Sans MS Italic missing**~~ Done 2026-10-13: the Microsoft 365
+  build is in `fonts/` and assets `eed459d`; greek_history J 49.1 -> 78.2,
+  nothing else moved (door_air uses no Comic Sans).
+- **indonesian_school_admission (0.4-0.5pt low)**: the "Format 12"
+  paragraph-relative topAndBottom text box (Word probes 2026-10-13, removing
+  it levels us with Word). Three parts: Word measures the box's offset from
+  the paragraph top before its space-before (the box stays put for before
+  = 0, 10 or 200 twips; ours moves with it, and sits 0.83pt high even at 0);
+  when the anchor's own line would overlap the box Word moves that line below
+  it (before=200: Word +22.5pt, us +10pt); and we resume text 0.72pt further
+  below the box than Word. Reservation code: `pdf/mod.rs` `for tb in
+  &para.textboxes` (`v_offset + height + dist_bottom`).
+- **Nested floating tables in a cell** (case145/148): the cell's trailing
+  empty paragraphs don't matter (Word and ours both ignore them), the second
+  floating table does. Without the paragraph between the two tables Word
+  stacks the second below the first (`tblOverlap="never"`, cell 13.75pt
+  taller) and we let them overlap (20.75pt shorter). Cell bottom borders
+  start 0.7pt left of the text in Word (tblCellMar left=0) and at the text
+  in ours.
 - **Floating table text beside it** (case113/114): "Body marker" 1.3pt left
-  of Word's.
+  of Word's. A floating table's offset does place its first cell's text even
+  without a style (Word: text 72.02); only inline unstyled tables skip the
+  outdent.
+- **132 references are desktop Word 2024 exports** (case83–case219, from
+  the external PRs: Creator "Microsoft® Word 2024", not "Microsoft Word").
+  case145's fresh online export differs by 0.1-0.2pt. Re-export them with
+  `tools/word_export.py` (online) before trusting sub-point work on them.
 
 ## Floating table positioning
 
