@@ -891,6 +891,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         rows,
         table_indent,
         table_indent_explicit,
+        has_style_or_cell_mar: tbl_style.is_some()
+            || ctx.styles.has_default_table_style
+            || own_mar.is_some(),
         cell_margins,
         position: table_position,
         alignment,
@@ -1031,6 +1034,41 @@ mod border_conflict_tests {
         assert_eq!(margins(0, 1), (1.0, 0.0, 3.0, 1.6));
         assert_eq!(margins(1, 0), (1.0, 5.0, 2.0, 6.0));
         assert!(table.rows[1].cells[0].cell_margins.is_none());
+    }
+
+    #[test]
+    fn style_or_cell_mar_flag_follows_word_probes() {
+        use std::io::{Cursor, Write};
+        let flag = |styles: Option<&str>, tbl_pr: &str| {
+            let xml = format!(
+                r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr>{tbl_pr}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcMar><w:right w:w="108"/></w:tcMar></w:tcPr><w:p/></w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            let opts = zip::write::SimpleFileOptions::default();
+            zip.start_file("word/document.xml", opts).unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+            if let Some(s) = styles {
+                zip.start_file("word/styles.xml", opts).unwrap();
+                zip.write_all(format!(r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{s}</w:styles>"#).as_bytes()).unwrap();
+            }
+            let bytes = zip.finish().unwrap().into_inner();
+            let doc = crate::docx::parse_bytes(&bytes).unwrap();
+            let Block::Table(table) = &doc.sections[0].blocks[0] else {
+                panic!("expected table")
+            };
+            table.has_style_or_cell_mar
+        };
+        let default_style = r#"<w:style w:type="table" w:default="1" w:styleId="TableNormal"/>"#;
+        let named_style = r#"<w:style w:type="table" w:styleId="Plain"/>"#;
+        assert!(!flag(None, ""));
+        assert!(!flag(None, r#"<w:tblInd w:w="0" w:type="dxa"/>"#));
+        assert!(!flag(Some(named_style), ""));
+        assert!(flag(Some(named_style), r#"<w:tblStyle w:val="Plain"/>"#));
+        assert!(flag(Some(default_style), ""));
+        assert!(flag(
+            None,
+            r#"<w:tblCellMar><w:left w:w="108"/></w:tblCellMar>"#
+        ));
     }
 
     fn border(style: BorderStyle, is_override: bool) -> CellBorder {

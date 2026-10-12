@@ -133,6 +133,13 @@ pub struct Table {
     pub rows: Vec<TableRow>,
     pub table_indent: f32,
     pub table_indent_explicit: bool,
+    /// The table has a table style (its own `w:tblStyle` or the document's
+    /// default table style) or its own `w:tblCellMar`. Word 2013 layout puts
+    /// the border at the indent only for such tables; without either, a
+    /// compat 15 table still outdents by its cell margin (probed: case213
+    /// with an empty default style, or a tblCellMar, moves its text 5.4pt
+    /// right; a tblInd, a cell tcMar or an unused named style does not).
+    pub has_style_or_cell_mar: bool,
     pub cell_margins: CellMargins,
     pub position: Option<TablePosition>,
     pub alignment: TableAlignment,

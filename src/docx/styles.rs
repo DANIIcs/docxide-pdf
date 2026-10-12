@@ -393,6 +393,8 @@ pub(super) struct StylesInfo {
     pub(super) paragraph_styles: HashMap<String, ParagraphStyle>,
     pub(super) character_styles: HashMap<String, RunProps>,
     pub(super) table_styles: HashMap<String, TableStyleDef>,
+    /// A `w:type="table"` style marked `w:default="1"` exists.
+    pub(super) has_default_table_style: bool,
     /// Maps style ID → display name (for STYLEREF resolution)
     pub(super) style_id_to_name: HashMap<String, String>,
     /// The styleId of the default paragraph style (w:default="1" w:type="paragraph").
@@ -835,6 +837,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             paragraph_styles,
             character_styles,
             table_styles: HashMap::new(),
+            has_default_table_style: false,
             style_id_to_name,
             default_paragraph_style_id,
         };
@@ -914,6 +917,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
     }
 
     let mut table_styles = HashMap::new();
+    let mut has_default_table_style = false;
 
     for style_node in root.children() {
         if !style_node.has_tag_name((WML_NS, "style")) {
@@ -1092,6 +1096,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 }
             }
             Some("table") => {
+                has_default_table_style |= style_node
+                    .attribute((WML_NS, "default"))
+                    .is_some_and(super::parse_on_off);
                 let base_borders = wml(style_node, "tblPr")
                     .and_then(|pr| wml(pr, "tblBorders"))
                     .map(parse_table_borders_def);
@@ -1197,6 +1204,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
         paragraph_styles,
         character_styles,
         table_styles,
+        has_default_table_style,
         style_id_to_name,
         default_paragraph_style_id,
     }
