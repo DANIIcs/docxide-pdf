@@ -1,5 +1,28 @@
 # Roadmap
 
+## WordCraft head-to-head round (2026-10-13)
+
+Fresh comparison with WordCraft (storytold/wordcraft, own DOCX parser and
+layout, harfrust shaping, krilla PDF): ours J 68.3 vs 49.7 over 391 fixtures.
+Fixed from the cases where it led, each probed in Word: list labels in the
+paragraph mark's format (`40d7c45c`), endnotes.xml's separator paragraph
+(`4de27fe3`), clearing paragraph after a full-width floating table
+(`2b0f4832`), 0.5pt margins for tables without a style or tblCellMar
+(`4c47ec52`, replaces `01eae84e`). Suite mean J 68.25 → 71.95, no real
+regressions. Still open where WordCraft leads:
+
+- **Office Math layout** (pendulum_mechanics, J 18 vs 36): we linearize OMML
+  into text runs; fractions, radicals and scripts change line heights.
+- **Comic Sans MS Italic missing** (greek_history, J 49 vs 65): the online
+  reference uses the real italic; `fonts/` lacks `comici.ttf`, so we shear
+  87/256 (the local-export rule from `f47b2afb`). Adding the face would also
+  change door_air, a local reference.
+- **indonesian_school_admission (0.4-0.5pt low)** from just below the title
+  through the table; cause not found.
+- **Nested floating table rows** (case145/148, 0.3-0.6pt per row).
+- **Floating table text beside it** (case113/114): "Body marker" 1.3pt left
+  of Word's.
+
 ## Floating table positioning
 
 - Do not reapply non-negative text-anchor offsets after a non-overlapping table has cleared a preceding float. Preserve topFromText; offsets after a separating paragraph remain (cases162–169).
@@ -472,22 +495,23 @@ and `w:suff` (`a3681d62`). Still open; main hid each of these:
 - **covid_insomnia p5 right column (J −0.3).** The reference list sits one
   line low ("[10]" at 146.3pt, Word 135.3pt). #21 now wraps "[10] Kaplan…"
   exactly as Word does, which the offset turns into a score dip.
-- **Page-split floating tables lose their wrap zone.** `b8ae47e5` keeps the
-  one-line clearing rule when no zone survives. A full-width table that
-  splits across pages would be treated as having a side strip; carry the
-  table's horizontal extent past the page break if that case shows up.
+- ~~**Page-split floating tables lose their wrap zone.**~~ Done `2b0f4832`:
+  without a zone the one-line clearing rule asks the table's own width
+  whether a side strip is possible (case129's full-width table registered no
+  zone either and lost the break's line).
 - **Two thresholds for one rule.** `MIN_EMPTY_STRIP` (18.0pt, `pdf/mod.rs`,
   bracketed only between 0 and ~42pt) and PR #31's `MIN_NESTED_FLOAT_STRIP`
   (18.75pt, `pdf/table_layout.rs`, measured between 18.70 and 18.75pt) both
   decide whether an empty line fits beside a float. Probe the body case in
   Word and share one constant.
-- **Nested table origin (+4.9pt).** In the PR #43/#45 fixtures
-  (case204–205, case210–211) every nested cell's
-  text sits 4.9pt right of Word's while the column boundaries match, so the
-  nested table's left edge (cell margin outdent) is off.
+- ~~**Nested table origin (+4.9pt).**~~ Done `4c47ec52`: a table with no
+  table style and no tblCellMar has 0.5pt side margins and is never
+  outdented (Word probes); case204/205/210/211 text now within 0.05pt.
 - **case111 cell too narrow.** "…ора по" overflows its cell in our layout
   but fits in Word's; since PR #40 clips cell text at the cell edges the
   overflow shows as a cut-off word instead of overprinting the border.
+  Probably the same 5.4pt-margin error: `4c47ec52` took case111 J 44.3 →
+  69.2; re-check the word.
 - **PR #44 only before a continuous section.** The section-break line kept
   after a table is measured only when the next section is continuous (the
   fixtures' case). Before a new page it spilled onto a blank page
