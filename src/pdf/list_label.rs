@@ -2,26 +2,21 @@ use std::collections::HashMap;
 
 use pdf_writer::{Content, Name, Str};
 
-use crate::fonts::{FontEntry, font_key};
-use crate::model::{Alignment, LabelSuffix, Paragraph, Run};
+use crate::fonts::{FontEntry, font_key, font_key_for};
+use crate::model::{Alignment, LabelSuffix, Paragraph};
 
 use super::color::fill_rgb;
 
 pub(super) fn label_font_key(para: &Paragraph) -> Option<String> {
-    if let Some(ref bf) = para.list_label_font {
-        let mut k = bf.clone();
-        if para.list_label_bold {
-            k.push_str("/B");
+    // Parsed labels carry the paragraph mark's font; labels built without one
+    // (altChunk HTML lists) take the first run's.
+    Some(match &para.list_label_font {
+        Some(f) => font_key_for(f, para.list_label_bold, para.list_label_italic),
+        None => {
+            let run = para.runs.first()?;
+            font_key_for(&run.font_name, para.list_label_bold || run.bold, run.italic)
         }
-        Some(k)
-    } else {
-        let run = para.runs.first()?;
-        let key_run = Run {
-            bold: para.list_label_bold || run.bold,
-            ..run.clone()
-        };
-        Some(font_key(&key_run))
-    }
+    })
 }
 
 /// Symbol-font PUA bullet codepoints map to Unicode equivalents that any
@@ -110,9 +105,7 @@ pub(super) fn render_list_label(
         return;
     }
     let (label_font_name, label_bytes) = label_for_paragraph(para, fonts);
-    let label_color = para
-        .list_label_color
-        .or_else(|| para.runs.first().and_then(|r| r.color));
+    let label_color = para.list_label_color;
     if let Some(c) = label_color {
         fill_rgb(content, c);
     }

@@ -13,6 +13,79 @@ use super::{
     parse_paragraph_spacing, wml, wml_attr, wml_bool,
 };
 
+/// The paragraph mark's run formatting. The mark inherits like any run: its
+/// own rPr, then its rStyle, then the paragraph style, then docDefaults.
+pub(super) struct MarkFormat {
+    pub(super) font: String,
+    pub(super) size: f32,
+    pub(super) bold: bool,
+    pub(super) italic: bool,
+    pub(super) color: Option<[u8; 3]>,
+}
+
+pub(super) fn mark_format<R: std::io::Read + std::io::Seek>(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+    ctx: &ParseContext<'_, R>,
+) -> MarkFormat {
+    let rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
+    let mark_style = rpr
+        .and_then(|rpr| wml_attr(rpr, "rStyle"))
+        .and_then(|id| ctx.styles.character_styles.get(id));
+    let toggle = |name: &str, from_char: Option<bool>, from_para: Option<bool>| {
+        rpr.and_then(|rpr| wml_bool(rpr, name))
+            .or(from_char)
+            .or(from_para)
+            .unwrap_or(false)
+    };
+    MarkFormat {
+        font: rpr
+            .and_then(|rpr| wml(rpr, "rFonts"))
+            .and_then(|rf| resolve_font_from_node_opt(rf, ctx.theme))
+            .or_else(|| mark_style.and_then(|s| s.font_name.clone()))
+            .or_else(|| para_style.and_then(|s| s.font_name.clone()))
+            .unwrap_or_else(|| ctx.styles.defaults.font_name.clone()),
+        size: rpr
+            .and_then(parse_font_size)
+            .or_else(|| mark_style.and_then(|s| s.font_size))
+            .or_else(|| para_style.and_then(|s| s.font_size))
+            .unwrap_or(ctx.styles.defaults.font_size),
+        bold: toggle(
+            "b",
+            mark_style.and_then(|s| s.bold),
+            para_style.and_then(|s| s.bold),
+        ),
+        italic: toggle(
+            "i",
+            mark_style.and_then(|s| s.italic),
+            para_style.and_then(|s| s.italic),
+        ),
+        color: rpr
+            .and_then(|rpr| wml_attr(rpr, "color"))
+            .and_then(super::parse_text_color)
+            .or_else(|| mark_style.and_then(|s| s.color))
+            .or_else(|| para_style.and_then(|s| s.color)),
+    }
+}
+
+/// Word draws a list label in the paragraph mark's format under the numbering
+/// level's own rPr; the text runs never count. Probed on k4's "5." (mark
+/// without rPr, Arial 10pt text): the label is Calibri 11pt from docDefaults;
+/// a Courier New 14pt mark draws a Courier New 14pt label; mark b, i and
+/// color reach the label; a level rFonts beats the mark's font; a bold italic
+/// blue first run changes nothing. A level's b="0" and color="auto" undo the
+/// mark's (renewable_dispatch's ListSubhead1: bold style, regular black "4.").
+pub(super) fn label_in_mark_format(label: &mut ListLabelInfo, mark: &MarkFormat) {
+    if label.label.is_empty() {
+        return;
+    }
+    label.font.get_or_insert_with(|| mark.font.clone());
+    label.font_size = label.font_size.or(Some(mark.size));
+    label.bold = Some(label.bold.unwrap_or(mark.bold));
+    label.italic = Some(label.italic.unwrap_or(mark.italic));
+    label.color = Some(label.color.unwrap_or(mark.color));
+}
+
 /// Options controlling which paragraph features to resolve.
 #[derive(Default)]
 pub(super) struct ParagraphOptions {
@@ -49,23 +122,9 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let para_style = ctx.styles.paragraph_styles.get(para_style_id);
 
-    let mark_style = ppr_rpr
-        .and_then(|rpr| wml_attr(rpr, "rStyle"))
-        .and_then(|id| ctx.styles.character_styles.get(id));
-
-    // The mark inherits like any run: its own rPr, then the paragraph style,
-    // then docDefaults.
-    let paragraph_mark_font_size = ppr_rpr
-        .and_then(parse_font_size)
-        .or_else(|| mark_style.and_then(|s| s.font_size))
-        .or_else(|| para_style.and_then(|s| s.font_size))
-        .or(Some(ctx.styles.defaults.font_size));
-    let paragraph_mark_font_name = ppr_rpr
-        .and_then(|rpr| wml(rpr, "rFonts"))
-        .and_then(|rf| resolve_font_from_node_opt(rf, ctx.theme))
-        .or_else(|| mark_style.and_then(|s| s.font_name.clone()))
-        .or_else(|| para_style.and_then(|s| s.font_name.clone()))
-        .or_else(|| Some(ctx.styles.defaults.font_name.clone()));
+    let mark = mark_format(ppr, para_style, ctx);
+    let paragraph_mark_font_size = Some(mark.size);
+    let paragraph_mark_font_name = Some(mark.font.clone());
     let paragraph_mark_position = paragraph_mark_position(ppr_rpr, para_style);
 
     // A paragraph-level pBdr element overrides the style borders even when
@@ -129,7 +188,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
     let style_num = opts.style_num_id.as_deref();
     let style_ilvl = opts.style_num_ilvl;
-    let numbering = parse_list_info(
+    let mut numbering = parse_list_info(
         num_pr,
         style_num,
         style_ilvl,
@@ -138,6 +197,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         ctx.numbering,
         lists,
     );
+    label_in_mark_format(&mut numbering, &mark);
     let (indent_left, indent_right, indent_hanging, indent_first_line) =
         resolve_indents(ppr, para_style, &numbering, &ctx.styles.defaults);
     let ListLabelInfo {
@@ -148,6 +208,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         font: list_label_font,
         font_size: list_label_font_size,
         bold: list_label_bold,
+        italic: list_label_italic,
         color: list_label_color,
         suff: list_label_suff,
         jc: list_label_jc,
@@ -289,8 +350,9 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         list_label,
         list_label_font,
         list_label_font_size,
-        list_label_bold,
-        list_label_color,
+        list_label_bold: list_label_bold.unwrap_or(false),
+        list_label_italic: list_label_italic.unwrap_or(false),
+        list_label_color: list_label_color.flatten(),
         list_label_jc,
         list_label_suff: super::numbering::label_suffix(&list_label_suff),
         list_item,

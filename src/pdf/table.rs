@@ -1225,11 +1225,7 @@ fn draw_cell_label(
     baseline_y: f32,
     fonts: &HashMap<String, FontEntry>,
 ) {
-    let font_key = para
-        .list_label_font
-        .as_deref()
-        .unwrap_or(para.first_run_font_key.as_str());
-    let Some(entry) = fonts.get(font_key) else {
+    let Some(entry) = para.label_font_key.as_deref().and_then(|k| fonts.get(k)) else {
         return;
     };
     let bytes = super::list_label::encode_label(entry, &para.list_label)
@@ -1240,7 +1236,7 @@ fn draw_cell_label(
     }
     content
         .begin_text()
-        .set_font(Name(entry.pdf_name.as_bytes()), para.font_size)
+        .set_font(Name(entry.pdf_name.as_bytes()), para.label_font_size)
         .next_line(label_x + para.label_shift, baseline_y)
         .show(Str(&bytes))
         .end_text();

@@ -15,8 +15,11 @@ pub(super) struct LevelDef {
     pub(super) tab_stop: Option<f32>,
     pub(super) start: u32,
     pub(super) label_font_size: Option<f32>,
-    pub(super) label_bold: bool,
-    pub(super) label_color: Option<[u8; 3]>,
+    /// The level's own b, i and color, None when it leaves them to the
+    /// paragraph mark (Some(None) is color="auto").
+    pub(super) label_bold: Option<bool>,
+    pub(super) label_italic: Option<bool>,
+    pub(super) label_color: Option<Option<[u8; 3]>>,
     pub(super) suff: String,
     pub(super) jc: Alignment,
     pub(super) label_font: Option<String>,
@@ -40,8 +43,11 @@ pub(super) struct ListLabelInfo {
     pub(super) label: String,
     pub(super) font: Option<String>,
     pub(super) font_size: Option<f32>,
-    pub(super) bold: bool,
-    pub(super) color: Option<[u8; 3]>,
+    /// The level's own, then the paragraph mark's once
+    /// `label_in_mark_format` ran.
+    pub(super) bold: Option<bool>,
+    pub(super) italic: Option<bool>,
+    pub(super) color: Option<Option<[u8; 3]>>,
     pub(super) suff: String,
     pub(super) jc: Alignment,
     /// None when the paragraph shows no label.
@@ -135,10 +141,9 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
         hansi.map(str::to_string).or_else(|| rfonts_ascii_name(r))
     });
     let label_font_size = rpr.and_then(parse_font_size);
-    let label_bold = rpr.and_then(|r| wml_bool(r, "b")).unwrap_or(false);
-    let label_color = rpr
-        .and_then(|r| wml_attr(r, "color"))
-        .and_then(parse_hex_color);
+    let label_bold = rpr.and_then(|r| wml_bool(r, "b"));
+    let label_italic = rpr.and_then(|r| wml_bool(r, "i"));
+    let label_color = rpr.and_then(|r| wml_attr(r, "color")).map(parse_hex_color);
     let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
     let jc = match wml_attr(lvl, "lvlJc") {
         Some("center") => Alignment::Center,
@@ -159,6 +164,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
             start,
             label_font_size,
             label_bold,
+            label_italic,
             label_color,
             suff,
             jc,
@@ -561,17 +567,12 @@ pub(super) fn parse_list_info(
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
         tab_stop: def.tab_stop,
-        font: if is_bullet {
-            def.label_font.clone()
-        } else if def.suff == "nothing" {
-            // suff=nothing: label flows inline with text and needs
-            // its own font for the synthetic Run we prepend.
-            def.label_font.clone()
-        } else {
-            None
-        },
+        // A level rFonts beats the paragraph mark's font for numbers too
+        // (probed on k4: Georgia in the level draws "5." in Georgia).
+        font: def.label_font.clone(),
         font_size: def.label_font_size,
         bold: def.label_bold,
+        italic: def.label_italic,
         color: def.label_color,
         suff: def.suff.clone(),
         jc: def.jc,
@@ -726,7 +727,8 @@ mod tests {
             tab_stop: None,
             start: 1,
             label_font_size: None,
-            label_bold: false,
+            label_bold: None,
+            label_italic: None,
             label_color: None,
             suff: "tab".into(),
             jc: Alignment::Left,

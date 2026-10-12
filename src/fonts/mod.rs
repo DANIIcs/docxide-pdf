@@ -172,19 +172,30 @@ fn first_css_name(name: &str) -> &str {
 /// Avoids per-call heap allocation when callers reuse the buffer.
 pub(crate) fn font_key_buf<'a>(run: &Run, buf: &'a mut String) -> &'a str {
     buf.clear();
-    buf.push_str(primary_font_name(&run.font_name));
-    match (run.bold, run.italic) {
+    push_font_key(buf, &run.font_name, run.bold, run.italic);
+    buf.as_str()
+}
+
+fn push_font_key(buf: &mut String, font_name: &str, bold: bool, italic: bool) {
+    buf.push_str(primary_font_name(font_name));
+    match (bold, italic) {
         (true, true) => buf.push_str("/BI"),
         (true, false) => buf.push_str("/B"),
         (false, true) => buf.push_str("/I"),
         (false, false) => {}
     }
-    buf.as_str()
 }
 
 pub(crate) fn font_key(run: &Run) -> String {
     let mut buf = String::new();
     font_key_buf(run, &mut buf);
+    buf
+}
+
+/// The key of a face named outside any run (list labels).
+pub(crate) fn font_key_for(font_name: &str, bold: bool, italic: bool) -> String {
+    let mut buf = String::new();
+    push_font_key(&mut buf, font_name, bold, italic);
     buf
 }
 

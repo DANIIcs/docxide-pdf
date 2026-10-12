@@ -612,11 +612,11 @@ pub(super) struct CellParagraphLayout {
     /// Text lines are laid out narrower and rendered further right to avoid the image.
     pub(super) float_indent_left: f32,
     pub(super) list_label: String,
-    pub(super) list_label_font: Option<String>,
+    pub(super) label_font_key: Option<String>,
+    pub(super) label_font_size: f32,
     /// For L/LI tagging inside the cell.
     pub(super) list_item: Option<crate::model::ListItem>,
     pub(super) label_color: Option<[u8; 3]>,
-    pub(super) first_run_font_key: String,
     pub(super) image_name: Option<String>,
     /// The picture's `docPr@descr` and decorative flag, for tagging.
     pub(super) image_alt: Option<String>,
@@ -1029,14 +1029,6 @@ pub(super) fn compute_row_layouts(
                                     vec![]
                                 };
 
-                                let first_run_font_key = runs
-                                    .first()
-                                    .map(|r| {
-                                        let mut kb2 = String::new();
-                                        font_key_buf(r, &mut kb2).to_owned()
-                                    })
-                                    .unwrap_or_default();
-
                                 let image_name = para.image.as_ref().and_then(|img| {
                                     let key = std::sync::Arc::as_ptr(&img.data) as usize;
                                     ctx.table_cell_image_names.get(&key).cloned()
@@ -1133,10 +1125,10 @@ pub(super) fn compute_row_layouts(
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
                                     list_label: para.list_label.clone(),
-                                    list_label_font: para.list_label_font.clone(),
+                                    label_font_key: super::list_label::label_font_key(para),
+                                    label_font_size: para.list_label_font_size.unwrap_or(font_size),
                                     list_item: para.list_item,
-                                    label_color: para.runs.first().and_then(|r| r.color),
-                                    first_run_font_key,
+                                    label_color: para.list_label_color,
                                     image_name,
                                     image_alt: para.image.as_ref().and_then(|i| i.alt.clone()),
                                     image_decorative: para

@@ -451,6 +451,7 @@ pub struct Paragraph {
     pub list_label_font: Option<String>,
     pub list_label_font_size: Option<f32>,
     pub list_label_bold: bool,
+    pub list_label_italic: bool,
     pub list_label_color: Option<[u8; 3]>,
     /// `w:lvlJc`: the label is left-, centre- or right-aligned on its position.
     pub list_label_jc: Alignment,
