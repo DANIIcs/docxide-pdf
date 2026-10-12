@@ -10,9 +10,8 @@ use std::collections::{BTreeMap, HashMap};
 use pdf_writer::{Content, Name, Pdf, Rect, Ref, Str};
 
 use super::color::{fill_rgb, stroke_rgb};
-use super::fonts::smartart_font_key_str;
 use crate::docx::emf::{EmfRecord, FillRule, for_each_record, parse_header};
-use crate::fonts::FontEntry;
+use crate::fonts::{FontEntry, font_key_for};
 
 #[derive(Clone)]
 enum EmfObject {
@@ -207,7 +206,7 @@ impl Translator<'_> {
                 italic,
                 face,
             } => {
-                let key = smartart_font_key_str(face, *bold, *italic);
+                let key = font_key_for(face, *bold, *italic);
                 self.objects.insert(
                     *handle,
                     EmfObject::Font {

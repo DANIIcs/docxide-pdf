@@ -352,7 +352,7 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
             .chain(para.floating_images.iter().map(|fi| &fi.image));
         for img in images.filter(|i| matches!(i.format, ImageFormat::Emf)) {
             for (face, bold, italic, text) in crate::docx::emf::text_with_fonts(&img.data) {
-                used.entry(smartart_font_key_str(&face, bold, italic))
+                used.entry(crate::fonts::font_key_for(&face, bold, italic))
                     .or_default()
                     .extend(text.chars());
             }
@@ -376,18 +376,6 @@ fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
     }
 }
 
-/// Build a font key for SmartArt shapes, matching the `font_key_buf` format.
-pub(super) fn smartart_font_key_str(name: &str, bold: bool, italic: bool) -> String {
-    let mut key = crate::fonts::primary_font_name(name).to_string();
-    match (bold, italic) {
-        (true, true) => key.push_str("/BI"),
-        (true, false) => key.push_str("/B"),
-        (false, true) => key.push_str("/I"),
-        (false, false) => {}
-    }
-    key
-}
-
 pub(super) fn collect_and_register_fonts(
     doc: &Document,
     pdf: &mut Pdf,
@@ -406,7 +394,8 @@ pub(super) fn collect_and_register_fonts(
                         for sa_para in &shape.paragraphs {
                             for (i, run) in sa_para.runs.iter().enumerate() {
                                 if let Some(ref name) = run.font_name {
-                                    let key = smartart_font_key_str(name, run.bold, run.italic);
+                                    let key =
+                                        crate::fonts::font_key_for(name, run.bold, run.italic);
                                     let chars = used_chars_per_font.entry(key).or_default();
                                     chars.extend(run.text.chars());
                                     if i == 0

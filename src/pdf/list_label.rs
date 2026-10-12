@@ -8,8 +8,8 @@ use crate::model::{Alignment, LabelSuffix, Paragraph};
 use super::color::fill_rgb;
 
 pub(super) fn label_font_key(para: &Paragraph) -> Option<String> {
-    // Parsed labels carry the paragraph mark's font; labels built without one
-    // (altChunk HTML lists) take the first run's.
+    // Parsed labels carry the paragraph mark's font; paragraphs built by hand
+    // without one take the first run's.
     Some(match &para.list_label_font {
         Some(f) => font_key_for(f, para.list_label_bold, para.list_label_italic),
         None => {

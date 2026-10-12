@@ -554,7 +554,7 @@ fn resolve_run_font<'a>(
         .font_name
         .as_ref()
         .and_then(|n| {
-            let key = super::fonts::smartart_font_key_str(n, run.bold, run.italic);
+            let key = crate::fonts::font_key_for(n, run.bold, run.italic);
             seen_fonts.get(&key)
         })
         .or(fallback);

@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 
 use super::styles::{ParagraphStyle, parse_font_size, rfonts_ascii_name};
 use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
-use crate::model::{Alignment, LabelSuffix, ListItem};
+use crate::model::{Alignment, LabelSuffix, ListItem, Run};
 use pdf_writer::types::ListNumbering;
 
 #[derive(Clone)]
@@ -43,11 +43,9 @@ pub(super) struct ListLabelInfo {
     pub(super) label: String,
     pub(super) font: Option<String>,
     pub(super) font_size: Option<f32>,
-    /// The level's own, then the paragraph mark's once
-    /// `label_in_mark_format` ran.
-    pub(super) bold: Option<bool>,
-    pub(super) italic: Option<bool>,
-    pub(super) color: Option<Option<[u8; 3]>>,
+    pub(super) bold: bool,
+    pub(super) italic: bool,
+    pub(super) color: Option<[u8; 3]>,
     pub(super) suff: String,
     pub(super) jc: Alignment,
     /// None when the paragraph shows no label.
@@ -413,6 +411,7 @@ pub(super) fn parse_list_info(
     paragraph_styles: &HashMap<String, ParagraphStyle>,
     numbering: &NumberingInfo,
     lists: &mut ListCounters,
+    mark: Option<&Run>,
 ) -> ListLabelInfo {
     let ListCounters {
         counters,
@@ -563,17 +562,26 @@ pub(super) fn parse_list_info(
         }
         label
     };
+    // Word draws a list label in the paragraph mark's format under the
+    // level's own rPr; the text runs never count. Probed on k4's "5." (mark
+    // without rPr, Arial 10pt text): the label is Calibri 11pt from
+    // docDefaults; a Courier New 14pt mark draws a Courier New 14pt label;
+    // mark b, i and color reach the label; a level rFonts beats the mark's
+    // font; a bold italic blue first run changes nothing. A level's b="0"
+    // and color="auto" undo the mark's (renewable_dispatch's ListSubhead1:
+    // bold style, regular black "4.").
     ListLabelInfo {
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
         tab_stop: def.tab_stop,
-        // A level rFonts beats the paragraph mark's font for numbers too
-        // (probed on k4: Georgia in the level draws "5." in Georgia).
-        font: def.label_font.clone(),
-        font_size: def.label_font_size,
-        bold: def.label_bold,
-        italic: def.label_italic,
-        color: def.label_color,
+        font: def
+            .label_font
+            .clone()
+            .or_else(|| mark.map(|m| m.font_name.clone())),
+        font_size: def.label_font_size.or(mark.map(|m| m.font_size)),
+        bold: def.label_bold.unwrap_or(mark.is_some_and(|m| m.bold)),
+        italic: def.label_italic.unwrap_or(mark.is_some_and(|m| m.italic)),
+        color: def.label_color.unwrap_or(mark.and_then(|m| m.color)),
         suff: def.suff.clone(),
         jc: def.jc,
         item: Some(ListItem {
@@ -761,6 +769,7 @@ mod tests {
             &HashMap::new(),
             &numbering,
             &mut lists,
+            None,
         );
         assert_eq!(info.label, "A)");
         assert_eq!(info.indent_left, 10.0);
@@ -795,6 +804,7 @@ mod tests {
             &HashMap::new(),
             &numbering,
             &mut lists,
+            None,
         );
         assert_eq!(lvl0_info.label, "I.");
         let lvl1_info = parse_list_info(
@@ -805,6 +815,7 @@ mod tests {
             &HashMap::new(),
             &numbering,
             &mut lists,
+            None,
         );
         // Without isLgl this would be "I.1."; isLgl forces %1 to decimal.
         assert_eq!(lvl1_info.label, "1.1.");
@@ -839,6 +850,7 @@ mod tests {
                 &HashMap::new(),
                 &numbering,
                 &mut lists,
+                None,
             )
             .label
         };
@@ -876,6 +888,7 @@ mod tests {
                 &HashMap::new(),
                 &numbering,
                 &mut lists,
+                None,
             )
         };
         // Owning style numbers.
@@ -921,6 +934,7 @@ mod tests {
             &styles,
             &numbering,
             &mut lists,
+            None,
         );
         assert_eq!(d1.label, "1.");
         let b2 = parse_list_info(
@@ -931,6 +945,7 @@ mod tests {
             &styles,
             &numbering,
             &mut lists,
+            None,
         );
         assert_eq!(b2.label, "2.");
     }

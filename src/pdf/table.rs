@@ -1768,6 +1768,14 @@ pub(super) fn render_table(
         let left = aligned_table_left(table, area, total_w, ctx.compat_mode);
         (left, None, (0.0, 0.0))
     };
+    if let Some(fp) = &override_pos {
+        pb.float_table_extent = Some(super::FloatTableExtent {
+            left: table_left,
+            right: table_left + col_widths.iter().sum::<f32>(),
+            left_from_text: fp.left_from_text,
+            right_from_text: fp.right_from_text,
+        });
+    }
 
     // For non-floating tables, prev_space_after offsets the table start.
     // For floating tables, it was already consumed into the saved cursor position.

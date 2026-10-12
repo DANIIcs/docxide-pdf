@@ -102,6 +102,23 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
     )
 }
 
+fn parse_note_separator<R: Read + Seek>(
+    node: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    lists: &mut ListCounters,
+) -> Option<Paragraph> {
+    node.children()
+        .find(|c| c.has_tag_name((WML_NS, "p")))
+        .map(|p| {
+            super::paragraph::build_paragraph(
+                p,
+                ctx,
+                lists,
+                &super::paragraph::ParagraphOptions::default(),
+            )
+        })
+}
+
 /// Simple parsing: paragraph runs and indents only, except that list
 /// paragraphs take the full builder for their numbering (croatian_grant's
 /// bulleted footnote). Matches the original footnote rendering behavior.
@@ -140,17 +157,7 @@ fn parse_notes_simple<R: Read + Seek>(
         match node.attribute((WML_NS, "type")) {
             // A body paragraph in all but place: no pStyle means Normal.
             Some("separator") => {
-                separator = node
-                    .children()
-                    .find(|c| c.has_tag_name((WML_NS, "p")))
-                    .map(|p| {
-                        super::paragraph::build_paragraph(
-                            p,
-                            &mut fn_ctx,
-                            &mut lists,
-                            &super::paragraph::ParagraphOptions::default(),
-                        )
-                    });
+                separator = parse_note_separator(node, &mut fn_ctx, &mut lists);
                 continue;
             }
             Some(_) => continue,
@@ -341,17 +348,7 @@ fn parse_notes_rich<R: Read + Seek>(
         }
         match node.attribute((WML_NS, "type")) {
             Some("separator") => {
-                separator = node
-                    .children()
-                    .find(|c| c.has_tag_name((WML_NS, "p")))
-                    .map(|p| {
-                        super::paragraph::build_paragraph(
-                            p,
-                            &mut fn_ctx,
-                            &mut lists,
-                            &super::paragraph::ParagraphOptions::default(),
-                        )
-                    });
+                separator = parse_note_separator(node, &mut fn_ctx, &mut lists);
                 continue;
             }
             Some(_) => continue,

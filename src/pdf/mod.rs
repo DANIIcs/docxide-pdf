@@ -680,6 +680,22 @@ fn update_styleref_from_para(
 /// strips) stacks them below.
 const MIN_EMPTY_STRIP: f32 = 18.0;
 
+pub(super) struct FloatTableExtent {
+    pub(super) left: f32,
+    pub(super) right: f32,
+    pub(super) left_from_text: f32,
+    pub(super) right_from_text: f32,
+}
+
+/// The wider of the two strips a column leaves beside a float.
+fn side_strip(
+    (obj_left, obj_right): (f32, f32),
+    (left_from_text, right_from_text): (f32, f32),
+    (col_x, col_w): (f32, f32),
+) -> f32 {
+    (obj_left - left_from_text - col_x).max(col_x + col_w - obj_right - right_from_text)
+}
+
 #[derive(Clone)]
 pub(super) struct FloatZone {
     pub top_y: f32,
@@ -1061,6 +1077,9 @@ pub(super) struct PageBuilder {
     /// Floating table exclusion zone on this page; paragraph layout
     /// uses horizontal bounds to decide wrap-beside vs push-below.
     pub(super) float_zone: Option<FloatZone>,
+    /// The last floating table's horizontal extent, kept after its zone is
+    /// consumed or lost to a page break.
+    pub(super) float_table_extent: Option<FloatTableExtent>,
     /// The (top, bottom) bands of this page's lifted frames, down from the
     /// page top: body lines may not overlap them (see `OpenFrame`).
     frame_bands: Vec<(f32, f32)>,
@@ -1149,6 +1168,7 @@ impl PageBuilder {
             is_first_page_of_section: true,
             page_hf_section: 0,
             float_zone: None,
+            float_table_extent: None,
             frame_bands: Vec::new(),
             pending_float_anchor: None,
             deferred_shapes: Vec::new(),
@@ -2588,32 +2608,24 @@ fn render_paragraph_block(
             },
         )
     };
-    let prev_floating_table = block_idx
-        .checked_sub(1)
-        .and_then(|i| section_blocks.get(i))
-        .and_then(|b| match b {
-            Block::Table(t) => t.position.as_ref().map(|pos| (t, pos)),
-            _ => None,
-        });
     // A clearing break that opens the anchor paragraph of the floating table
     // above it sits beside that table's top; only what follows the break comes
     // below the table (indigenous_innovation's defined terms: one line, not two).
+    // The zone is gone once the table broke across pages or left no strip
+    // (case129's full-width table: both lines below it), so ask the table's
+    // own extent.
     if para.clears_floats
-        && let Some((table, pos)) = prev_floating_table
-        // A floating table that broke across pages, or one too wide to leave
-        // a strip beside it, registers no zone; ask the table itself then
-        // (case129's full-width table: both lines below it).
-        && match state.pb.float_zone.as_ref() {
-            Some(zone) => {
-                (zone.obj_left - zone.left_from_text - col_x)
-                    .max(col_x + col_w - zone.obj_right - zone.right_from_text)
-                    >= MIN_EMPTY_STRIP
-            }
-            None => {
-                let table_w: f32 = table.col_widths.iter().sum();
-                col_w - table_w - pos.left_from_text.min(pos.right_from_text) >= MIN_EMPTY_STRIP
-            }
-        }
+        && block_idx
+            .checked_sub(1)
+            .and_then(|i| section_blocks.get(i))
+            .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()))
+        && state.pb.float_table_extent.as_ref().is_some_and(|t| {
+            side_strip(
+                (t.left, t.right),
+                (t.left_from_text, t.right_from_text),
+                (col_x, col_w),
+            ) >= MIN_EMPTY_STRIP
+        })
         && lines.len() > 1
         && lines[0].ends_with_break
         && lines[0].chunks.is_empty()
@@ -4215,8 +4227,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     && let Some(ref zone) = state.pb.float_zone
                 {
                     let (x, w) = col_geometry[state.current_col];
-                    let gap = (zone.obj_left - zone.left_from_text - x)
-                        .max(x + w - zone.obj_right - zone.right_from_text);
+                    let gap = side_strip(
+                        (zone.obj_left, zone.obj_right),
+                        (zone.left_from_text, zone.right_from_text),
+                        (x, w),
+                    );
                     if gap < MIN_EMPTY_STRIP && state.pb.slot_top > zone.bottom_y {
                         state.pb.slot_top = zone.bottom_y;
                         state.pb.float_zone = None;

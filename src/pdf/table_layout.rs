@@ -1125,7 +1125,9 @@ pub(super) fn compute_row_layouts(
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
                                     list_label: para.list_label.clone(),
-                                    label_font_key: super::list_label::label_font_key(para),
+                                    label_font_key: (!para.list_label.is_empty())
+                                        .then(|| super::list_label::label_font_key(para))
+                                        .flatten(),
                                     label_font_size: para.list_label_font_size.unwrap_or(font_size),
                                     list_item: para.list_item,
                                     label_color: para.list_label_color,

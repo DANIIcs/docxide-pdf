@@ -187,12 +187,10 @@ fn push_font_key(buf: &mut String, font_name: &str, bold: bool, italic: bool) {
 }
 
 pub(crate) fn font_key(run: &Run) -> String {
-    let mut buf = String::new();
-    font_key_buf(run, &mut buf);
-    buf
+    font_key_for(&run.font_name, run.bold, run.italic)
 }
 
-/// The key of a face named outside any run (list labels).
+/// The key of a face named outside any run (list labels, SmartArt, EMF).
 pub(crate) fn font_key_for(font_name: &str, bold: bool, italic: bool) -> String {
     let mut buf = String::new();
     push_font_key(&mut buf, font_name, bold, italic);

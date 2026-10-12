@@ -765,7 +765,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                     let style_num = para_style.and_then(|s| s.num_id.as_deref());
                     let style_ilvl = para_style.and_then(|s| s.num_ilvl);
-                    let mut numbering = parse_list_info(
+                    let numbering = parse_list_info(
                         num_pr,
                         style_num,
                         style_ilvl,
@@ -773,10 +773,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         &ctx.styles.paragraph_styles,
                         ctx.numbering,
                         cell_lists,
-                    );
-                    super::paragraph::label_in_mark_format(
-                        &mut numbering,
-                        &super::paragraph::mark_format(ppr, para_style, ctx),
+                        Some(&super::runs::paragraph_mark_run(ppr, para_style, ctx)),
                     );
                     let (indent_left, indent_right, indent_hanging, indent_first_line) =
                         super::paragraph::resolve_indents(
@@ -836,9 +833,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         num_level_tab_stop: num_tab_stop,
                         list_label_font,
                         list_label_font_size,
-                        list_label_bold: list_label_bold.unwrap_or(false),
-                        list_label_italic: list_label_italic.unwrap_or(false),
-                        list_label_color: list_label_color.flatten(),
+                        list_label_bold,
+                        list_label_italic,
+                        list_label_color,
                         list_label_jc,
                         list_label_suff: super::numbering::label_suffix(&list_label_suff),
                         list_item,

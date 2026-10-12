@@ -278,6 +278,21 @@ struct ParagraphRunDefaults {
     lang_bidi: Option<String>,
 }
 
+/// The paragraph mark's formatting, resolved like any run: its rPr, its
+/// rStyle, the paragraph style, then docDefaults.
+pub(super) fn paragraph_mark_run<R: Read + Seek>(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+    ctx: &ParseContext<'_, R>,
+) -> Run {
+    let rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
+    let char_style = rpr
+        .and_then(|rpr| wml_attr(rpr, "rStyle"))
+        .and_then(|id| ctx.styles.character_styles.get(id));
+    ParagraphRunDefaults::from_style(para_style, &ctx.styles.defaults)
+        .resolve_run_format(rpr, char_style, None, ctx.theme)
+}
+
 impl ParagraphRunDefaults {
     fn from_style(para_style: Option<&ParagraphStyle>, defaults: &StyleDefaults) -> Self {
         let para_font_size = para_style.and_then(|s| s.font_size);
