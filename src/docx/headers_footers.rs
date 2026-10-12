@@ -91,7 +91,7 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
-) -> HashMap<u32, Footnote> {
+) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
     parse_notes_rich(
         zip,
         styles,
@@ -313,14 +313,15 @@ fn parse_notes_rich<R: Read + Seek>(
     numbering: &NumberingInfo,
     zip_path: &str,
     element_name: &str,
-) -> HashMap<u32, Footnote> {
+) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
     let mut footnotes = HashMap::new();
+    let mut separator = None;
     let Some(xml_text) = super::read_zip_text(zip, zip_path) else {
-        return footnotes;
+        return (footnotes, separator);
     };
     let rels = parse_part_relationships(zip, zip_path);
     let Ok(xml) = roxmltree::Document::parse(&xml_text) else {
-        return footnotes;
+        return (footnotes, separator);
     };
     let root = xml.root_element();
 
@@ -338,8 +339,23 @@ fn parse_notes_rich<R: Read + Seek>(
         if !node.has_tag_name((WML_NS, element_name)) {
             continue;
         }
-        if node.attribute((WML_NS, "type")).is_some() {
-            continue;
+        match node.attribute((WML_NS, "type")) {
+            Some("separator") => {
+                separator = node
+                    .children()
+                    .find(|c| c.has_tag_name((WML_NS, "p")))
+                    .map(|p| {
+                        super::paragraph::build_paragraph(
+                            p,
+                            &mut fn_ctx,
+                            &mut lists,
+                            &super::paragraph::ParagraphOptions::default(),
+                        )
+                    });
+                continue;
+            }
+            Some(_) => continue,
+            None => {}
         }
         let Some(id) = node
             .attribute((WML_NS, "id"))
@@ -370,5 +386,5 @@ fn parse_notes_rich<R: Read + Seek>(
         }
     }
 
-    footnotes
+    (footnotes, separator)
 }

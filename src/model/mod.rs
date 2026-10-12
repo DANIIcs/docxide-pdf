@@ -253,6 +253,9 @@ pub struct Document {
     /// notes like any paragraph and draws the rule as its strikethrough.
     pub footnote_separator: Option<Paragraph>,
     pub endnotes: HashMap<u32, Footnote>,
+    /// endnotes.xml's separator paragraph, laid out the same way above the
+    /// endnotes.
+    pub endnote_separator: Option<Paragraph>,
     pub comments: HashMap<u32, Comment>,
     pub font_table: FontTable,
     pub even_and_odd_headers: bool,

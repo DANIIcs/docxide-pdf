@@ -900,7 +900,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let (footnotes, footnote_separator) = parse_footnotes(zip, &styles, &theme, &numbering);
-    let endnotes = parse_endnotes(zip, &styles, &theme, &numbering);
+    let (endnotes, endnote_separator) = parse_endnotes(zip, &styles, &theme, &numbering);
     let comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
@@ -1113,6 +1113,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         footnotes,
         footnote_separator,
         endnotes,
+        endnote_separator,
         comments,
         font_table,
         even_and_odd_headers: settings.even_and_odd_headers,

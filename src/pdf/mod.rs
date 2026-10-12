@@ -377,6 +377,7 @@ pub(super) struct RenderContext<'a> {
     pub(super) style_id_to_name: &'a HashMap<String, String>,
     pub(super) doc_line_spacing: LineSpacing,
     pub(super) note_separator: footnotes::NoteSeparator,
+    pub(super) endnote_separator: footnotes::NoteSeparator,
     pub(super) default_tab_stop: f32,
     /// Image names for inline images in table cells, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: &'a HashMap<usize, String>,
@@ -4018,6 +4019,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             &seen_fonts,
             doc.line_spacing,
         ),
+        endnote_separator: footnotes::NoteSeparator::new(
+            doc.endnote_separator.as_ref(),
+            &seen_fonts,
+            doc.line_spacing,
+        ),
         cell_grid_pitch: std::cell::Cell::new(
             doc.sections
                 .first()
@@ -4543,11 +4549,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     // Phase 2c: render footnotes at page bottom (above footer). Endnotes
     // (default pos=docEnd) flow inline after the last body block on the final
-    // page (see render_endnotes_inline), NOT pinned to the bottom: their top is
-    // the cursor below the last paragraph and its space_after, then the same
-    // 12pt separator gap Word leaves above the note separator.
+    // page (see render_endnotes_inline), NOT pinned to the bottom: their
+    // separator paragraph starts at the cursor below the last paragraph and
+    // its space_after.
     let last_page_idx = state.pb.all_contents.len().saturating_sub(1);
-    let endnote_top_y = state.pb.slot_top - state.prev_space_after - 12.0;
+    let endnote_top_y = state.pb.slot_top - state.prev_space_after;
     for (page_idx, content) in state.pb.all_contents.iter_mut().enumerate() {
         let (hf_si, is_first, si) = state.pb.page_section_indices[page_idx];
         let sp = &doc.sections[hf_si].properties;

@@ -267,9 +267,19 @@ pub(super) fn render_endnotes_inline(
     if en_ids.is_empty() {
         return Vec::new();
     }
-    let sep_y = top_y;
-    draw_note_separator(content, margin_left, sep_y, text_width, 0.5);
-    let fn_y = sep_y - 9.0;
+    // endnotes.xml's separator paragraph, laid out as the footnote one
+    // (case75: Word's rule 20.8pt below the last body baseline, the first
+    // note 13.5pt below the rule).
+    let separator = &ctx.endnote_separator;
+    let (rule_centre, thickness) = separator.rule;
+    draw_note_separator(
+        content,
+        margin_left,
+        top_y - rule_centre,
+        text_width,
+        thickness,
+    );
+    let fn_y = top_y - separator.height;
     render_notes_downward(
         content,
         fn_y,
