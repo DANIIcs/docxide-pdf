@@ -354,6 +354,27 @@ fn compute_header_height(
                 // picture plus the text descent (`inline_line_advance`).
                 let picture_h = runs_max_image_h(&para.runs);
                 let wrapped_h = wrapped_header_picture_height(para, ctx, text_width);
+                // A text paragraph is as many lines as it wraps to (Word bottom-
+                // aligns a nine-line footer at the footer margin; one line per
+                // paragraph put it 100pt low, off the page); its w:br breaks
+                // are among those lines.
+                let text_lines = (wrapped_h.is_none() && picture_h <= 0.0).then(|| {
+                    build_lines(
+                        &para.runs,
+                        ctx,
+                        (text_width - para.indent_left - para.indent_right).max(1.0),
+                        ctx.cjk(true, para.alignment),
+                        &LineOpts {
+                            tab_stops: &para.tab_stops,
+                            indent_left: para.indent_left,
+                            indent_right: para.indent_right,
+                            hanging: para.indent_hanging - para.indent_first_line,
+                            ..Default::default()
+                        },
+                    )
+                    .len()
+                    .max(1)
+                });
                 let mut content_h = if let Some(h) = wrapped_h {
                     h
                 } else if picture_h > 0.0 {
@@ -361,7 +382,7 @@ fn compute_header_height(
                         picture_h + picture_line_bottom(&para.runs, para, ctx.fonts, effective_ls),
                     )
                 } else {
-                    line_h
+                    text_lines.unwrap_or(1) as f32 * line_h
                 } + float_text_push(para, text_width);
 
                 for fi in &para.floating_images {
@@ -429,7 +450,7 @@ fn compute_header_height(
 
                 // Each w:br (line break) in the paragraph creates an additional line.
                 let br_count = para.runs.iter().filter(|r| r.is_line_break).count();
-                if wrapped_h.is_none() {
+                if wrapped_h.is_none() && text_lines.is_none() {
                     content_h += br_count as f32 * line_h;
                 }
 
