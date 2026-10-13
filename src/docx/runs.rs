@@ -668,6 +668,19 @@ fn split_run_by_script(run: Run) -> Vec<Run> {
     result
 }
 
+/// Hangs each pending comment anchor whose reference follows at most `built`
+/// run nodes on the last run built so far.
+fn attach_comment_anchors(runs: &mut [Run], pending: &mut Vec<(usize, u32)>, built: usize) {
+    let Some(last) = runs.last_mut() else { return };
+    pending.retain(|&(k, id)| {
+        let due = k <= built;
+        if due {
+            last.comment_anchor_ids.push(id);
+        }
+        !due
+    });
+}
+
 fn is_comment_reference_run(node: roxmltree::Node) -> bool {
     node.children()
         .any(|c| c.has_tag_name((WML_NS, "commentReference")))
@@ -883,6 +896,8 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.lang == run.lang
                 && prev.char_style_id == run.char_style_id
                 && prev.comment_ids == run.comment_ids
+                && prev.comment_anchor_ids.is_empty()
+                && run.comment_anchor_ids.is_empty()
                 // One Formula per math zone, never merged into the text around it.
                 && match (&prev.formula, &run.formula) {
                     (None, None) => true,
@@ -1047,8 +1062,37 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let defaults = ParagraphRunDefaults::from_style(para_style, &ctx.styles.defaults);
 
     let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool, Vec<u32>)> = Vec::new();
-    let mut active_comments: Vec<u32> = Vec::new();
+    let mut active_comments: Vec<u32> = ctx
+        .comments_open_at
+        .get(&para_node.range().start)
+        .cloned()
+        .unwrap_or_default();
     collect_run_nodes(para_node, ctx.rels, &mut run_nodes, &mut active_comments);
+    // Word shows only comments the text references; a range without its
+    // w:commentReference gets no tint and no balloon.
+    for (.., ids) in &mut run_nodes {
+        ids.retain(|id| ctx.referenced_comments.contains(id));
+    }
+    // A referenced comment whose range holds no text (empty, or missing)
+    // anchors at its reference: after the run nodes that precede it.
+    let mut ref_anchors: Vec<(usize, u32)> = para_node
+        .descendants()
+        .filter(|n| n.has_tag_name((WML_NS, "commentReference")))
+        .filter_map(|n| {
+            let id = n.attribute((WML_NS, "id"))?.parse::<u32>().ok()?;
+            if !ctx.textless_comments.contains(&id) {
+                return None;
+            }
+            let start = n.range().start;
+            Some((
+                run_nodes
+                    .iter()
+                    .filter(|(r, ..)| r.range().start < start)
+                    .count(),
+                id,
+            ))
+        })
+        .collect();
 
     let mut runs = Vec::new();
     let mut floating_images: Vec<FloatingImage> = Vec::new();
@@ -1065,7 +1109,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut has_clear_break = false;
     let mut field_stack: Vec<FieldFrame> = Vec::new();
 
-    for (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids) in run_nodes {
+    for (node_idx, (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids)) in
+        run_nodes.into_iter().enumerate()
+    {
+        attach_comment_anchors(&mut runs, &mut ref_anchors, node_idx);
         if run_node.has_tag_name((MATH_NS, "oMath")) {
             let first = runs.len();
             omath_to_runs(
@@ -1467,6 +1514,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
             }
         }
     }
+
+    attach_comment_anchors(&mut runs, &mut ref_anchors, usize::MAX);
 
     let has_page_break_before = ppr
         .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))

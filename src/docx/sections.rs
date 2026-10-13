@@ -238,6 +238,9 @@ fn resolve_hf<R: Read + Seek>(
         rels: &part_rels,
         zip: ctx.zip,
         numbering: ctx.numbering,
+        referenced_comments: Default::default(),
+        textless_comments: Default::default(),
+        comments_open_at: Default::default(),
     };
     parse_header_footer_xml(&xml_text, &mut hf_ctx)
 }

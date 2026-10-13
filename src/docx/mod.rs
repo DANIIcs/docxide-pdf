@@ -197,6 +197,53 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     pub(in crate::docx) rels: &'a HashMap<String, String>,
     pub(in crate::docx) zip: &'a mut zip::ZipArchive<R>,
     pub(in crate::docx) numbering: &'a numbering::NumberingInfo,
+    /// Comment ids Word shows a balloon for: referenced by a
+    /// `w:commentReference` in the body (`comment_ranges`).
+    pub(in crate::docx) referenced_comments: std::collections::HashSet<u32>,
+    /// Comment ids whose range holds no text (or that have no range).
+    pub(in crate::docx) textless_comments: std::collections::HashSet<u32>,
+    /// Comment ids open where a paragraph starts, by its byte offset.
+    pub(in crate::docx) comments_open_at: HashMap<usize, Vec<u32>>,
+}
+
+/// Comment ranges as Word reads them, over the whole body (a range may start
+/// between blocks and span paragraphs and tables): the shown ids whose range
+/// encloses no text, the ids already open where each paragraph starts (keyed
+/// by the paragraph's byte offset), and the ids Word shows a balloon for.
+fn comment_ranges(
+    root: roxmltree::Node,
+) -> (
+    std::collections::HashSet<u32>,
+    HashMap<usize, Vec<u32>>,
+    std::collections::HashSet<u32>,
+) {
+    let id = |n: roxmltree::Node| n.attribute((WML_NS, "id"))?.parse::<u32>().ok();
+    let mut open: Vec<u32> = Vec::new();
+    let mut open_at = HashMap::new();
+    let mut with_text = std::collections::HashSet::new();
+    let mut referenced = std::collections::HashSet::new();
+    let mut unballooned = std::collections::HashSet::new();
+    for n in root.descendants() {
+        if n.has_tag_name((WML_NS, "commentRangeStart")) {
+            open.extend(id(n));
+        } else if n.has_tag_name((WML_NS, "commentRangeEnd")) {
+            open.retain(|o| Some(*o) != id(n));
+            // Word probe: a range ending between blocks (after a table) gets
+            // no balloon, wherever its reference is; ending inside the
+            // table's last paragraph it gets one.
+            if !n.ancestors().any(|a| a.has_tag_name((WML_NS, "p"))) {
+                unballooned.extend(id(n));
+            }
+        } else if n.has_tag_name((WML_NS, "commentReference")) {
+            referenced.extend(id(n));
+        } else if n.has_tag_name((WML_NS, "t")) && n.text().is_some_and(|t| !t.is_empty()) {
+            with_text.extend(open.iter().copied());
+        } else if n.has_tag_name((WML_NS, "p")) && !open.is_empty() {
+            open_at.insert(n.range().start, open.clone());
+        }
+    }
+    let shown = &referenced - &unballooned;
+    (&shown - &with_text, open_at, shown)
 }
 
 pub(crate) fn is_east_asian_char(ch: char) -> bool {
@@ -902,7 +949,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let (footnotes, footnote_separator) = parse_footnotes(zip, &styles, &theme, &numbering);
     let (endnotes, endnote_separator) = parse_endnotes(zip, &styles, &theme, &numbering);
-    let comments = comments::parse_comments(zip);
+    let mut comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
     let mut xml_content = String::new();
@@ -918,12 +965,29 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
     let default_line_pitch = styles.defaults.font_size * 1.2;
 
+    let (textless_comments, comments_open_at, referenced_comments) = comment_ranges(root);
+    // Word numbers balloons in the order of their reference marks.
+    let mut next_index = 0;
+    for n in root.descendants() {
+        if n.has_tag_name((WML_NS, "commentReference"))
+            && let Some(c) = n
+                .attribute((WML_NS, "id"))
+                .and_then(|v| v.parse::<u32>().ok())
+                .and_then(|id| comments.get_mut(&id))
+        {
+            next_index += 1;
+            c.display_index = next_index;
+        }
+    }
     let mut ctx = ParseContext {
         styles: &styles,
         theme: &theme,
         rels: &rels,
         zip,
         numbering: &numbering,
+        referenced_comments,
+        textless_comments,
+        comments_open_at,
     };
 
     let mut sections: Vec<Section> = Vec::new();
@@ -1107,6 +1171,20 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     // up on the right for the comment pane. We apply the same scaling at
     // content-stream assembly time; the body keeps its natural layout here.
 
+    // Word's print export sets a balloon in the Balloon Text style (Times New
+    // Roman 9pt when the document has none; 70 references): the label in its
+    // face, bold, the comment text in its own face, both at its size.
+    let balloon_style = styles.paragraph_styles.get("BalloonText");
+    let comment_label_font = balloon_style
+        .and_then(|s| s.font_name.clone())
+        .unwrap_or_else(|| "Times New Roman".into());
+    let comment_font_size = balloon_style.and_then(|s| s.font_size).unwrap_or(9.0);
+    let comment_body_font = styles
+        .paragraph_styles
+        .get("CommentText")
+        .and_then(|s| s.font_name.clone())
+        .unwrap_or_else(|| styles.defaults.font_name.clone());
+
     Ok(Document {
         sections,
         line_spacing: styles.defaults.line_spacing,
@@ -1116,6 +1194,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         endnotes,
         endnote_separator,
         comments,
+        comment_label_font,
+        comment_body_font,
+        comment_font_size,
         font_table,
         even_and_odd_headers: settings.even_and_odd_headers,
         mirror_margins: settings.mirror_margins,

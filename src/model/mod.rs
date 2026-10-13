@@ -257,6 +257,11 @@ pub struct Document {
     /// endnotes.
     pub endnote_separator: Option<Paragraph>,
     pub comments: HashMap<u32, Comment>,
+    /// The balloon pane's text: the label's face (drawn bold), the comment
+    /// text's face, and the size of both before the page zoom.
+    pub comment_label_font: String,
+    pub comment_body_font: String,
+    pub comment_font_size: f32,
     pub font_table: FontTable,
     pub even_and_odd_headers: bool,
     /// `w:mirrorMargins`: like evenAndOddHeaders, makes odd/even section breaks
@@ -605,6 +610,10 @@ pub struct Run {
     /// Active comment IDs covering this run (empty for the common no-comments case).
     /// Multiple IDs when comment ranges overlap.
     pub comment_ids: Vec<u32>,
+    /// Comments whose balloon hangs at the end of this run without a range of
+    /// text to tint: Word anchors a comment at its `w:commentReference`, so an
+    /// empty or missing range still gets a balloon there.
+    pub comment_anchor_ids: Vec<u32>,
     /// True for runs synthesized from Office Math (OMML). The math font (e.g.
     /// Cambria Math) has very tall metrics for big operators; such runs must not
     /// inflate the surrounding text line height.
@@ -722,6 +731,7 @@ impl Default for Run {
             bold_is_direct: false,
             italic_is_direct: false,
             comment_ids: Vec::new(),
+            comment_anchor_ids: Vec::new(),
             is_math: false,
             rtl: false,
             formula: None,

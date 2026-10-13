@@ -426,7 +426,7 @@ impl WordChunk {
             text_outline: run.text_outline.clone(),
             text_fill: run.text_fill.clone(),
             text_shadow: run.text_shadow.clone(),
-            comment_ids: run.comment_ids.clone(),
+            comment_ids: [&run.comment_ids[..], &run.comment_anchor_ids[..]].concat(),
             footnote_id: run.footnote_id,
             endnote_id: run.endnote_id,
             actual_text: None,

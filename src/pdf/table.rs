@@ -568,7 +568,7 @@ fn render_cell_content(
                     ctx.fonts,
                     None,
                     gradient_specs,
-                    None,
+                    Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                 );
@@ -1144,7 +1144,7 @@ fn render_partial_cell_content(
                     ctx.fonts,
                     None,
                     gradient_specs,
-                    None,
+                    Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                 );
@@ -1346,6 +1346,7 @@ fn render_table_row(
                 },
                 tagger,
             );
+            move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
         }
     }
 
@@ -1925,6 +1926,7 @@ pub(super) fn render_table(
                 &ends,
                 ri,
             );
+            move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
 
             if all_done {
                 break;
@@ -2346,6 +2348,19 @@ pub(super) fn render_header_footer_table(
         None,
         0..usize::MAX,
     );
+    // ponytail: header/footer cells get no balloons (the pane anchors body text only).
+    ctx.cell_comment_anchors.borrow_mut().clear();
+}
+
+/// Moves the anchors the cell renderers collected onto the page, merging a
+/// comment that spans cells into one anchor at its last piece.
+fn move_cell_comment_anchors(ctx: &RenderContext, page: &mut Vec<(u32, f32, f32, f32)>) {
+    for a in ctx.cell_comment_anchors.borrow_mut().drain(..) {
+        match page.iter_mut().find(|p| p.0 == a.0) {
+            Some(p) => *p = a,
+            None => page.push(a),
+        }
+    }
 }
 
 #[cfg(test)]

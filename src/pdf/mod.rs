@@ -400,6 +400,9 @@ pub(super) struct RenderContext<'a> {
     /// snap to it like body text; physical_therapy (no flag) keeps natural
     /// cell lines on its 18pt grid.
     pub(super) cell_grid_pitch: std::cell::Cell<f32>,
+    /// Comment anchors of table-cell text, which the cell renderers reach
+    /// through `ctx` only; the body table code moves them onto the page.
+    pub(super) cell_comment_anchors: std::cell::RefCell<Vec<(u32, f32, f32, f32)>>,
 }
 
 impl RenderContext<'_> {
@@ -4106,6 +4109,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 .first()
                 .map_or(0.0, |s| cell_grid_pitch(doc, &s.properties)),
         ),
+        cell_comment_anchors: Default::default(),
     };
 
     let bookmark_positions = compute_bookmark_positions(doc, &ctx);

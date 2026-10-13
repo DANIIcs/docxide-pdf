@@ -27,19 +27,26 @@ const PANE_BG: [u8; 3] = [240, 240, 240];
 const CALLOUT_FILL: [u8; 3] = [251, 220, 217];
 const CALLOUT_STROKE: [u8; 3] = [200, 90, 90];
 const CONNECTOR_RGB: [u8; 3] = [209, 52, 56];
-const LABEL_RGB: [u8; 3] = [80, 30, 30];
-const BODY_RGB: [u8; 3] = [50, 30, 30];
+/// Unzoomed stroke widths in Word's print export: the connector is one
+/// 1/300in unit (dashed 3 on, 3 off), the balloon border two.
+const CONNECTOR_WIDTH: f32 = 0.24;
+const BALLOON_BORDER: f32 = 0.48;
+const LABEL_RGB: [u8; 3] = [0, 0, 0];
+const BODY_RGB: [u8; 3] = [0, 0, 0];
 
 /// Unzoomed: a balloon's gaps to the pane's left and right edges, and its
 /// text's inset (case63's balloons span 423.8-599.5, text from 427.0).
 const BALLOON_LEFT_GAP: f32 = 22.8;
 const BALLOON_RIGHT_GAP: f32 = 4.3;
 const BALLOON_TEXT_PAD: f32 = 4.3;
-const CALLOUT_PAD_Y: f32 = 3.0;
-const CALLOUT_GAP: f32 = 0.0;
-const CALLOUT_RADIUS: f32 = 4.0;
-const CALLOUT_FONT_SIZE: f32 = 7.0;
-const CALLOUT_LINE_H: f32 = 8.5;
+const CALLOUT_RADIUS: f32 = 6.0;
+/// Unzoomed balloon box, measured on Word's print export (Tahoma 8pt and
+/// Times New Roman 9pt labels over Calibri text): the first baseline sits
+/// this far plus the text's ascent below the top, the box is its lines plus
+/// this much, and balloons stack this far apart.
+const BALLOON_TOP_TO_ASCENT: f32 = 2.35;
+const BALLOON_EXTRA_H: f32 = 4.7;
+const BALLOON_GAP: f32 = 0.97;
 
 /// Anchor tuple: (comment_id, end_x, highlight_top_y, font_size). The highlight
 /// top is what callouts align to; the connector originates from
@@ -52,8 +59,9 @@ pub(super) fn render_comment_pane(
     // The page's `page_zoom`, which `anchors` are already zoomed by.
     (zoom, tx, ty): (f32, f32, f32),
     seen_fonts: &HashMap<String, FontEntry>,
-    // The pane's body and label font keys (`fonts::comment_pane_keys`).
-    (body_key, label_key): (&str, &str),
+    // The balloon text: body and label font keys (`fonts::comment_pane_keys`)
+    // and its size before the zoom (`Document::comment_font_size`).
+    (body_key, label_key, font_size): (&str, &str, f32),
 ) {
     let (Some(body_entry), Some(label_entry)) =
         (seen_fonts.get(body_key), seen_fonts.get(label_key))
@@ -83,12 +91,27 @@ pub(super) fn render_comment_pane(
     let inner_w = pane_width - (BALLOON_LEFT_GAP + BALLOON_RIGHT_GAP) * zoom;
     let text_x = inner_x + BALLOON_TEXT_PAD * zoom;
     let text_w = inner_w - 2.0 * BALLOON_TEXT_PAD * zoom;
+    // Glyphs land on Word's 1/300in grid; lines step by the comment font's
+    // own line height at the unrounded size.
+    let fs = (font_size / 0.24).round() * 0.24 * zoom;
+    let line_h = body_entry.line_h_ratio.unwrap_or(1.2) * font_size * zoom;
+    let first_baseline =
+        (BALLOON_TOP_TO_ASCENT + body_entry.ascender_ratio.unwrap_or(0.8) * font_size) * zoom;
 
+    // Balloons stack in reading order of where they hang (the reference
+    // marks), not in the order their ranges open.
+    let mut anchors = anchors.to_vec();
+    anchors.sort_by(|a, b| {
+        (b.2.round(), a.1)
+            .partial_cmp(&(a.2.round(), b.1))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let anchors = &anchors[..];
     let mut placements: Vec<(u32, f32, f32, Vec<(bool, String)>)> = Vec::new();
     // Stack callouts flush top-to-bottom: only the first uses its anchor_y to
     // pick a starting position; subsequent ones sit directly under the previous
     // box so there's no whitespace between them (Word's behavior).
-    let mut next_top: f32 = pane_top - CALLOUT_PAD_Y;
+    let mut next_top: f32 = pane_top;
     let mut first = true;
     for &(cid, _anchor_x, anchor_y, _fs) in anchors {
         let Some(comment) = comments.get(&cid) else {
@@ -96,20 +119,19 @@ pub(super) fn render_comment_pane(
         };
         let label = format_label(comment);
         let mut lines: Vec<(bool, String)> = Vec::new();
-        let label_w = label_entry.word_width(&label, CALLOUT_FONT_SIZE, false);
+        let label_w = label_entry.word_width(&label, fs, false);
         let first_line_space = (text_w - label_w).max(0.0);
         let mut first_body = String::new();
         let mut remainder = comment.text.as_str();
         if first_line_space > 0.0 {
-            let (head, tail) =
-                take_words_for_width(remainder, first_line_space, body_entry, CALLOUT_FONT_SIZE);
+            let (head, tail) = take_words_for_width(remainder, first_line_space, body_entry, fs);
             first_body = head;
             remainder = tail;
         }
         lines.push((true, format!("{label}{first_body}")));
-        wrap_into_lines(remainder, text_w, body_entry, CALLOUT_FONT_SIZE, &mut lines);
+        wrap_into_lines(remainder, text_w, body_entry, fs, &mut lines);
 
-        let h = lines.len() as f32 * CALLOUT_LINE_H + 2.0 * CALLOUT_PAD_Y;
+        let h = lines.len() as f32 * line_h + BALLOON_EXTRA_H * zoom;
         let mut top = if first {
             anchor_y.min(next_top)
         } else {
@@ -120,15 +142,22 @@ pub(super) fn render_comment_pane(
             top = h + pane_bottom;
         }
         placements.push((cid, top, h, lines));
-        next_top = top - h - CALLOUT_GAP;
+        next_top = top - h - BALLOON_GAP * zoom;
     }
 
     for (_cid, top, h, lines) in &placements {
-        draw_rounded_rect(content, inner_x, top - h, inner_w, *h, CALLOUT_RADIUS);
+        draw_rounded_rect(
+            content,
+            inner_x,
+            top - h,
+            inner_w,
+            *h,
+            CALLOUT_RADIUS * zoom,
+        );
         content.save_state();
         fill_rgb(content, CALLOUT_FILL);
         stroke_rgb(content, CALLOUT_STROKE);
-        content.set_line_width(0.6);
+        content.set_line_width(BALLOON_BORDER * zoom);
         content.fill_even_odd_and_stroke();
         content.restore_state();
 
@@ -136,7 +165,7 @@ pub(super) fn render_comment_pane(
             .values()
             .map(|e| (e.pdf_name.as_str(), e))
             .collect();
-        let mut text_y = top - CALLOUT_PAD_Y - CALLOUT_FONT_SIZE;
+        let mut text_y = top - first_baseline;
         for (is_first, line_text) in lines {
             if *is_first {
                 let label = format_label_from_text(line_text);
@@ -145,16 +174,16 @@ pub(super) fn render_comment_pane(
                 let label_bytes = label_entry.encode(label_only);
                 content.begin_text();
                 fill_rgb(content, LABEL_RGB);
-                content.set_font(Name(label_entry.pdf_name.as_bytes()), CALLOUT_FONT_SIZE);
+                content.set_font(Name(label_entry.pdf_name.as_bytes()), fs);
                 content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
                 content.show(Str(&label_bytes));
                 content.end_text();
                 if !body_part.is_empty() {
-                    let label_w = label_entry.word_width(label_only, CALLOUT_FONT_SIZE, false);
+                    let label_w = label_entry.word_width(label_only, fs, false);
                     let body_bytes = body_entry.encode(body_part);
                     content.begin_text();
                     fill_rgb(content, BODY_RGB);
-                    content.set_font(Name(body_entry.pdf_name.as_bytes()), CALLOUT_FONT_SIZE);
+                    content.set_font(Name(body_entry.pdf_name.as_bytes()), fs);
                     content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x + label_w, text_y]);
                     content.show(Str(&body_bytes));
                     content.end_text();
@@ -163,20 +192,20 @@ pub(super) fn render_comment_pane(
                 let body_bytes = body_entry.encode(line_text);
                 content.begin_text();
                 fill_rgb(content, BODY_RGB);
-                content.set_font(Name(body_entry.pdf_name.as_bytes()), CALLOUT_FONT_SIZE);
+                content.set_font(Name(body_entry.pdf_name.as_bytes()), fs);
                 content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
                 content.show(Str(&body_bytes));
                 content.end_text();
             }
-            text_y -= CALLOUT_LINE_H;
+            text_y -= line_h;
         }
         let _ = pdf_name_map;
     }
 
     content.save_state();
     stroke_rgb(content, CONNECTOR_RGB);
-    content.set_line_width(0.55);
-    content.set_dash_pattern([0.55, 0.55], 0.0);
+    content.set_line_width(CONNECTOR_WIDTH * zoom);
+    content.set_dash_pattern([3.0 * CONNECTOR_WIDTH * zoom; 2], 0.0);
     for (i, &(_cid, anchor_x, anchor_y, fs)) in anchors.iter().enumerate() {
         if let Some((_, top, _, _)) = placements.get(i) {
             // Two-segment connector: horizontal from the BOTTOM of the
@@ -185,7 +214,7 @@ pub(super) fn render_comment_pane(
             // subtract the full highlight height (1.15 * fs) to get the
             // bottom edge where the connector originates.
             let connector_origin_y = anchor_y - 1.15 * fs;
-            let callout_attach_y = *top - CALLOUT_LINE_H * 0.4;
+            let callout_attach_y = *top - 0.4 * line_h;
             content.move_to(anchor_x, connector_origin_y);
             content.line_to(pane_x, connector_origin_y);
             content.line_to(inner_x, callout_attach_y);

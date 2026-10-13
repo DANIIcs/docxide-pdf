@@ -15,24 +15,11 @@ use super::{collect_paras, label_font_key, para_runs_with_textboxes};
 /// otherwise point us at the wrong face); fall back to the first run if
 /// nothing else matches. Glyph collection and the pane both ask here, so the
 /// pane never draws a character its face wasn't given.
-pub(super) fn comment_pane_keys(all_runs: &[&Run]) -> Option<(String, String)> {
-    use crate::fonts::primary_font_name;
-    let named = ["Aptos", "Calibri"].into_iter().find(|f| {
-        all_runs
-            .iter()
-            .any(|r| primary_font_name(&r.font_name) == *f)
-    });
-    let body = match named {
-        Some(f) => f,
-        None => {
-            let run = all_runs
-                .iter()
-                .find(|r| !r.bold && !r.italic)
-                .or_else(|| all_runs.first())?;
-            primary_font_name(&run.font_name)
-        }
-    };
-    Some((body.to_string(), format!("{body}/B")))
+pub(super) fn comment_pane_keys(doc: &Document) -> (String, String) {
+    (
+        doc.comment_body_font.clone(),
+        format!("{}/B", doc.comment_label_font),
+    )
 }
 
 pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
@@ -210,9 +197,8 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         }
     }
 
-    if !doc.comments.is_empty()
-        && let Some((body_key, label_key)) = comment_pane_keys(all_runs)
-    {
+    if !doc.comments.is_empty() {
+        let (body_key, label_key) = comment_pane_keys(doc);
         let body = used.entry(body_key).or_default();
         for comment in doc.comments.values() {
             body.extend(comment.text.chars());

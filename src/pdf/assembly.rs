@@ -164,9 +164,7 @@ pub(super) fn assemble_pdf_pages(
 
     let has_any_comments =
         !doc.comments.is_empty() && all_page_comment_anchors.iter().any(|p| !p.is_empty());
-    let comment_keys = has_any_comments
-        .then(|| super::fonts::comment_pane_keys(&super::fonts::collect_all_runs(doc)))
-        .flatten();
+    let comment_keys = has_any_comments.then(|| super::fonts::comment_pane_keys(doc));
 
     // (Link element, page, annotation) for the structure tree's OBJR kids; the
     // annotations' /StructParent keys follow the pages' keys.
@@ -385,7 +383,7 @@ pub(super) fn assemble_pdf_pages(
                 zoom_sp,
                 (zoom, zoom_tx, zoom_ty),
                 seen_fonts,
-                (body_key, label_key),
+                (body_key, label_key, doc.comment_font_size),
             );
             pane_raw = pane_content.finish().to_vec();
         }
