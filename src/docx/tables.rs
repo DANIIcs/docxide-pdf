@@ -420,9 +420,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let num_rows = tbl_rows.len();
     let num_cols = col_widths.len();
 
+    let cell_spacing = |pr: Option<roxmltree::Node>| {
+        pr.and_then(|pr| wml(pr, "tblCellSpacing"))
+            .and_then(|n| twips_attr(n, "w"))
+    };
+    let table_spacing = cell_spacing(tbl_pr).unwrap_or(0.0);
+    let mut row_spacing = Vec::with_capacity(num_rows);
     let mut rows = Vec::new();
     for (ri, tr) in tbl_rows.iter().enumerate() {
         let tr_pr = wml(*tr, "trPr");
+        row_spacing.push(cell_spacing(tr_pr).unwrap_or(table_spacing));
         let (row_height, height_exact) = tr_pr
             .and_then(|pr| wml(pr, "trHeight"))
             .map(|h| {
@@ -898,6 +905,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         });
     }
     settle_row_borders(&mut rows, cell_margins);
+    apply_cell_spacing(&mut rows, &row_spacing, num_cols, cell_margins);
 
     Table {
         col_widths,
@@ -933,6 +941,35 @@ pub(super) fn settle_row_borders(rows: &mut [TableRow], cell_margins: CellMargin
             let mut m = cell.cell_margins.unwrap_or(cell_margins);
             m.top += top / 2.0;
             m.bottom += bottom / 2.0;
+            cell.cell_margins = Some(m);
+        }
+    }
+}
+
+/// `w:tblCellSpacing` s leaves 2s between neighbouring cells and between the
+/// cells and the table's edge (Word probes, compat 14 and 15: a 3-row table
+/// grows by 4 × 2s; the first column's text moves 2s right, the second's s).
+/// Cell content sees that as wider insets: s on a side facing another cell,
+/// 2s on a side facing the table edge. Compat 14's outdent follows the first
+/// cell's left inset, so its text stays at the indent as in Word.
+// ponytail: borders stay on the grid lines; Word draws each cell's own box
+// 2s apart (and adds one border width per gap), so bordered spaced tables are
+// still short by a border per row.
+fn apply_cell_spacing(rows: &mut [TableRow], spacing: &[f32], num_cols: usize, base: CellMargins) {
+    let last_row = rows.len().saturating_sub(1);
+    for (ri, row) in rows.iter_mut().enumerate() {
+        let s = spacing[ri];
+        if s <= 0.0 {
+            continue;
+        }
+        let gap = |at_edge: bool| if at_edge { 2.0 * s } else { s };
+        let spans: Vec<_> = row.grid_cells().map(|(col, span, _)| (col, span)).collect();
+        for (cell, (col, span)) in row.cells.iter_mut().zip(spans) {
+            let mut m = cell.cell_margins.unwrap_or(base);
+            m.left += gap(col == 0);
+            m.right += gap(col + span >= num_cols);
+            m.top += gap(ri == 0);
+            m.bottom += gap(ri == last_row);
             cell.cell_margins = Some(m);
         }
     }
@@ -1045,6 +1082,41 @@ mod border_conflict_tests {
         assert_eq!(margins(0, 1), (1.0, 0.0, 3.0, 1.6));
         assert_eq!(margins(1, 0), (1.0, 5.0, 2.0, 6.0));
         assert!(table.rows[1].cells[0].cell_margins.is_none());
+    }
+
+    #[test]
+    fn cell_spacing_widens_insets_double_at_the_table_edge() {
+        use std::io::{Cursor, Write};
+        // 20 twips = 1pt spacing on the table, 0 on the second row.
+        let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+          <w:tblPr><w:tblCellSpacing w:w="20" w:type="dxa"/><w:tblCellMar><w:left w:w="0"/><w:right w:w="0"/></w:tblCellMar></w:tblPr>
+          <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid>
+          <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+          <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+          <w:tr><w:trPr><w:tblCellSpacing w:w="0" w:type="dxa"/></w:trPr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+        </w:tbl><w:sectPr/></w:body></w:document>"#;
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file(
+            "word/document.xml",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(xml.as_bytes()).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let doc = crate::docx::parse_bytes(&bytes).unwrap();
+        let Block::Table(table) = &doc.sections[0].blocks[0] else {
+            panic!("expected table")
+        };
+        let margins = |r: usize, c: usize| {
+            let m = table.rows[r].cells[c]
+                .cell_margins
+                .unwrap_or(table.cell_margins);
+            (m.top, m.left, m.bottom, m.right)
+        };
+        assert_eq!(margins(0, 0), (2.0, 2.0, 1.0, 1.0));
+        assert_eq!(margins(0, 1), (2.0, 1.0, 1.0, 2.0));
+        assert_eq!(margins(1, 1), (1.0, 1.0, 1.0, 2.0));
+        assert_eq!(margins(2, 0), (0.0, 0.0, 0.0, 0.0));
     }
 
     #[test]

@@ -66,28 +66,24 @@ Commands: `python3 tools/line_diff.py <ref> <gen>`, `python3 tools/pdf_lines.py
 
 ### 2.2 Remaining focus fixtures (§4)
 
-1. **maine (5.0): nested layout tables with `tblCellSpacing`.**
-   - **Width (diagnosed, patch parked):** its tables are `tblW` 100% pct over
-     stale 544.5pt grids in a 540pt column; Word wraps inside 540, we use the
-     grid (lines run to 582pt past the 576pt margin). Word probes (online,
-     generator `accuracy_push_local/probes/mk_pct_probe.py`): 100% and 80% tables over 575pt
-     and 540pt grids, autofit and fixed, all take the pct share; compat 15's
-     basis is the column, compat 14's the column plus the table's left and
-     right cell margins (550.7 for 540 + 2 × 5.4). `apply_pct_width` skips real
-     grids and caps pct at 100%. The fix (drop the `grid_inferred` guard,
-     compat-aware basis, optionally no cap) is
-     `accuracy_push_local/patches/pct-over-real-grid.patch`; with it maine's
-     page 1 wraps as Word's but its score stays 5.0 (row heights dominate).
-     It is **parked**: the corpus subset with pct-vs-grid mismatches (42
-     docs) drops 46.59 → 44.89 (capped) / 46.02 (uncapped). The corpus
-     references are local print exports and seem to keep the grid (pct 93% /
-     grid 100%, pct 100% / grid 103%, pct 108% / grid 108%); export three of
-     them online before deciding (Word refused to open files for a while this
-     session, then recovered).
-   - **Cell spacing:** `tblCellSpacing` is not parsed or laid out anywhere;
-     maine's rows come out 1.7–4.5pt short. Probe generator
-     `accuracy_push_local/probes/mk_spacing_probe.py` (bordered 2×2 tables, 0 / 15 / 100 twips, compat
-     15) is ready; its export failed the same way.
+1. **maine (4.6 → 39.4): nested layout tables with `tblCellSpacing`.**
+   - **Done (2026-10-13), width:** a real grid now shrinks to its pct share
+     (≤ 100%), but never grows to it, never above 100%, and never when the
+     share has no room for a nested table or inline picture. The 42-document
+     pct-vs-grid corpus subset was re-exported with Word's **online** preset
+     (`subsets/pct_grid_online/`): 43.64 → 44.05 with the rule alone, no
+     document down more than 0.6. Evidence for each exception: a 93% table
+     holding a 317pt nested table keeps its 451pt grid; polish_ministry's
+     530.9pt grid under 100% of 532.4 is drawn 531.3 wide; 107–113% tables
+     keep 462–489pt grids in a 441pt column.
+   - **Done (2026-10-13), cell spacing:** `tblCellSpacing` (table and
+     `trPr`) s leaves 2s between neighbouring cells and between cells and the
+     table edge. Word probes (`accuracy_push_local/probes/mk_spacing2.py`,
+     compat 14 and 15, bordered and not, 0 / 15 / 100 twips): a 3-row table
+     grows by 4 × (2s + border); first column text moves 2s right (compat 15;
+     compat 14 keeps it at the indent), other columns s. Modelled as wider
+     cell insets. Open: bordered spaced tables draw borders on the grid
+     lines instead of per-cell boxes and miss one border width per gap.
    - **Done (`b159982a`):** the extra blank line after "…this Bureau." was a
      hideMark cell whose last paragraph ends in `<w:br/>`; Word hides that
      mark-only line and its space after (5 probes,
@@ -186,13 +182,13 @@ when they moved to `scraped/` with baselines. References are online exports.
 | chiseldon_parish_planning_agenda | 5.7 → 69.0 | done |
 | bulgarian_farmland_allocation_order | 5.2 → 66.0 | done |
 | renewable_dispatch_committee_agenda | 49.5 → 85.7 | done (Arial Narrow 2.42; "Agenda" text box 2.6pt low, untriaged) |
-| physical_education_curriculum_map | 27.9 → 68.5 | done |
+| physical_education_curriculum_map | 27.9 → 77.8 | done (underline split at plain gaps; floating tables' half-border shift) |
 | australian_higher_education_guidelines | 34.2 → 65.3 | done (35 pages as Word) |
-| czech_village_budget_commentary | 11.3 → 51.1 | header 1.1pt high; a later header line ("IČO … e-mail") lays out differently |
+| czech_village_budget_commentary | 11.3 → 51.1 | header 1.1pt high: its picture-only header line at 1.5× takes Calibri-sized leading (what-ifs: picture run → TNR −0.5, mark → Calibri no change), unlike body paragraphs, where Word uses the mark (2026-10-13 probe); header picture lines unprobed |
 | italian_academic_cv_form | 28.1 → 45.1 | page breaks as Word; remaining gap untriaged |
 | cyprus_ucits_marketing_registry | 29.9 → 79.7 | done (3 pages as Word) |
 | potamites_genetic_distance_table | 14.0 → 72.7 | done (EMF text, lines, fills, rclFrame; clipping and opaque text backgrounds not done) |
-| maine_criminal_history_record | 4.5 → 4.5 | §2.2 item 1 (hideMark break line fixed; width and cell spacing open) |
+| maine_criminal_history_record | 4.5 → 39.4 | §2.2 item 1 (width and cell spacing done; nested floating tables open) |
 | arabic_rice_benefits_article | 3.0 | §2.2 item 2 |
 
 ## 5. Open queue (diagnosed, not fixed)
@@ -244,6 +240,12 @@ Ordered roughly by expected gain. Corpus counts are clean documents.
     absent, compat < 15: the table style's size wins unless 10pt).
 14. romanian_quality: an at-least row is trHeight + both cell margins (67.5 =
     60.2 + 2 × 3.6) though the content is shorter; one sample.
+14a. Compat 15 border geometry (Word probe `accuracy_push_local/probes/mk_cellx.py`,
+    0.5/1.5/6pt borders): the outer left and right borders sit inside the
+    table box, so only the first column's text moves in by half the left band;
+    interior columns' text stays at gridline + margin whatever the insideV
+    width. `word2013_border_shift` moves the whole grid instead (interior
+    text 0.25pt right at 0.5pt borders, 3pt at 6pt).
 
 **Headers, floats, frames**
 15. A floating header table neither wraps header text nor extends the header

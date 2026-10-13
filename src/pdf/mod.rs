@@ -45,7 +45,7 @@ use header_footer::{
 pub(super) use helpers::resolve_line_h;
 use helpers::{
     align_offset, auto_ascent_scale, border_band, collect_paras, draw_horizontal_rule,
-    drops_contextual_spacing, joins_border_group, para_runs_with_textboxes,
+    drops_contextual_spacing, joins_border_group, para_runs_with_textboxes, spacing_leading,
 };
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
@@ -1045,12 +1045,14 @@ impl FloatingTablePos {
         // Before compat 15 an offset places the first cell's text, not
         // its border, as tblInd does inline: Word draws case46's R1 at
         // the margin and the border a cell margin left of it.
-        let x = if ctx.compat_mode < 15
-            && matches!(pos.h_position, crate::model::HorizontalPosition::Offset(_))
-        {
-            x - table.first_cell_left_margin()
-        } else {
-            x
+        // From compat 15 the offset places the left border's outer edge, as
+        // tblInd does inline (Word probe: 0.5/1.5/6pt borders put floating and
+        // inline tables' first-column text at the same x).
+        use crate::model::HorizontalPosition::Offset;
+        let x = match pos.h_position {
+            Offset(_) if ctx.compat_mode < 15 => x - table.first_cell_left_margin(),
+            Offset(_) => x + table::word2013_border_shift(table),
+            _ => x,
         };
         let y = match pos.v_anchor {
             "page" => sp.page_height - pos.v_offset_pt,
@@ -1691,7 +1693,7 @@ fn first_row_height(table: &crate::model::Table, ctx: &RenderContext, col_w: f32
     } else {
         table_layout::auto_fit_columns(table, ctx.fonts, Some(col_w), Some(col_w))
     };
-    table_layout::apply_pct_width(table, &mut col_widths, col_w);
+    table_layout::apply_pct_width(table, &mut col_widths, col_w, ctx.compat_mode);
     table_layout::compute_row_layouts(table, &col_widths, ctx, None)
         .first()
         .map_or(0.0, |r| r.height)
@@ -2728,10 +2730,17 @@ fn render_paragraph_block(
         // line-spacing leading below it, sized by the paragraph mark
         // (dental_amalgam: a 68.25pt logo under Normal's 1.15 lines is
         // 70.1pt tall in Word although the next paragraph is single-spaced).
-        let leading = (line_h - natural_line_h).max(0.0);
+        // The mark's, not the picture run's: Word probe at 3× spacing, 12pt
+        // Times New Roman, 12pt Calibri, 24pt Times New Roman and 11pt Cambria
+        // marks add 2 × their line whatever the picture run's font and size.
+        let (mark_fs, mark_lhr) = unsized_line_metrics(para, font_size, ctx.fonts);
+        let mark_line_h = resolve_line_h(effective_ls, mark_fs, mark_lhr);
+        let leading = spacing_leading(mark_line_h, mark_fs, mark_lhr);
         // A shorter one sits on the baseline of a full line of the mark's
-        // font (indigenous_innovation's 2.25pt rule under the title).
-        let picture_h = if para.content_height > line_h {
+        // font (indigenous_innovation's 2.25pt rule under the title). Taller
+        // than a natural line is enough for the leading: a 30pt picture under
+        // 3 × 13.8pt lines is 57.6pt in Word, not 41.4.
+        let picture_h = if para.content_height > natural_line_h {
             para.content_height + leading
         } else {
             line_h
@@ -2745,7 +2754,7 @@ fn render_paragraph_block(
         // twips from its EMU extent against an 8617 twip column) fits.
         let twips = |pt: f32| (pt * 20.0).round();
         if img.is_ole_preview && twips(img.layout_size().0) > twips(col_w) {
-            picture_h + line_h
+            picture_h + mark_line_h
         } else {
             picture_h
         }
@@ -4545,7 +4554,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                         let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
                         let line_h = resolve_line_h(ls, fs, lhr);
-                        Some((line_h, (line_h - fs * lhr.unwrap_or(1.2)).max(0.0)))
+                        Some((line_h, spacing_leading(line_h, fs, lhr)))
                     }
                     _ => None,
                 })

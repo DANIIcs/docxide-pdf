@@ -67,6 +67,12 @@ pub(crate) fn resolve_line_h(ls: LineSpacing, font_size: f32, tallest_lhr: Optio
     }
 }
 
+/// What line spacing adds to a font's natural line (`line_h` from
+/// `resolve_line_h`), never negative.
+pub(crate) fn spacing_leading(line_h: f32, font_size: f32, tallest_lhr: Option<f32>) -> f32 {
+    (line_h - font_size * tallest_lhr.unwrap_or(1.2)).max(0.0)
+}
+
 /// How much of its ascent a line's first baseline sits below the line top.
 /// Below single spacing Word shrinks the whole line box, ascent and descent
 /// alike; at or above it the extra leading all goes below the baseline (Word

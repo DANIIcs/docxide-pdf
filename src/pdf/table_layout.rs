@@ -32,23 +32,79 @@ pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) 
 /// Scale column widths so the table occupies its `w:tblW type="pct"` share
 /// of the available content width. tcW pct values are mis-read as twips at
 /// parse time, but their proportions survive — only the total needs fixing.
-/// Only applies to inferred grids: when a real tblGrid exists, Word renders
-/// its widths as-is even when the pct preferred width disagrees (observed
-/// with pct values of 100.4–115% alongside grids matching the content width).
-pub(super) fn apply_pct_width(table: &Table, widths: &mut [f32], available_w: f32) {
-    if !table.grid_inferred {
+/// A real tblGrid only shrinks, to a share of at most 100% (Word probes: 100%
+/// and 80% tables over 575pt and 540pt grids; maine's 544.5pt grids wrap at
+/// its 540pt column). Word keeps the saved grid when the share would widen it
+/// (polish_ministry), is over 100%, or has no room for a nested table or
+/// picture.
+/// Before compat 15 the share is of the column plus the edge cells' left and
+/// right margins, the margins the table hangs out by (Word probe: 100% tables
+/// 550.7pt wide in a 540pt column with 5.4pt margins; cell spacing included).
+// ponytail: keeps the grid's proportions; Word's autofit re-splits columns
+// by content (a 150:425 grid came out 200:350).
+pub(super) fn apply_pct_width(
+    table: &Table,
+    widths: &mut [f32],
+    available_w: f32,
+    compat_mode: u32,
+) {
+    let Some(pct) = table.width_pct else { return };
+    let basis = if compat_mode >= 15 {
+        available_w
+    } else {
+        available_w + table.first_cell_left_margin() + table.last_cell_right_margin()
+    };
+    // Word caps a table's width at the text column width.
+    let target = basis * pct.min(1.0);
+    let total: f32 = widths.iter().sum();
+    if total <= 0.0 || target <= 0.0 {
         return;
     }
-    let Some(pct) = table.width_pct else { return };
-    // Word caps a table's width at the text column width.
-    let target = available_w * pct.min(1.0);
-    let total: f32 = widths.iter().sum();
-    if total > 0.0 && target > 0.0 {
-        let scale = target / total;
-        for w in widths {
-            *w *= scale;
+    let scale = target / total;
+    let keeps_grid = || {
+        pct > 1.0
+            || scale > 1.0
+            || widths
+                .iter()
+                .zip(hard_content_widths(table))
+                .any(|(w, m)| w * scale < m - 0.5)
+    };
+    if !table.grid_inferred && keeps_grid() {
+        return;
+    }
+    for w in widths {
+        *w *= scale;
+    }
+}
+
+/// Each grid column's widest nested table or picture plus its cell padding:
+/// content that never wraps narrower.
+fn hard_content_widths(table: &Table) -> Vec<f32> {
+    let mut min = vec![0.0f32; table.col_widths.len()];
+    for row in &table.rows {
+        for (grid_col, span, cell) in row.grid_cells() {
+            if grid_col >= min.len() || span > 1 {
+                continue;
+            }
+            let pad = cell.cell_margins.as_ref().unwrap_or(&table.cell_margins);
+            let pad = pad.left + pad.right;
+            for block in &cell.content {
+                let w = match block {
+                    Block::Table(t) => t.col_widths.iter().sum(),
+                    Block::Paragraph(p) => p
+                        .image
+                        .iter()
+                        .chain(p.runs.iter().filter_map(|r| r.inline_image.as_ref()))
+                        .map(|i| i.layout_size().0)
+                        .fold(0.0, f32::max),
+                };
+                if w > 0.0 {
+                    min[grid_col] = min[grid_col].max(w + pad);
+                }
+            }
         }
     }
+    min
 }
 
 pub(super) fn cell_x_offset(col_widths: &[f32], table_left: f32, grid_col: usize) -> f32 {
@@ -1169,7 +1225,7 @@ pub(super) fn compute_row_layouts(
                                 // The widths the nested table is drawn at, so a split's
                                 // line cursors index the lines it draws.
                                 let mut nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w), None);
-                                apply_pct_width(nested_table, &mut nested_cw, cell_text_w);
+                                apply_pct_width(nested_table, &mut nested_cw, cell_text_w, ctx.compat_mode);
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h = nested_layouts.iter().map(|rl| rl.height).sum::<f32>();

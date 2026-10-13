@@ -169,6 +169,15 @@ impl Table {
             .and_then(|c| c.cell_margins)
             .map_or(self.cell_margins.left, |m| m.left)
     }
+
+    /// The right margin of the first row's last cell, its own or the table's.
+    pub fn last_cell_right_margin(&self) -> f32 {
+        self.rows
+            .first()
+            .and_then(|r| r.cells.last())
+            .and_then(|c| c.cell_margins)
+            .map_or(self.cell_margins.right, |m| m.right)
+    }
 }
 
 pub struct TableRow {

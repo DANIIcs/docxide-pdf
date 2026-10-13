@@ -331,9 +331,18 @@ fn push_decoration(
 ) {
     // Look back past the other line of a double underline (or a strike on the
     // same run), which interleave with this one chunk by chunk.
-    let merged = decorations.iter_mut().rev().take(3).find(|(_, dy, _, dh, dc)| {
-        (*dy - y).abs() < 0.01 && (*dh - height).abs() < 0.01 && *dc == color
-    });
+    // Only a touching span joins: an underlined word after a gap of plain text
+    // or tabs gets its own line.
+    let merged = decorations
+        .iter_mut()
+        .rev()
+        .take(3)
+        .find(|(dx, dy, dw, dh, dc)| {
+            (*dy - y).abs() < 0.01
+                && (*dh - height).abs() < 0.01
+                && *dc == color
+                && (x - (*dx + *dw)).abs() < 0.5
+        });
     if let Some(prev) = merged {
         prev.2 = (x + width) - prev.0;
     } else {
@@ -3798,7 +3807,7 @@ pub(super) fn picture_line_bottom(
     let leading = tallest_by_ascent(text_runs(), seen_fonts)
         .or_else(mark)
         .map_or(0.0, |(fs, lhr, _)| {
-            (super::helpers::resolve_line_h(ls, fs, lhr) - fs * lhr.unwrap_or(1.2)).max(0.0)
+            super::helpers::spacing_leading(super::helpers::resolve_line_h(ls, fs, lhr), fs, lhr)
         });
     let glyph_runs = text_runs().filter(|r| !r.text.trim().is_empty());
     let descent = tallest_by_ascent(glyph_runs, seen_fonts)

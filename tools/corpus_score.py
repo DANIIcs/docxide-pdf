@@ -16,6 +16,7 @@ help one fixture and hurt elsewhere. Compare runs with tools/corpus_compare.py.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -49,7 +50,8 @@ def score(docx: Path, ref: Path, cli: str, out: Path) -> dict | None:
         pass
     if not pdf.exists():
         return {'jaccard': 0, 'ssim': 0, 'failed': True}
-    refpng = OUT / '_refpng' / name
+    # Keyed by content too: print and online exports of one document share its name.
+    refpng = OUT / '_refpng' / f'{name}-{hashlib.sha1(ref.read_bytes()).hexdigest()[:8]}'
     raster(ref, refpng)
     raster(pdf, work / 'png')
     r = subprocess.run([str(PAGE_METRICS), str(ref), str(pdf), str(refpng), str(work / 'png')],

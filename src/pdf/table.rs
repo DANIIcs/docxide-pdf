@@ -1646,7 +1646,7 @@ fn render_header_rows(
 /// the indent, so the border grid (drawn centred) sits half a band further
 /// right, and cell text follows it: rehab_centre's 2.25pt bands span
 /// 72.0–74.25 from a 72pt margin and text starts 5.4 + 1.125 in.
-fn word2013_border_shift(table: &Table) -> f32 {
+pub(super) fn word2013_border_shift(table: &Table) -> f32 {
     table
         .first_cell()
         .map_or(0.0, |c| c.borders.left.band() / 2.0)
@@ -1710,6 +1710,7 @@ pub(super) fn render_table(
         table,
         &mut col_widths,
         available_w.unwrap_or(sp.page_width - sp.margin_left - sp.margin_right),
+        ctx.compat_mode,
     );
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
@@ -2273,7 +2274,7 @@ pub(super) fn render_table(
 
 pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext, content_w: f32) -> f32 {
     let mut col_widths = auto_fit_columns(table, ctx.fonts, None, None);
-    apply_pct_width(table, &mut col_widths, content_w);
+    apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     row_layouts.iter().map(|r| r.height).sum()
 }
@@ -2296,6 +2297,7 @@ pub(super) fn render_header_footer_table(
         table,
         &mut col_widths,
         sp.page_width - sp.margin_left - sp.margin_right,
+        ctx.compat_mode,
     );
     let hf_sub = HfSubstitution {
         page_num,
