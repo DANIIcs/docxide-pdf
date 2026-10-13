@@ -139,8 +139,9 @@ pub(crate) enum EmfRecord {
     Skip,
 }
 
-/// Word wraps pasted bitmaps (scanned signatures, stamps) in an EMF whose only
-/// drawing record is one EMR_STRETCHDIBITS. Return that bitmap as a BMP so the
+/// Word wraps pasted bitmaps (scanned signatures, stamps, logos) in an EMF
+/// whose only drawing record is one EMR_STRETCHDIBITS, EMR_STRETCHBLT or
+/// EMR_BITBLT. Return that bitmap as a BMP so the
 /// raster pipeline can embed it; `None` for anything else, including EMFs that
 /// mix vector drawing with a bitmap (those keep the vector translator).
 // ponytail: the DIB is stretched over the whole picture frame, ignoring its
@@ -155,6 +156,7 @@ pub(crate) fn emf_to_raster(data: &[u8]) -> Option<Vec<u8>> {
     for_each_raw_record(data, |rec_type, payload| {
         match rec_type {
             81 if bmp.is_none() => bmp = decode_stretchdibits(payload),
+            76 | 77 if bmp.is_none() => bmp = decode_blt_bitmap(payload),
             t if paints_vector(t) => vector = true,
             _ => {}
         }
@@ -328,6 +330,27 @@ fn decode_stretchdibits(payload: &[u8]) -> Option<Vec<u8>> {
     };
     let bmi = part(u32_at(40)?, u32_at(44)?)?;
     let bits = part(u32_at(48)?, u32_at(52)?)?;
+    if bmi.len() < 40 || bits.is_empty() {
+        return None;
+    }
+    Some(super::wmf::bmp_from_parts(bmi, bits))
+}
+
+/// EMR_BITBLT / EMR_STRETCHBLT with a source bitmap: the same BITMAPINFO and
+/// bits fields as STRETCHDIBITS, after the source transform and colour
+/// (`offBmiSrc` at payload offset 76, [MS-EMF] 2.3.1.2 and 2.3.1.6).
+fn decode_blt_bitmap(payload: &[u8]) -> Option<Vec<u8>> {
+    let u32_at = |off: usize| -> Option<usize> {
+        payload
+            .get(off..off + 4)
+            .map(|s| u32::from_le_bytes(s.try_into().unwrap()) as usize)
+    };
+    let part = |off: usize, len: usize| -> Option<&[u8]> {
+        let start = off.checked_sub(8)?;
+        payload.get(start..start.checked_add(len)?)
+    };
+    let bmi = part(u32_at(76)?, u32_at(80)?)?;
+    let bits = part(u32_at(84)?, u32_at(88)?)?;
     if bmi.len() < 40 || bits.is_empty() {
         return None;
     }
