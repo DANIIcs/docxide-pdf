@@ -70,6 +70,15 @@ pub(super) fn apply_pct_width(
                 .any(|(w, m)| w * scale < m - 0.5)
     };
     if !table.grid_inferred && keeps_grid() {
+        // Keeping the grid means the saved one, not columns content-fitted
+        // below it: a 100% CV table over a 450pt grid fills its 451pt column
+        // in Word (white cell shading over grey table shading), where ours
+        // shrank to its 355pt of text.
+        let grid: f32 = table.col_widths.iter().sum();
+        if pct <= 1.0 && grid > total && grid <= target + 0.5 && widths.len() == table.col_widths.len()
+        {
+            widths.copy_from_slice(&table.col_widths);
+        }
         return;
     }
     for w in widths {
