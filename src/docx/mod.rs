@@ -1194,6 +1194,22 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     // up on the right for the comment pane. We apply the same scaling at
     // content-stream assembly time; the body keeps its natural layout here.
 
+    // A textbox sized as a share of the text width (pctWidth) takes it from
+    // its section: 40% of a 451pt column draws a 180.25pt box in Word, not
+    // the 187pt extent saved beside it.
+    for section in &mut sections {
+        let text_width = section.properties.text_width();
+        for block in &mut section.blocks {
+            if let Block::Paragraph(p) = block {
+                for tb in &mut p.textboxes {
+                    if let Some(f) = tb.width_pct_margin {
+                        tb.width_pt = f * text_width;
+                    }
+                }
+            }
+        }
+    }
+
     // Word's print export sets a balloon in the Balloon Text style (Times New
     // Roman 9pt when the document has none; 70 references): the label in its
     // face, bold, the comment text in its own face, both at its size.

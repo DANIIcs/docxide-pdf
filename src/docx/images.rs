@@ -55,6 +55,23 @@ pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
     wpd(container, "extent").map_or((0.0, 0.0), |e| (emu_attr(e, "cx"), emu_attr(e, "cy")))
 }
 
+/// `wp14:sizeRelH relativeFrom="margin"` with a non-zero pctWidth, as a
+/// fraction of the text width.
+fn pct_width_of_margin(anchor: roxmltree::Node) -> Option<f32> {
+    let rel = anchor
+        .children()
+        .find(|n| n.tag_name().name() == "sizeRelH")
+        .filter(|n| n.attribute("relativeFrom") == Some("margin"))?;
+    let pct: f32 = rel
+        .children()
+        .find(|n| n.tag_name().name() == "pctWidth")?
+        .text()?
+        .trim()
+        .parse()
+        .ok()?;
+    (pct > 0.0).then_some(pct / 100_000.0)
+}
+
 /// `wp:anchor` z-order: (behindDoc, relativeHeight).
 pub(super) fn anchor_z_order(anchor: roxmltree::Node) -> (bool, u32) {
     (
@@ -591,6 +608,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 let (behind_doc, z_index) = anchor_z_order(container);
                 return Some(RunDrawingResult::TextBox(Textbox {
                     width_pt: display_w,
+                    width_pct_margin: pct_width_of_margin(container),
                     height_pt: display_h,
                     h_position,
                     h_relative_from: h_relative,

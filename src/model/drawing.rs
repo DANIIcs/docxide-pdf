@@ -387,6 +387,10 @@ pub enum AutoFit {
 pub struct Textbox {
     pub paragraphs: Vec<Paragraph>,
     pub width_pt: f32,
+    /// `wp14:sizeRelH relativeFrom="margin"` pctWidth as a fraction: the
+    /// width is that share of the section's text width (resolved into
+    /// `width_pt` once the section is known).
+    pub width_pct_margin: Option<f32>,
     pub height_pt: f32,
     pub h_position: HorizontalPosition,
     pub h_relative_from: HRelativeFrom,
