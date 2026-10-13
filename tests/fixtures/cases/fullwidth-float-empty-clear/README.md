@@ -1,0 +1,1 @@
+Public synthetic control: full-width floating table followed by an empty clearing break and a body paragraph. Word keeps the paragraph-mark line below the table even after the float zone has been cleared. No private corpus data.

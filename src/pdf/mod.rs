@@ -2594,7 +2594,11 @@ fn render_paragraph_block(
         // A floating table that broke across pages leaves no zone; keep the
         // one-line rule then. ponytail: assumes such a table left a side strip;
         // carry its extent past the page break if a full-width one shows up.
-        && state.pb.float_zone.as_ref().is_none_or(|zone| {
+        && state.pb.float_zone.as_ref().map_or_else(
+            // With no zone, an empty break still owns its mark line.
+            // Only a paragraph with content can consume the leading line.
+            || para.runs.iter().any(|r| !r.text.is_empty() || r.inline_image.is_some()),
+            |zone| {
             (zone.obj_left - zone.left_from_text - col_x)
                 .max(col_x + col_w - zone.obj_right - zone.right_from_text)
                 >= MIN_EMPTY_STRIP
