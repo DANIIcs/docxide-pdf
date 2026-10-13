@@ -915,6 +915,7 @@ pub(super) fn embed_all_images(
                         for img in para
                             .image
                             .iter()
+                            .chain(para.runs.iter().filter_map(|run| run.inline_image.as_ref()))
                             .chain(para.floating_images.iter().map(|fi| &fi.image))
                         {
                             embed_table_image(
@@ -1098,6 +1099,34 @@ fn embed_textbox_images(
 #[cfg(test)]
 mod tests {
     use super::{apply_lum, crop_matrix};
+
+    #[test]
+    fn mixed_cell_paragraph_pictures_are_embedded_in_all_table_stories() {
+        let inputs: [&[u8]; 5] = [
+            include_bytes!("../../tests/fixtures/cases/cell-inline-body/input.docx"),
+            include_bytes!("../../tests/fixtures/cases/cell-inline-header/input.docx"),
+            include_bytes!("../../tests/fixtures/cases/cell-inline-nested/input.docx"),
+            include_bytes!("../../tests/fixtures/cases/cell-inline-tabbed/input.docx"),
+            include_bytes!("../../tests/fixtures/cases/cell-inline-exact/input.docx"),
+        ];
+        for input in inputs {
+            let doc = crate::docx::parse_bytes(input).unwrap();
+            let mut pdf = pdf_writer::Pdf::new();
+            let mut next = 1;
+            let images = super::embed_all_images(
+                &doc,
+                &mut pdf,
+                &mut || {
+                    let reference = pdf_writer::Ref::new(next);
+                    next += 1;
+                    reference
+                },
+                &std::collections::HashMap::new(),
+            );
+            assert_eq!(images.table_cell_image_names.len(), 1);
+            assert_eq!(images.image_xobjects.len(), 1);
+        }
+    }
 
     #[test]
     fn lum_washes_out_faint_ink_but_keeps_dark_ink() {

@@ -313,6 +313,34 @@ fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
         || para.has_connectors
 }
 
+fn clip_fixed_cell_pictures(
+    content: &mut Content,
+    para: &CellParagraphLayout,
+    cell_x: f32,
+    col_w: f32,
+    top: f32,
+    height: f32,
+) -> bool {
+    if !para.clip_inline_pictures
+        || !para
+            .lines
+            .iter()
+            .flat_map(|line| &line.chunks)
+            .any(|chunk| chunk.inline_image_name.is_some())
+        || para.image_line_ascent <= para.font_size * para.ascender_ratio
+    {
+        return false;
+    }
+    // Exact spacing leaves tall inline pictures on the fixed text baseline;
+    // Word clips the part protruding above the paragraph's line box.
+    content.save_state();
+    content
+        .rect(cell_x, top - height, col_w, height)
+        .clip_nonzero()
+        .end_path();
+    true
+}
+
 /// Total content height including trailing space_after, matching Word's vAlign calculation.
 fn cell_content_h_for_valign(items: &[CellContentItem]) -> f32 {
     let mut h: f32 = 0.0;
@@ -552,6 +580,14 @@ fn render_cell_content(
                     para.text_hanging
                 };
 
+                let picture_clip = clip_fixed_cell_pictures(
+                    content,
+                    para,
+                    cell_x,
+                    col_w,
+                    cursor_y,
+                    para_block_height(para),
+                );
                 render_paragraph_lines(
                     content,
                     &para.lines,
@@ -560,7 +596,10 @@ fn render_cell_content(
                     text_w,
                     baseline_y,
                     para.line_h,
-                    (para.font_size, para.font_size * para.descender_ratio),
+                    (
+                        para.image_line_ascent,
+                        para.font_size * para.descender_ratio,
+                    ),
                     para.lines.len(),
                     0,
                     links,
@@ -572,6 +611,9 @@ fn render_cell_content(
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                 );
+                if picture_clip {
+                    content.restore_state();
+                }
                 content.restore_state();
                 end_cell_tag(content, &tagger);
 
@@ -1128,6 +1170,14 @@ fn render_partial_cell_content(
                 };
 
                 let l1 = l1.unwrap_or(para.lines.len());
+                let picture_clip = clip_fixed_cell_pictures(
+                    content,
+                    para,
+                    cell_x,
+                    col_w,
+                    cursor_y,
+                    super::table_layout::cell_lines_h(para, l0..l1),
+                );
                 render_paragraph_lines(
                     content,
                     &para.lines[l0..l1],
@@ -1136,7 +1186,10 @@ fn render_partial_cell_content(
                     text_w,
                     baseline_y,
                     para.line_h,
-                    (para.font_size, para.font_size * para.descender_ratio),
+                    (
+                        para.image_line_ascent,
+                        para.font_size * para.descender_ratio,
+                    ),
                     para.lines.len(),
                     l0,
                     links,
@@ -1148,6 +1201,9 @@ fn render_partial_cell_content(
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                 );
+                if picture_clip {
+                    content.restore_state();
+                }
                 end_cell_tag(content, &tagger);
 
                 cursor_y -= if para.lines.is_empty() {
@@ -2343,6 +2399,28 @@ pub(super) fn render_header_footer_table(
 #[cfg(test)]
 mod floating_nested_visibility_tests {
     use super::*;
+
+    #[test]
+    fn picture_clipping_does_not_clip_picture_free_text() {
+        let para = CellParagraphLayout {
+            font_size: 14.0,
+            ascender_ratio: 0.8,
+            image_line_ascent: 36.0,
+            clip_inline_pictures: true,
+            lines: vec![super::super::layout::TextLine::default()],
+            ..Default::default()
+        };
+        let mut content = Content::new();
+        assert!(!clip_fixed_cell_pictures(
+            &mut content,
+            &para,
+            72.0,
+            360.0,
+            700.0,
+            18.0
+        ));
+        assert!(content.finish().is_empty());
+    }
 
     #[test]
     fn zero_flow_height_does_not_hide_nested_fields() {
