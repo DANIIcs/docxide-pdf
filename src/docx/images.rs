@@ -26,16 +26,15 @@ fn wpd_child_text<'a>(parent: Option<roxmltree::Node<'a, 'a>>, name: &str) -> Op
         .and_then(|n| n.text())
 }
 
-/// Extra vertical space for an inline image: (total, top_portion).
-/// Total = effectExtent top+bottom + distT+distB.
-/// Top = effectExtent.t + distT.
+/// Extra vertical space for an inline image: (total, top_portion), its
+/// effectExtent top+bottom and top. distT/distB only space a floating
+/// picture's wrap: Word lays an inline one out without them (a 9pt-dist
+/// banner sits 150.25pt down in Word's export, 9pt higher than with them).
 fn inline_extra_height(container: roxmltree::Node) -> (f32, f32) {
     let ee = wpd(container, "effectExtent");
     let ee_t = ee.map(|n| emu_attr(n, "t")).unwrap_or(0.0);
     let ee_b = ee.map(|n| emu_attr(n, "b")).unwrap_or(0.0);
-    let dist_t = emu_attr(container, "distT");
-    let dist_b = emu_attr(container, "distB");
-    (ee_t + ee_b + dist_t + dist_b, ee_t + dist_t)
+    (ee_t + ee_b, ee_t)
 }
 
 /// An anchor's (top, bottom) wrap distances: distT/distB plus the effectExtent
