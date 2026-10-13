@@ -678,6 +678,12 @@ pub(in crate::docx) fn autospacing(
     para_style: Option<&ParagraphStyle>,
     defaults: &StyleDefaults,
 ) -> (bool, bool) {
+    // Word sums the written 5pt after and 5pt before of auto-spaced list
+    // items under doNotUseHTMLParagraphAutoSpacing (23.76pt steps for a 13.8
+    // line), where the flags alone would give 14pt and drop it inside a list.
+    if defaults.no_html_auto_spacing {
+        return (false, false);
+    }
     let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
     let side = |attr: &str, style_val: Option<bool>, default: bool| {
         inline_spacing
@@ -958,7 +964,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         settings.east_asia_lang.as_deref(),
         settings.bidi_lang.as_deref(),
     );
-    let styles = parse_styles(zip, &theme, settings.styles_from_normal_template);
+    let mut styles = parse_styles(zip, &theme, settings.styles_from_normal_template);
+    styles.defaults.no_html_auto_spacing = settings.no_html_auto_spacing;
     let numbering = parse_numbering(zip);
     let rels = parse_relationships(zip);
     let ft = parse_font_table(zip);
@@ -1227,6 +1234,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         compress_punctuation: settings.compress_punctuation,
         compat_mode: settings.compat_mode,
         do_not_expand_shift_return: settings.do_not_expand_shift_return,
+        additive_paragraph_spacing: settings.no_html_auto_spacing,
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
     })
 }

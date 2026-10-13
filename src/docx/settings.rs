@@ -28,6 +28,9 @@ pub(super) struct DocumentSettings {
     /// `w:compat/w:adjustLineHeightInTable`: table cell lines snap to the
     /// document grid too (§17.15.3.1).
     pub adjust_line_height_in_table: bool,
+    /// `w:doNotUseHTMLParagraphAutoSpacing`: before/afterAutospacing is
+    /// ignored and the written before/after values apply.
+    pub no_html_auto_spacing: bool,
 }
 
 impl Default for DocumentSettings {
@@ -45,6 +48,7 @@ impl Default for DocumentSettings {
             styles_from_normal_template: false,
             do_not_expand_shift_return: false,
             adjust_line_height_in_table: false,
+            no_html_auto_spacing: false,
         }
     }
 }
@@ -96,5 +100,6 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
             && wml(root, "attachedTemplate").is_none(),
         do_not_expand_shift_return: compat_flag("doNotExpandShiftReturn"),
         adjust_line_height_in_table: compat_flag("adjustLineHeightInTable"),
+        no_html_auto_spacing: compat_flag("doNotUseHTMLParagraphAutoSpacing"),
     }
 }

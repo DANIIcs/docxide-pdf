@@ -130,6 +130,8 @@ pub(super) struct StyleDefaults {
     /// The document has no pPrDefault: paragraphs take Word's built-in
     /// 8pt-after, 1.158-line defaults (`space_after`, `line_spacing`).
     pub(super) builtin_para_defaults: bool,
+    /// `doNotUseHTMLParagraphAutoSpacing` (settings): auto spacing flags off.
+    pub(super) no_html_auto_spacing: bool,
     pub(super) font_size: f32,
     pub(super) font_name: String,
     pub(super) east_asia_font: Option<String>,
@@ -841,6 +843,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
 ) -> StylesInfo {
     let mut defaults = StyleDefaults {
         builtin_para_defaults: false,
+        no_html_auto_spacing: false,
         font_size: 10.0,
         font_name: theme.minor.clone(),
         east_asia_font: None,

@@ -395,6 +395,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) compat_mode: u32,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub(super) do_not_expand_shift_return: bool,
+    /// `Document::additive_paragraph_spacing`.
+    pub(super) additive_paragraph_spacing: bool,
     /// The current section's docGrid line pitch when its grid snaps lines
     /// and `adjustLineHeightInTable` is set (0 otherwise): table cells then
     /// snap to it like body text; physical_therapy (no flag) keeps natural
@@ -2216,7 +2218,14 @@ fn render_paragraph_block(
         para.space_after
     };
 
-    let mut inter_gap = f32::max(state.prev_space_after, effective_space_before);
+    // Word overlaps the space after and the next space before (the larger
+    // wins) under its HTML spacing rule; doNotUseHTMLParagraphAutoSpacing
+    // adds them (5pt + 5pt list items step 23.76 on a 13.8pt line).
+    let mut inter_gap = if ctx.additive_paragraph_spacing {
+        state.prev_space_after + effective_space_before
+    } else {
+        f32::max(state.prev_space_after, effective_space_before)
+    };
     // The anchor the wrap and reservation passes below see, before a page
     // break or a page top's suppressed space before is known (peeked here,
     // taken when the drawings render).
@@ -4160,6 +4169,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         endnote_marks: &endnote_display_order,
         compat_mode: doc.compat_mode,
         do_not_expand_shift_return: doc.do_not_expand_shift_return,
+        additive_paragraph_spacing: doc.additive_paragraph_spacing,
         note_separator: footnotes::NoteSeparator::new(
             doc.footnote_separator.as_ref(),
             &seen_fonts,
