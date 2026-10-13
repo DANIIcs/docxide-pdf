@@ -319,6 +319,9 @@ pub(super) struct WordChunk {
     /// At a right-to-left level: glyphs are placed from the right
     /// (`show_rtl`), in logical order.
     pub(super) rtl_glyphs: bool,
+    /// The space before this chunk came from a `w:rtl` run: bidi ordering
+    /// gives it that run's embedding.
+    pub(super) gap_rtl: bool,
 }
 
 /// Pale-pink highlight color Word uses for comment-anchored text spans.
@@ -435,6 +438,7 @@ impl WordChunk {
             checkbox: run.checkbox,
             rtl: run.rtl,
             rtl_glyphs: false,
+            gap_rtl: false,
         }
     }
 
@@ -486,6 +490,7 @@ impl WordChunk {
             checkbox: None,
             rtl: false,
             rtl_glyphs: false,
+            gap_rtl: false,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -548,6 +553,7 @@ impl WordChunk {
             checkbox: None,
             rtl: false,
             rtl_glyphs: false,
+            gap_rtl: false,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -615,6 +621,7 @@ impl WordChunk {
             checkbox: None,
             rtl: false,
             rtl_glyphs: false,
+            gap_rtl: false,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -887,6 +894,11 @@ pub(super) struct TextLine {
     /// Width of the space the line wrapped at (dropped from the line); bidi
     /// ordering places it (`bidi::reorder_lines`).
     pub(super) trailing_space: f32,
+    /// That space came from a `w:rtl` run.
+    pub(super) trailing_space_rtl: bool,
+    /// In a `w:bidi` paragraph: the first-line indent is on the right and a
+    /// justified paragraph's last line ends at the right.
+    pub(super) rtl_paragraph: bool,
     /// How far this line's baseline sits below where the paragraph ascent
     /// would put it (negative: above), for lines with their own `pitch`.
     pub(super) ascent_shift: f32,
@@ -1222,7 +1234,9 @@ fn push_word_chunks(
     y_off: f32,
     x_start: f32,
     total_ww: f32,
+    gap_rtl: bool,
 ) {
+    let first = chunks.len();
     let actual = |shown: &str, source: &str| (shown != source).then(|| source.to_string());
     if run.small_caps {
         let segs = smallcaps_segments(word, eff_fs);
@@ -1247,6 +1261,9 @@ fn push_word_chunks(
         let mut chunk = WordChunk::text(entry, run, word, eff_fs, cs, y_off, x_start, total_ww);
         chunk.actual_text = original.and_then(|o| actual(word, o));
         chunks.push(chunk);
+    }
+    if let Some(c) = chunks.get_mut(first) {
+        c.gap_rtl = gap_rtl;
     }
 }
 
@@ -1527,6 +1544,8 @@ pub(super) fn build_paragraph_lines(
     // continuously across spaces inside an underlined run, but not across a
     // space that belongs to a neighbouring non-underlined run).
     let mut pending_space_underline = false;
+    // Whether the pending spaces came from a `w:rtl` run (`WordChunk::gap_rtl`).
+    let mut space_rtl = false;
     let mut pending_space_double = false;
     let mut pending_space_color: Option<[u8; 3]> = None;
     let mut pending_space_border: Option<ParagraphBorder> = None;
@@ -1718,6 +1737,7 @@ pub(super) fn build_paragraph_lines(
                 space_count as f32 * word_space_width(run, entry, eff_fs, source, &mut prev_char);
             if space_count > 0 {
                 pending_real_space = true;
+                space_rtl = run.rtl;
                 pending_space_underline = run.underline;
                 pending_space_double = run.double_underline;
                 pending_space_color = run.color;
@@ -1883,6 +1903,7 @@ pub(super) fn build_paragraph_lines(
                     y_off,
                     0.0,
                     ww,
+                    space_rtl,
                 );
                 current_x = ww;
                 continue;
@@ -1942,6 +1963,7 @@ pub(super) fn build_paragraph_lines(
                     y_off,
                     current_x,
                     ww,
+                    space_rtl,
                 );
                 current_x += ww;
                 continue;
@@ -1986,6 +2008,7 @@ pub(super) fn build_paragraph_lines(
                             y_off,
                             start_x,
                             ww,
+                            space_rtl,
                         );
                         current_x = start_x + ww;
                         continue;
@@ -1995,6 +2018,7 @@ pub(super) fn build_paragraph_lines(
                 // No right region or right region also full — wrap to next line
                 lines.push(TextLine {
                     trailing_space: pending_space_w,
+                    trailing_space_rtl: space_rtl,
                     ..finish_dual_line(
                         &mut current_chunks,
                         &mut in_right_region,
@@ -2040,6 +2064,7 @@ pub(super) fn build_paragraph_lines(
                             y_off,
                             0.0,
                             ww,
+                            space_rtl,
                         );
                         current_x = ww;
                         continue;
@@ -2078,6 +2103,7 @@ pub(super) fn build_paragraph_lines(
                 y_off,
                 current_x,
                 ww,
+                space_rtl,
             );
             current_x += ww;
         }
@@ -2092,6 +2118,7 @@ pub(super) fn build_paragraph_lines(
             pending_space_w +=
                 trailing_spaces as f32 * word_space_width(run, entry, eff_fs, "", &mut prev_char);
             pending_real_space = true;
+            space_rtl = run.rtl;
             pending_space_underline = run.underline;
             pending_space_double = run.double_underline;
             pending_space_color = run.color;
@@ -2136,6 +2163,9 @@ pub(super) fn build_paragraph_lines(
         }
     }
     super::bidi::reorder_lines(&mut lines, cjk.bidi, seen_fonts);
+    for line in lines.iter_mut() {
+        line.rtl_paragraph = cjk.bidi;
+    }
     lines
 }
 
@@ -2310,6 +2340,8 @@ pub(super) fn build_tabbed_line(
     // Underline state of the run that emitted the pending whitespace, so an
     // underline bridges spaces inside an underlined run (see build_paragraph_lines).
     let mut pending_space_underline = false;
+    // Whether the pending spaces came from a `w:rtl` run (`WordChunk::gap_rtl`).
+    let mut space_rtl = false;
     let mut pending_space_double = false;
     let mut pending_space_color: Option<[u8; 3]> = None;
     let mut pending_space_border: Option<ParagraphBorder> = None;
@@ -2587,6 +2619,7 @@ pub(super) fn build_tabbed_line(
                 pending_space_w += space_count as f32
                     * word_space_width(run, entry, eff_fs, source, &mut prev_char);
                 if space_count > 0 {
+                    space_rtl = run.rtl;
                     pending_space_underline = run.underline;
                     pending_space_double = run.double_underline;
                     pending_space_color = run.color;
@@ -2664,6 +2697,7 @@ pub(super) fn build_tabbed_line(
                     y_off,
                     current_x,
                     ww,
+                    space_rtl,
                 );
                 current_x += ww;
             }
@@ -2676,6 +2710,7 @@ pub(super) fn build_tabbed_line(
             if trailing_spaces > 0 {
                 pending_space_w += trailing_spaces as f32
                     * word_space_width(run, entry, eff_fs, "", &mut prev_char);
+                space_rtl = run.rtl;
                 pending_space_underline = run.underline;
                 pending_space_double = run.double_underline;
                 pending_space_color = run.color;
@@ -2804,6 +2839,32 @@ fn show_rtl(
     }
     if boundary_space {
         items.show(Str(&entry.encode(" ")));
+    }
+}
+
+/// `text`'s glyphs in logical order, each at the place its right-to-left
+/// layout (bidi, paragraph level 1) gives it, the pen starting at the left
+/// end: a list label that reads "3." draws ".3".
+pub(super) fn show_visual(content: &mut Content, entry: &FontEntry, text: &str) {
+    let chars: Vec<char> = text.chars().collect();
+    let cls: Vec<_> = chars.iter().map(|&c| super::bidi::class(c)).collect();
+    let (levels, cluster) = super::bidi::resolve(&cls, &vec![1; cls.len()], 1);
+    let mut x = vec![0.0f32; chars.len()];
+    let mut left = 0.0;
+    for i in super::bidi::visual_order(&levels, &cluster) {
+        x[i] = left;
+        left += entry.char_width_1000(chars[i]);
+    }
+    let mut tj = content.show_positioned();
+    let mut items = tj.items();
+    let mut pen = 0.0f32;
+    for (i, &ch) in chars.iter().enumerate() {
+        let adjust = (pen - x[i]).round();
+        if adjust != 0.0 {
+            items.adjust(adjust);
+        }
+        items.show(Str(&entry.encode(&ch.to_string())));
+        pen += entry.char_width_1000(ch) - adjust;
     }
 }
 
@@ -2959,10 +3020,12 @@ pub(super) fn render_paragraph_lines(
             .copied()
             .unwrap_or((margin_left, text_width));
         let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging.abs() > 0.001 {
-            (
-                base_margin - first_line_hanging,
-                base_width + first_line_hanging,
-            )
+            let shift = if line.rtl_paragraph {
+                0.0
+            } else {
+                first_line_hanging
+            };
+            (base_margin - shift, base_width + first_line_hanging)
         } else {
             (base_margin, base_width)
         };
@@ -3068,6 +3131,11 @@ pub(super) fn render_paragraph_lines(
         let line_start_x = match alignment {
             Alignment::Center => eff_margin + (eff_width - left_content_width) / 2.0,
             Alignment::Right => eff_margin + eff_width - left_content_width,
+            // Word probe: a justified right-to-left paragraph's last line
+            // ends at the right margin.
+            Alignment::Justify | Alignment::Distribute if line.rtl_paragraph && !is_justified => {
+                eff_margin + eff_width - left_content_width
+            }
             Alignment::Left | Alignment::Justify | Alignment::Distribute => eff_margin,
         };
 
@@ -4531,6 +4599,7 @@ mod tests {
                 0.0,
                 0.0,
                 30.0,
+                false,
             );
             chunks
                 .into_iter()

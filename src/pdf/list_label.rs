@@ -110,12 +110,23 @@ pub(super) fn render_list_label(
         fill_rgb(content, c);
     }
     let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
+    let rtl_entry = para
+        .bidi
+        .then(|| fonts.values().find(|e| e.pdf_name == label_font_name))
+        .flatten();
     content
         .begin_text()
-        .set_font(Name(label_font_name.as_bytes()), label_fs)
-        .next_line(label_x + label_shift(para, fonts), baseline_y)
-        .show(Str(&label_bytes))
-        .end_text();
+        .set_font(Name(label_font_name.as_bytes()), label_fs);
+    if let Some(entry) = rtl_entry {
+        // Laid out right to left ("3." draws ".3"), read in logical order.
+        content.next_line(label_x, baseline_y);
+        super::layout::show_visual(content, entry, &para.list_label);
+    } else {
+        content
+            .next_line(label_x + label_shift(para, fonts), baseline_y)
+            .show(Str(&label_bytes));
+    }
+    content.end_text();
     if label_color.is_some() {
         content.set_fill_gray(0.0);
     }
@@ -162,13 +173,14 @@ pub(super) fn text_hanging(
             -para.indent_first_line
         };
     }
-    let label_x = para.indent_left - para.indent_hanging + para.indent_first_line;
+    let start = start_indent(para);
+    let label_x = start - para.indent_hanging + para.indent_first_line;
     let end = label_x + label_shift(para, fonts) + label_width(para, fonts);
     // suff nothing/space: no tab, the text follows the label directly
     // (chinese_costume's cell items "（1）演示…").
     match para.list_label_suff {
-        LabelSuffix::Nothing => return para.indent_left - end,
-        LabelSuffix::Space => return para.indent_left - end - label_space_width(para, fonts),
+        LabelSuffix::Nothing => return start - end,
+        LabelSuffix::Space => return start - end - label_space_width(para, fonts),
         LabelSuffix::Tab => {}
     }
     let next = para
@@ -176,7 +188,7 @@ pub(super) fn text_hanging(
         .iter()
         .map(|t| t.position)
         .chain(para.num_level_tab_stop)
-        .chain((para.indent_hanging > 0.0).then_some(para.indent_left))
+        .chain((para.indent_hanging > 0.0).then_some(start))
         .filter(|p| *p > end + 0.01)
         .min_by(f32::total_cmp)
         .unwrap_or_else(|| {
@@ -186,5 +198,30 @@ pub(super) fn text_hanging(
                 end
             }
         });
-    para.indent_left - next
+    start - next
+}
+
+/// The indent on the paragraph's start side: the left one, or the right one
+/// in a right-to-left paragraph (its indents are stored mirrored).
+fn start_indent(para: &Paragraph) -> f32 {
+    if para.bidi {
+        para.indent_right
+    } else {
+        para.indent_left
+    }
+}
+
+/// Where a right-to-left paragraph's label starts: its right edge sits at
+/// the start indent less the hanging indent, measured from the right
+/// (Word probe: "3." of a 360/360 list ends at the right margin, text 18pt
+/// in).
+// ponytail: lvlJc and floats beside the paragraph ignored for these labels
+pub(super) fn bidi_label_x(
+    para: &Paragraph,
+    col_x: f32,
+    col_w: f32,
+    fonts: &HashMap<String, FontEntry>,
+) -> f32 {
+    let from_right = start_indent(para) - para.indent_hanging + para.indent_first_line;
+    col_x + col_w - from_right - label_width(para, fonts)
 }

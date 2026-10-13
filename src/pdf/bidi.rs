@@ -235,8 +235,9 @@ pub(super) fn resolve(cls: &[Class], emb: &[u8], base: u8) -> (Vec<u8>, Vec<bool
     (levels, cluster)
 }
 
-/// Visual order (L2) of items with `levels`; at levels above one a run
-/// also breaks where a cluster meets anything else (see module docs).
+/// Visual order (L2) of items with `levels`. Reversing at a level above
+/// one, two items both at that level don't join when only one is a
+/// cluster (see module docs): a cluster and a number stay separate units.
 pub(super) fn visual_order(levels: &[u8], cluster: &[bool]) -> Vec<usize> {
     let mut order: Vec<usize> = (0..levels.len()).collect();
     let max = levels.iter().copied().max().unwrap_or(0);
@@ -254,7 +255,10 @@ pub(super) fn visual_order(levels: &[u8], cluster: &[bool]) -> Vec<usize> {
             let mut j = i + 1;
             while j < order.len()
                 && levels[order[j]] >= k
-                && !(k >= 2 && cluster[order[j]] != cluster[order[j - 1]])
+                && !(k >= 2
+                    && levels[order[j]] == k
+                    && levels[order[j - 1]] == k
+                    && cluster[order[j]] != cluster[order[j - 1]])
             {
                 j += 1;
             }
@@ -286,9 +290,10 @@ fn line_units(line: &TextLine, rtl_of: &dyn Fn(&WordChunk) -> bool, base: u8) ->
     for (ci, c) in line.chunks.iter().enumerate() {
         let e = emb(rtl_of(c));
         if prev_end.is_some_and(|end| c.x_offset > end + 0.01) {
+            // The space keeps the embedding of the run it was typed in.
             units.push(Unit {
                 cls: Class::WS,
-                emb: e,
+                emb: emb(c.gap_rtl),
                 chunk: None,
             });
         }
@@ -312,7 +317,7 @@ fn line_units(line: &TextLine, rtl_of: &dyn Fn(&WordChunk) -> bool, base: u8) ->
     if line.trailing_space > 0.0 {
         units.push(Unit {
             cls: Class::WS,
-            emb: units.last().map_or(base, |u| u.emb),
+            emb: emb(line.trailing_space_rtl),
             chunk: None,
         });
     }
@@ -374,7 +379,15 @@ pub(super) fn reorder_lines(
         let (mut levels, mut cluster) = resolve(&cls, &emb, base);
         levels.truncate(own);
         cluster.truncate(own);
-        reorder_line(&mut lines[li], &per_line[li], &levels, &cluster, fonts);
+        let ltr_island = bidi && !lines[li].trailing_space_rtl;
+        reorder_line(
+            &mut lines[li],
+            &per_line[li],
+            &levels,
+            &cluster,
+            ltr_island,
+            fonts,
+        );
     }
 }
 
@@ -393,6 +406,7 @@ fn reorder_line(
     units: &[Unit],
     levels: &[u8],
     cluster: &[bool],
+    keep_left_wrap_space: bool,
     fonts: &HashMap<String, FontEntry>,
 ) {
     if levels.iter().all(|&l| l == 0) {
@@ -448,13 +462,16 @@ fn reorder_line(
     let piece_levels: Vec<u8> = pieces.iter().map(|p| p.level).collect();
     let piece_cluster: Vec<bool> = pieces.iter().map(|p| p.cluster).collect();
     let mut order = visual_order(&piece_levels, &piece_cluster);
-    // The wrap space hangs when it lands at either end of the line, as a
-    // trailing space does in left-to-right text: arabic_rice's all-Arabic
-    // first line starts its ink at the margin, but a line opening with a
-    // left-to-right "-" keeps the space between the dash and the Arabic
-    // (2.4pt in Word's export).
+    // The wrap space hangs at either end of a line, as a trailing space does
+    // in left-to-right text: arabic_rice's all-Arabic first line starts its
+    // ink at the margin, while a line opening with a left-to-right "-" keeps
+    // the space between the dash and the Arabic (2.4pt in Word's export).
+    // Except at the left end when it comes from a plain run in a w:bidi
+    // paragraph, a left-to-right embedding: Word probes start such
+    // justified and left-aligned lines 3.3pt in, and the same lines from
+    // w:rtl runs at the margin.
     let is_wrap_space = |i: &usize| pieces[*i].chunk.is_none() && *i == pieces.len() - 1;
-    if order.first().is_some_and(is_wrap_space) {
+    if !keep_left_wrap_space && order.first().is_some_and(is_wrap_space) {
         order.remove(0);
     }
     if order.last().is_some_and(is_wrap_space) {
@@ -486,7 +503,14 @@ fn reorder_line(
         if p.level % 2 == 1 {
             chunk.rtl_glyphs = true;
             if chunk.rtl {
-                chunk.text = chunk.text.chars().map(mirrored).collect();
+                let shown: String = chunk.text.chars().map(mirrored).collect();
+                // Extraction reads the brackets as written, as in Word's PDF.
+                if shown != chunk.text {
+                    let source = std::mem::replace(&mut chunk.text, shown);
+                    chunk
+                        .actual_text
+                        .get_or_insert_with(|| crate::docx::arabic::unshape(&source));
+                }
             }
         }
         x += chunk.width;
@@ -500,6 +524,8 @@ fn reorder_line(
     keys.sort_by_key(|&(_, k)| k);
     line.draw_order = keys.into_iter().map(|(i, _)| i).collect();
     line.chunks = placed.into_iter().map(|(_, c)| c).collect();
+    // A wrap space that landed inside the line widens it.
+    line.total_width = x;
 }
 
 /// The characters `range` of `chunk` as a chunk of their own, its width
@@ -612,6 +638,9 @@ mod tests {
         );
         // rtl brackets are mirrored.
         assert_eq!(visual("A (B) C", true, 1), "C (B) A");
+        // Probe p2: a plain run in a w:bidi paragraph orders as at level 0.
+        assert_eq!(visual("A 4.5% B", false, 1), "B% 4.5 A");
+        assert_eq!(visual("A (5) B", false, 1), "B) 5( A");
     }
 
     #[test]

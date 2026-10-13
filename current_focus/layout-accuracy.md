@@ -92,12 +92,15 @@ Commands: `python3 tools/line_diff.py <ref> <gen>`, `python3 tools/pdf_lines.py
    - Two nested floating tables (`tblpPr` in a cell) are stacked instead of
      side by side (`render_nested_table` ignores `position`; 8 corpus
      documents).
-2. **arabic (3.0 → 5.8):** complex script. Arabic letters now take the cs
-   font (`rFonts@cs`, else Arial; `split_run_by_script`), so nothing draws
-   `.notdef`; `w:rtl`, `szCs`/`bCs` are still never read. Word's cs choices:
-   B Nazanin → its altName, Faruma → MV Boli, B Zar / IRANYekan / none →
-   Arial. The rest needs UAX #9 reordering and Arabic shaping (roadmap
-   "RTL / BiDi", high effort). Ask the user before starting.
+2. **arabic (3.0 → 73.0): done (2026-10-14, branch `rtl`).** Shaping by
+   presentation forms (`docx/arabic.rs`), Word's bidi ordering per line
+   (`pdf/bidi.rs`), cs properties only for `w:rtl`/`w:cs` runs, spaces
+   between Arabic letters in the run's own font, and `w:bidi` alignment,
+   indents and list labels; rules and open items in roadmap "RTL / BiDi".
+   Probes: `tests/output/rtl_probe/mk_rtl.py` (p1–p9). Every arabic_rice
+   line now ends within 0.4pt of Word's; what's left is the URL line
+   (0.8pt), one off-centre fathatan and ink-level glyph differences.
+   case220 pins the bidi-paragraph rules the scraped fixture lacks.
 
 ## 3. How to measure and work
 
@@ -189,7 +192,7 @@ when they moved to `scraped/` with baselines. References are online exports.
 | cyprus_ucits_marketing_registry | 29.9 → 79.7 | done (3 pages as Word) |
 | potamites_genetic_distance_table | 14.0 → 72.7 | done (EMF text, lines, fills, rclFrame; clipping and opaque text backgrounds not done) |
 | maine_criminal_history_record | 4.5 → 39.4 | §2.2 item 1 (width and cell spacing done; nested floating tables open) |
-| arabic_rice_benefits_article | 3.0 | §2.2 item 2 |
+| arabic_rice_benefits_article | 3.0 → 73.0 | done (GPOS mark anchors open) |
 
 ## 5. Open queue (diagnosed, not fixed)
 

@@ -271,9 +271,15 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         space_before_auto,
         space_after_auto,
         content_height,
-        alignment,
-        indent_left,
-        indent_right,
+        // w:bidi mirrors the paragraph: left/start aligns and indents on the
+        // right, right/end on the left (Word probes 2026-10-13: jc none, left
+        // and start end lines at the right margin, right and end at the left;
+        // w:left 720 + firstLine 360 keeps 36pt on the right and starts the
+        // first line 18pt further in). firstLine/hanging stay start-side
+        // amounts, which layout applies on the right (`TextLine::rtl_paragraph`).
+        alignment: if bidi { mirrored(alignment) } else { alignment },
+        indent_left: if bidi { indent_right } else { indent_left },
+        indent_right: if bidi { indent_left } else { indent_right },
         indent_hanging,
         indent_first_line,
         list_label,
@@ -335,6 +341,15 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         auto_space_dn,
         bidi,
         frame_props: parse_frame_props(ppr, para_style.and_then(|s| s.frame_attrs.as_ref())),
+    }
+}
+
+fn mirrored(alignment: crate::model::Alignment) -> crate::model::Alignment {
+    use crate::model::Alignment::{Left, Right};
+    match alignment {
+        Left => Right,
+        Right => Left,
+        other => other,
     }
 }
 

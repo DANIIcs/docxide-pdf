@@ -73,7 +73,7 @@ pub(super) fn textbox_height(tb: &Textbox, ctx: &RenderContext) -> f32 {
                 &tp.runs,
                 ctx,
                 tw,
-                ctx.cjk(true, tp.alignment),
+                ctx.cjk(true, tp),
                 &LineOpts {
                     tab_stops: &tp.tab_stops,
                     indent_left: tp.indent_left,
@@ -237,7 +237,7 @@ pub(super) fn render_single_textbox(
                     &tp.runs,
                     ctx,
                     tp_text_w,
-                    ctx.cjk(true, tp.alignment),
+                    ctx.cjk(true, tp),
                     &LineOpts {
                         tab_stops: &tp.tab_stops,
                         indent_left: tp.indent_left,
@@ -468,7 +468,7 @@ pub(super) fn render_textbox_paragraphs(
             &tp.runs,
             ctx,
             tp_text_w,
-            ctx.cjk(true, tp.alignment),
+            ctx.cjk(true, tp),
             &LineOpts {
                 inline_images: Some(&inline_imgs),
                 tab_stops: &tp.tab_stops,

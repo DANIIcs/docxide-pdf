@@ -72,7 +72,7 @@ fn layout_paragraph(
         runs,
         ctx,
         text_width,
-        ctx.cjk(true, para.alignment),
+        ctx.cjk(true, para),
         &LineOpts {
             tab_stops: &para.tab_stops,
             indent_left: para.indent_left,

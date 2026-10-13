@@ -279,7 +279,7 @@ fn wrapped_header_picture_height(para: &Paragraph, ctx: &RenderContext, width: f
         &para.runs,
         ctx,
         (width - para.indent_left - para.indent_right).max(1.0),
-        ctx.cjk(true, para.alignment),
+        ctx.cjk(true, para),
         &LineOpts {
             inline_images: Some(&images),
             tab_stops: &para.tab_stops,
@@ -665,7 +665,7 @@ pub(super) fn render_header_footer(
                     &substituted_runs,
                     ctx,
                     text_width,
-                    ctx.cjk(true, para.alignment),
+                    ctx.cjk(true, para),
                     &LineOpts {
                         tab_stops: &para.tab_stops,
                         ..Default::default()
@@ -901,7 +901,7 @@ pub(super) fn render_header_footer(
                                     &tp.runs,
                                     ctx,
                                     tp_text_w,
-                                    ctx.cjk(true, tp.alignment),
+                                    ctx.cjk(true, tp),
                                     &LineOpts {
                                         inline_images: Some(&inline_imgs),
                                         tab_stops: &tp.tab_stops,
@@ -993,7 +993,7 @@ pub(super) fn render_header_footer(
                             &tp.runs,
                             ctx,
                             tp_text_w,
-                            ctx.cjk(true, tp.alignment),
+                            ctx.cjk(true, tp),
                             &LineOpts {
                                 inline_images: Some(&inline_imgs),
                                 tab_stops: &tp.tab_stops,
@@ -1320,7 +1320,7 @@ pub(super) fn render_header_footer(
                     &substituted_runs,
                     ctx,
                     para_text_width,
-                    ctx.cjk(true, para.alignment),
+                    ctx.cjk(true, para),
                     &LineOpts {
                         inline_images: Some(&block_inline_images),
                         tab_stops: &para.tab_stops,

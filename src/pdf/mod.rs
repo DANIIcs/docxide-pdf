@@ -317,7 +317,7 @@ fn auto_frame_width(
                         tab_stops: &p.tab_stops,
                         ..Default::default()
                     };
-                    build_lines(&p.runs, ctx, col_w, ctx.cjk(true, p.alignment), &opts)
+                    build_lines(&p.runs, ctx, col_w, ctx.cjk(true, p), &opts)
                         .iter()
                         .map(|l| l.total_width)
                         .fold(0.0, f32::max)
@@ -350,7 +350,7 @@ fn frame_content_height(
                     ..Default::default()
                 };
                 let line_w = (width - p.indent_left - p.indent_right).max(1.0);
-                let lines = build_lines(&p.runs, ctx, line_w, ctx.cjk(true, p.alignment), &opts);
+                let lines = build_lines(&p.runs, ctx, line_w, ctx.cjk(true, p), &opts);
                 let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                 let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 height += lines.len().max(1) as f32 * resolve_line_h(ls, fs, lhr);
@@ -429,14 +429,15 @@ impl RenderContext<'_> {
     }
     /// East Asian switches for `build_paragraph_lines`: the paragraph's autospace
     /// choice plus the document-wide punctuation compression.
-    fn cjk(&self, auto_space: bool, alignment: crate::model::Alignment) -> CjkLayout {
+    fn cjk(&self, auto_space: bool, para: &crate::model::Paragraph) -> CjkLayout {
+        let alignment = para.alignment;
         CjkLayout {
             auto_space,
             compress_punct: self.compress_punctuation,
             squeeze_spaces: self.compat_mode >= 15
                 && matches!(alignment, crate::model::Alignment::Justify),
             expand_shift_return: !self.do_not_expand_shift_return,
-            bidi: false,
+            bidi: para.bidi,
         }
     }
 }
@@ -1716,7 +1717,7 @@ fn line_count(para: &Paragraph, ctx: &RenderContext, col_w: f32) -> usize {
         None,
         None,
         None,
-        ctx.cjk(para.auto_space_de || para.auto_space_dn, para.alignment),
+        ctx.cjk(para.auto_space_de || para.auto_space_dn, para),
     )
     .len()
 }
@@ -1921,7 +1922,7 @@ fn compute_bookmark_positions(
                             &para.runs,
                             ctx,
                             para_w,
-                            ctx.cjk(para.auto_space_de || para.auto_space_dn, para.alignment),
+                            ctx.cjk(para.auto_space_de || para.auto_space_dn, para),
                             &LineOpts {
                                 tab_stops: &para.tab_stops,
                                 indent_left: para.indent_left,
@@ -2224,6 +2225,9 @@ fn render_paragraph_block(
     let mut para_text_x = col_x + para.indent_left;
     let mut para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
     let mut label_x = col_x + para.indent_left - para.indent_hanging + para.indent_first_line;
+    if para.bidi {
+        label_x = list_label::bidi_label_x(para, col_x, col_w, ctx.fonts);
+    }
 
     // When inside a floating object zone, narrow the paragraph to
     // fit beside the object rather than overlapping it.
@@ -2325,7 +2329,7 @@ fn render_paragraph_block(
         );
     }
 
-    let cjk = ctx.cjk(para.auto_space_de || para.auto_space_dn, para.alignment);
+    let cjk = ctx.cjk(para.auto_space_de || para.auto_space_dn, para);
 
     // Look-ahead: a wrapping float anchored in the *next* block (an image-only
     // paragraph) sits at that block's top, which Word computes from this
@@ -3438,6 +3442,9 @@ fn render_paragraph_block(
     para_text_x = col_x + para.indent_left;
     para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
     label_x = col_x + para.indent_left - para.indent_hanging + para.indent_first_line;
+    if para.bidi {
+        label_x = list_label::bidi_label_x(para, col_x, col_w, ctx.fonts);
+    }
 
     // Re-apply float zone adjustment after potential column change
     let first_line_top = state.pb.slot_top - inter_gap;

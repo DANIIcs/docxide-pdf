@@ -1863,9 +1863,36 @@ margins (and the gutter side) on even pages.
 
 Vertical alignment of runs within a line (top/center/baseline/bottom/auto). Only superscript/subscript are handled; the paragraph-level `w:textAlignment` property for mixed-size runs is not.
 
-### RTL / BiDi (TODO — HIGH EFFORT, MEDIUM IMPACT)
+### RTL / BiDi (MOSTLY DONE — 2026-10-14, branch `rtl`; arabic_rice 5.8 → 73.0, case220)
 
-`w:bidi` (paragraph-level) and `w:rtl` (run-level) right-to-left support is completely absent. Requires implementing the Unicode BiDi algorithm (UAX #9) for correct visual reordering. Architecturally complex — affects line building, text rendering, and alignment.
+Rules measured on Word's online export (arabic_rice plus 9 probe documents,
+`tests/output/rtl_probe/mk_rtl.py`, gitignored):
+- **cs formatting** (`docx/styles.rs` `ComplexProps`): rFonts@cs, szCs, bCs,
+  iCs apply only to `w:rtl`/`w:cs` runs, and to all their text. Arabic
+  letters in a plain run keep sz/b/i; whitespace between them keeps the run's
+  font (arabic_rice's words step by Aptos's 2.44pt space).
+- **Shaping** (`docx/arabic.rs`): contextual forms and lam-alef as Unicode
+  presentation forms, after rsid-split runs merge; Arial's U+FExx glyphs are
+  Word's (advances match to 0.01pt). ToUnicode maps them back to letters.
+- **Ordering** (`pdf/bidi.rs`, after line breaking): each run is an
+  embedding (rtl → odd, plain → even level); every line resolved from its
+  first character with lookahead into the paragraph; no bracket pairing, no
+  mirroring in plain runs; neutral clusters between Arabic letters in plain
+  runs laid out left to right; the wrap space resolved with the next line and
+  hung at line ends (not at the left end for a plain run in a bidi
+  paragraph). Content stream and tags stay in logical order.
+- **Paragraphs:** `w:bidi` mirrors alignment and indents (first line on the
+  right, justified last line right), list labels at the right, laid out RTL.
+
+Open: GPOS mark anchors (harakat sit off-centre; arabic_rice has one);
+mirrored brackets extract as the mirrored character (Word maps them back);
+Arabic in a face without Arabic glyphs (Arial Italic) draws `.notdef` where
+Word rescues from another font (also the A11Y gap); no joining across runs
+that differ in formatting; lines with tabs or float regions keep logical
+order; tab stops and table `bidiVisual` not mirrored; Arabic letters in a
+plain run whose font has Arabic glyphs should use that font (Word: Courier
+New draws them), we use the cs font; harmless for arabic_rice (Aptos has
+none).
 
 ## Table Features
 
