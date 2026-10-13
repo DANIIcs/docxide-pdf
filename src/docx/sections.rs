@@ -139,23 +139,31 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         },
     });
 
-    let line_numbering = wml(sect_node, "lnNumType").map(|n| LineNumbering {
-        count_by: n
-            .attribute((WML_NS, "countBy"))
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(1)
-            .max(1),
-        start: n
-            .attribute((WML_NS, "start"))
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(1),
-        distance: twips_attr(n, "distance"),
-        restart: match n.attribute((WML_NS, "restart")) {
-            Some("continuous") => LineNumberRestart::Continuous,
-            Some("newSection") => LineNumberRestart::NewSection,
-            _ => LineNumberRestart::NewPage,
-        },
-    });
+    // Word numbers lines only with a countBy of 1 or more: an lnNumType
+    // without one (w:distance="0" alone) shows none (Word probe).
+    let line_numbering = wml(sect_node, "lnNumType")
+        .filter(|n| {
+            n.attribute((WML_NS, "countBy"))
+                .and_then(|v| v.parse::<u32>().ok())
+                .is_some_and(|c| c > 0)
+        })
+        .map(|n| LineNumbering {
+            count_by: n
+                .attribute((WML_NS, "countBy"))
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1)
+                .max(1),
+            start: n
+                .attribute((WML_NS, "start"))
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1),
+            distance: twips_attr(n, "distance"),
+            restart: match n.attribute((WML_NS, "restart")) {
+                Some("continuous") => LineNumberRestart::Continuous,
+                Some("newSection") => LineNumberRestart::NewSection,
+                _ => LineNumberRestart::NewPage,
+            },
+        });
 
     let vertical_align = wml_attr(sect_node, "vAlign")
         .map(|v| match v {
