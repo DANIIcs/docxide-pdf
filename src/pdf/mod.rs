@@ -3736,7 +3736,17 @@ fn render_paragraph_block(
                 baseline - (img.layout_extra_height - img.layout_extra_top)
             };
             let y_bottom = state.pb.slot_top - bottom_depth;
-            let x = col_x + align_offset(para.alignment, (col_w - img.display_width).max(0.0));
+            // The picture is the first line's only character: it starts where
+            // that line's text would (81pt in for a 1620-twip indent in Word's
+            // export) and aligns within the indents.
+            let first = if para.list_label.is_empty() {
+                para.indent_first_line - para.indent_hanging
+            } else {
+                0.0
+            };
+            let start = para.indent_left + first;
+            let room = col_w - start - para.indent_right - img.display_width;
+            let x = col_x + start + align_offset(para.alignment, room.max(0.0));
             let img_fx = effect_names.get(&state.global_block_idx);
             if let Some(ref shadow) = img.shadow {
                 color::draw_image_shadow(
