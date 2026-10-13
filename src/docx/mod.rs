@@ -228,8 +228,8 @@ fn comment_ranges(
             open.extend(id(n));
         } else if n.has_tag_name((WML_NS, "commentRangeEnd")) {
             open.retain(|o| Some(*o) != id(n));
-            // Word probes: a range ending before any text of its paragraph,
-            // or between blocks, gets no balloon wherever its reference is
+            // Word probes: a range over text ending before any text of its
+            // paragraph, or between blocks, gets no balloon wherever its reference is
             // (after a table or a paragraph alike); one ending after text,
             // in a cell's last paragraph too, gets one.
             let text_before = n
@@ -251,7 +251,8 @@ fn comment_ranges(
             open_at.insert(n.range().start, open.clone());
         }
     }
-    let shown = &referenced - &unballooned;
+    // An empty range there keeps its balloon (it hangs at its reference).
+    let shown = &referenced - &(&unballooned & &with_text);
     (&shown - &with_text, open_at, shown)
 }
 
