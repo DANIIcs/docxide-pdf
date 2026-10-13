@@ -883,10 +883,13 @@ pub(super) fn compute_row_layouts(
                                 // ascender_ratio = usWinDescent/units. Fallback
                                 // 0.2 pairs with the 1.2 default line ratio so
                                 // standard fonts get zero trailing leading.
-                                let descender_ratio = tallest_lhr
-                                    .zip(tallest_ar)
-                                    .map(|(lh, ar)| (lh - ar).max(0.0))
-                                    .unwrap_or(0.2);
+                                let descender_ratio = if runs.iter().any(|r| r.inline_image.is_some())
+                                    && runs.iter().all(|r| !r.is_tab && r.text.trim().is_empty()) {
+                                    0.0
+                                } else {
+                                    tallest_lhr.zip(tallest_ar)
+                                        .map(|(lh, ar)| (lh - ar).max(0.0)).unwrap_or(0.2)
+                                };
                                 let font_substituted =
                                     metric_font.is_some_and(|e| e.is_substituted);
 

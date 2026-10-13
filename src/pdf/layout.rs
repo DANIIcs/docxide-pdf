@@ -847,6 +847,8 @@ pub(super) struct TextLine {
     pub(super) break_font_size: Option<f32>,
     /// Line-height ratio of the break run that ended this otherwise empty line.
     pub(super) break_lhr: Option<f32>,
+    /// An empty line made by leading spaces wrapping an inline picture.
+    pub(super) leading_space_wrap: bool,
     /// First chunk after the line's last tab: justification stretches only the
     /// gaps from here on (Word starts the text at the tab stop).
     pub(super) justify_from: usize,
@@ -878,6 +880,12 @@ pub(super) fn size_lines_by_own_runs(
     let by_pdf_name: HashMap<&str, &FontEntry> =
         fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
     for line in lines.iter_mut() {
+        if line.leading_space_wrap {
+            if let Some(fs) = line.break_font_size {
+                line.pitch = Some(super::resolve_line_h(line_spacing, fs, line.break_lhr));
+            }
+            continue;
+        }
         if line.chunks.iter().any(|c| c.inline_image_name.is_some()) {
             continue;
         }
@@ -1626,7 +1634,9 @@ pub(super) fn build_paragraph_lines(
                 } else {
                     line_max
                 };
-                if !current_chunks.is_empty() && proposed_x + img_w > cur_max {
+                if (!current_chunks.is_empty() || pending_space_w > 0.0)
+                    && proposed_x + img_w > cur_max
+                {
                     if !in_right_region && let Some((rx, rw, _)) = right_region_for(lines.len()) {
                         cur_right_info = Some((current_chunks.len(), rx, rw));
                         in_right_region = true;
@@ -1645,11 +1655,24 @@ pub(super) fn build_paragraph_lines(
                             continue;
                         }
                     }
-                    lines.push(finish_dual_line(
+                    let leading_space_run = current_chunks
+                        .is_empty()
+                        .then(|| runs[..run_idx].iter().rev().find(|r| !r.text.is_empty()))
+                        .flatten();
+                    let mut line = finish_dual_line(
                         &mut current_chunks,
                         &mut in_right_region,
                         &mut cur_right_info,
-                    ));
+                    );
+                    if let Some(space_run) = leading_space_run {
+                        let entry = seen_fonts
+                            .get(&crate::fonts::font_key(space_run))
+                            .expect("font registered");
+                        line.break_font_size = Some(effective_font_size(space_run, entry));
+                        line.break_lhr = entry.line_h_ratio;
+                        line.leading_space_wrap = true;
+                    }
+                    lines.push(line);
                     current_x = 0.0;
                 } else {
                     current_x = proposed_x;
@@ -3885,6 +3908,24 @@ pub(super) fn grid_baseline_offset(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn leading_space_wrap_uses_space_font_pitch() {
+        let mut lines = vec![super::TextLine {
+            leading_space_wrap: true,
+            break_font_size: Some(7.5),
+            break_lhr: Some(1.2),
+            ..Default::default()
+        }, super::TextLine {
+            break_font_size: Some(7.5),
+            break_lhr: Some(1.2),
+            ..Default::default()
+        }];
+        super::size_lines_by_own_runs(&mut lines, &std::collections::HashMap::new(),
+            crate::model::LineSpacing::Auto(1.0), 14.0, 10.0);
+        assert!((lines[0].pitch.unwrap() - 9.0).abs() < 0.001);
+        assert!(lines[1].pitch.is_none(), "ordinary empty lines keep paragraph pitch");
+    }
+
     use super::*;
     use crate::model::VertAlign;
 
