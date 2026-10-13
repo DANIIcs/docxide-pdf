@@ -17,10 +17,27 @@ const PANE_RIGHT_GAP: f32 = 13.3;
 /// text column plus a 279.7pt balloon area fills the page width, so 12pt text
 /// prints at 9.16pt with a 90pt right margin (case63, case64) and at 8.96pt with
 /// 72pt (door_air_cooling_unit_spec). The zoomed page sits 0.96pt from the left
-/// edge and 0.54pt below vertical centre (Word's ty 94.32 and 100.80).
+/// edge and near the vertical centre (Word's ty 94.32 and 100.80).
+///
+/// Word picks the zoom in 1/300 steps: rounding with a 279.15pt area
+/// reproduces all 148 zooms measured on print exports (Letter and A4, 54-90pt
+/// right margins), where the unrounded 279.7 missed one in six.
 pub(super) fn page_zoom(page_width: f32, page_height: f32, margin_right: f32) -> (f32, f32, f32) {
-    let scale = page_width / (page_width - margin_right + BALLOON_AREA);
-    (scale, 0.96, page_height * (1.0 - scale) / 2.0 + 0.54)
+    let scale = (page_width / (page_width - margin_right + 279.15) * 300.0).round() / 300.0;
+    // The zoomed page's top: the centred position floored to the 1/300in
+    // grid, then two units up on Letter paper and two down on A4 (121 print
+    // references; the print path's paper margins, presumably).
+    let unit = 0.24;
+    let centred = (page_height * (1.0 - scale) / 2.0 / unit).floor() * unit;
+    let paper_shift = if (page_height - 792.0).abs() < 1.0 {
+        -2.0 * unit
+    } else if (page_height - 841.9).abs() < 1.0 {
+        2.0 * unit
+    } else {
+        0.0
+    };
+    let top = centred + paper_shift;
+    (scale, 0.96, page_height * (1.0 - scale) - top)
 }
 
 const PANE_BG: [u8; 3] = [240, 240, 240];
