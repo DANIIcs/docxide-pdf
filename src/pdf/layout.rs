@@ -235,6 +235,7 @@ pub(super) fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
     result
 }
 
+#[derive(Clone)]
 pub(super) struct WordChunk {
     pub(super) pdf_font: String,
     pub(super) text: String,
@@ -313,6 +314,11 @@ pub(super) struct WordChunk {
     pub(super) kern: bool,
     /// Drawn as a square in place of the text (`Run::checkbox`).
     pub(super) checkbox: Option<FormCheckbox>,
+    /// From a `w:rtl` run (bidi embedding, mirrored brackets).
+    pub(super) rtl: bool,
+    /// At a right-to-left level: glyphs are placed from the right
+    /// (`show_rtl`), in logical order.
+    pub(super) rtl_glyphs: bool,
 }
 
 /// Pale-pink highlight color Word uses for comment-anchored text spans.
@@ -427,6 +433,8 @@ impl WordChunk {
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
             checkbox: run.checkbox,
+            rtl: run.rtl,
+            rtl_glyphs: false,
         }
     }
 
@@ -476,6 +484,8 @@ impl WordChunk {
             formula: None,
             kern: false,
             checkbox: None,
+            rtl: false,
+            rtl_glyphs: false,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -536,6 +546,8 @@ impl WordChunk {
             formula: None,
             kern: false,
             checkbox: None,
+            rtl: false,
+            rtl_glyphs: false,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -601,6 +613,8 @@ impl WordChunk {
             formula: None,
             kern: false,
             checkbox: None,
+            rtl: false,
+            rtl_glyphs: false,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -867,6 +881,12 @@ pub(super) struct TextLine {
     /// This line's own advance when its tallest face differs from the
     /// paragraph's (see `size_lines_by_own_runs`); None uses the paragraph pitch.
     pub(super) pitch: Option<f32>,
+    /// Chunk indices in logical order when bidi reordering stored the chunks
+    /// visually (`bidi::reorder_lines`); empty: the stored order.
+    pub(super) draw_order: Vec<usize>,
+    /// Width of the space the line wrapped at (dropped from the line); bidi
+    /// ordering places it (`bidi::reorder_lines`).
+    pub(super) trailing_space: f32,
     /// How far this line's baseline sits below where the paragraph ascent
     /// would put it (negative: above), for lines with their own `pitch`.
     pub(super) ascent_shift: f32,
@@ -1280,6 +1300,8 @@ pub(super) struct CjkLayout {
     /// Justify a line that ends in a manual break, as Word does unless
     /// `doNotExpandShiftReturn` is set.
     pub(super) expand_shift_return: bool,
+    /// `w:bidi`: the paragraph's base direction is right to left.
+    pub(super) bidi: bool,
 }
 
 /// How far Word 2013+ narrows the spaces of a justified line to keep its
@@ -1971,11 +1993,14 @@ pub(super) fn build_paragraph_lines(
                 }
                 // Try hyphenation before wrapping whole word
                 // No right region or right region also full — wrap to next line
-                lines.push(finish_dual_line(
-                    &mut current_chunks,
-                    &mut in_right_region,
-                    &mut cur_right_info,
-                ));
+                lines.push(TextLine {
+                    trailing_space: pending_space_w,
+                    ..finish_dual_line(
+                        &mut current_chunks,
+                        &mut in_right_region,
+                        &mut cur_right_info,
+                    )
+                });
                 current_x = 0.0;
                 // A word wider than the new line breaks at its margin too.
                 let room = left_max(lines.len());
@@ -2110,6 +2135,7 @@ pub(super) fn build_paragraph_lines(
             line.natural_width = true;
         }
     }
+    super::bidi::reorder_lines(&mut lines, cjk.bidi, seen_fonts);
     lines
 }
 
@@ -2732,6 +2758,55 @@ fn show_kerned(content: &mut Content, entry: &FontEntry, text: &str, boundary_sp
     items.show(Str(&entry.encode(&run)));
 }
 
+/// A right-to-left chunk's glyphs in logical order, each placed left of the
+/// one before (the pen starts at the chunk's left edge), so text extraction
+/// and tags read the word as written. A letter's combining marks follow it
+/// with no move: they hang back over it from its end, as in left-to-right
+/// text. TJ moves and advances scale alike with Tz, so all of this is in
+/// thousandths of the font size.
+fn show_rtl(
+    content: &mut Content,
+    entry: &FontEntry,
+    text: &str,
+    font_size: f32,
+    char_spacing: f32,
+    boundary_space: bool,
+) {
+    let mut clusters: Vec<String> = Vec::new();
+    for ch in text.chars() {
+        match clusters.last_mut() {
+            Some(c) if super::bidi::class(ch) == super::bidi::Class::NSM => c.push(ch),
+            _ => clusters.push(ch.to_string()),
+        }
+    }
+    let tc = char_spacing * 1000.0 / font_size.max(0.01);
+    let advance = |s: &str| {
+        s.chars()
+            .map(|c| entry.char_width_1000(c) + tc)
+            .sum::<f32>()
+    };
+    let total: f32 = clusters.iter().map(|c| advance(c)).sum();
+    let mut tj = content.show_positioned();
+    let mut items = tj.items();
+    let (mut pen, mut right) = (0.0f32, total);
+    for cluster in &clusters {
+        let w = advance(cluster);
+        right -= w;
+        // TJ subtracts: moving right is a negative adjustment. Whole
+        // thousandths keep the numbers short; the pen follows the rounded
+        // moves, so the error never adds up.
+        let adjust = (pen - right).round();
+        if adjust != 0.0 {
+            items.adjust(adjust);
+        }
+        items.show(Str(&entry.encode(cluster)));
+        pen += w - adjust;
+    }
+    if boundary_space {
+        items.show(Str(&entry.encode(" ")));
+    }
+}
+
 pub(super) fn encode_text_for_pdf(
     text: &str,
     pdf_font: &str,
@@ -3191,7 +3266,15 @@ pub(super) fn render_paragraph_lines(
             let mut td_y = 0.0_f32;
             let mut cur_shear = 0.0_f32;
 
-            for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+            // Logical order, so the content stream (and the tags) read the
+            // text as written even where bidi stored the chunks visually.
+            let draw_order: Vec<usize> = if line.draw_order.is_empty() {
+                (0..line.chunks.len()).collect()
+            } else {
+                line.draw_order.clone()
+            };
+            for chunk_idx in draw_order {
+                let chunk = &line.chunks[chunk_idx];
                 if chunk.inline_image_name.is_some() || chunk.checkbox.is_some() {
                     continue;
                 }
@@ -3357,7 +3440,17 @@ pub(super) fn render_paragraph_lines(
                     .then(|| seen_fonts.get("__cjk_fallback"))
                     .flatten();
 
-                if let (Some(primary), Some(fallback)) = (primary_entry, fallback_entry) {
+                if let Some(entry) = primary_entry.filter(|_| chunk.rtl_glyphs) {
+                    // ponytail: no CJK-fallback glyphs or kerning in right-to-left chunks
+                    show_rtl(
+                        content,
+                        entry,
+                        &chunk.text,
+                        chunk.font_size,
+                        effective_cs,
+                        boundary_space,
+                    );
+                } else if let (Some(primary), Some(fallback)) = (primary_entry, fallback_entry) {
                     let fallback_gids = fallback.char_to_gid.as_ref();
                     // A segment of the chunk in its own font, or in the fallback
                     // font when its characters are missing from the primary one.
@@ -4084,6 +4177,7 @@ mod tests {
             compress_punct: false,
             squeeze_spaces: false,
             expand_shift_return: true,
+            bidi: false,
         };
         let lines = build_paragraph_lines(
             &runs,
@@ -4118,6 +4212,7 @@ mod tests {
             compress_punct: false,
             squeeze_spaces: false,
             expand_shift_return: true,
+            bidi: false,
         };
         let lines = build_paragraph_lines(
             &runs,

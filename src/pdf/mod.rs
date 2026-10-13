@@ -1,4 +1,5 @@
 mod assembly;
+mod bidi;
 mod chart_legend;
 mod charts;
 mod charts_radial;
@@ -435,6 +436,7 @@ impl RenderContext<'_> {
             squeeze_spaces: self.compat_mode >= 15
                 && matches!(alignment, crate::model::Alignment::Justify),
             expand_shift_return: !self.do_not_expand_shift_return,
+            bidi: false,
         }
     }
 }
