@@ -149,7 +149,7 @@ fn word_pair_rule_at(text: &str, i: usize) -> Option<bool> {
 /// True when `split_preserving_spaces` would break between `a` and `b` inside one
 /// run: UAX #14 plus Word's pair rules. Run boundaries call this for every
 /// glued word, so it stays off the heap.
-fn breaks_between(a: char, b: char) -> bool {
+pub(super) fn breaks_between(a: char, b: char) -> bool {
     if let Some(rule) = word_pair_rule(a, b) {
         return rule;
     }

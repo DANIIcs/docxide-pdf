@@ -1,0 +1,1 @@
+Public synthetic email is split across several runs with near-black alternating colors to prevent parser coalescing; these formatting changes must not turn it into several independent min-content words. Reference was exported by Word. Positive-indent sizing requires PR51; the independently submitted run-boundary patch does not include PR51.
