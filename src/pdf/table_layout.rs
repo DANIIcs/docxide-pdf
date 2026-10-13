@@ -461,6 +461,18 @@ pub(super) fn auto_fit_columns(
         }
     }
 
+    // A nested table sized in twips (tblW dxa) keeps its grid like a top-level
+    // one: a survey's 465pt nested table inside an auto-width host fills it
+    // in Word, where content-fitting made it half as wide.
+    if available_width.is_some()
+        && !table.auto_width
+        && table.width_pct.is_none()
+        && !table.fixed_layout
+        && !table.grid_inferred
+    {
+        return auto_fit_columns(table, fonts, None, None);
+    }
+
     if available_width.is_some() && !table.fixed_layout {
         let natural_widths = natural_widths(table, fonts, cm);
         // Word's auto-fit for nested tables produces column widths slightly
