@@ -352,9 +352,107 @@ pub(crate) fn format_number(value: u32, num_fmt: &str) -> String {
                 _ => value.to_string(),
             }
         }
+        "cardinalText" => english_words(value, false),
+        "ordinalText" => english_words(value, true),
+        "ordinal" => {
+            let suffix = match (value % 10, value % 100) {
+                (_, 11..=13) => "th",
+                (1, _) => "st",
+                (2, _) => "nd",
+                (3, _) => "rd",
+                _ => "th",
+            };
+            format!("{value}{suffix}")
+        }
         "none" => String::new(),
         _ => value.to_string(),
     }
+}
+
+/// Word's cardinalText / ordinalText in English: "One", "Twenty-one",
+/// "First", "Twenty-first".
+// ponytail: English only; Word spells these in the paragraph's language.
+fn english_words(value: u32, ordinal: bool) -> String {
+    const ONES: [&str; 20] = [
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+    ];
+    const ONES_TH: [&str; 20] = [
+        "zeroth",
+        "first",
+        "second",
+        "third",
+        "fourth",
+        "fifth",
+        "sixth",
+        "seventh",
+        "eighth",
+        "ninth",
+        "tenth",
+        "eleventh",
+        "twelfth",
+        "thirteenth",
+        "fourteenth",
+        "fifteenth",
+        "sixteenth",
+        "seventeenth",
+        "eighteenth",
+        "nineteenth",
+    ];
+    const TENS: [&str; 10] = [
+        "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    ];
+    fn below_100(n: u32, ordinal: bool) -> String {
+        if n < 20 {
+            return if ordinal {
+                ONES_TH[n as usize]
+            } else {
+                ONES[n as usize]
+            }
+            .to_string();
+        }
+        let tens = TENS[(n / 10) as usize];
+        match n % 10 {
+            0 if ordinal => format!("{}ieth", &tens[..tens.len() - 1]),
+            0 => tens.to_string(),
+            u => format!("{tens}-{}", below_100(u, ordinal)),
+        }
+    }
+    let words = if value < 100 {
+        below_100(value, ordinal)
+    } else if value < 1000 {
+        let rest = value % 100;
+        let hundreds = format!("{} hundred", ONES[(value / 100) as usize]);
+        match rest {
+            0 if ordinal => format!("{hundreds}th"),
+            0 => hundreds,
+            _ => format!("{hundreds} {}", below_100(rest, ordinal)),
+        }
+    } else {
+        return value.to_string();
+    };
+    let mut c = words.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
 }
 
 fn normalize_bullet_text(text: &str) -> String {
@@ -551,11 +649,14 @@ pub(super) fn parse_list_info(
                         .copied()
                         .unwrap_or(ref_def.map(|d| d.start).unwrap_or(1))
                 };
-                // §17.9.4: isLgl forces every referenced level to decimal.
-                let lvl_fmt = if def.is_lgl {
+                // §17.9.4: isLgl shows every referenced level in Arabic
+                // numerals; decimalZero already is one ("Section 1.01" under
+                // a cardinalText "Article One" level).
+                let fmt = ref_def.map(|d| d.num_fmt.as_str()).unwrap_or("decimal");
+                let lvl_fmt = if def.is_lgl && fmt != "decimalZero" {
                     "decimal"
                 } else {
-                    ref_def.map(|d| d.num_fmt.as_str()).unwrap_or("decimal")
+                    fmt
                 };
                 label = label.replace(&placeholder, &format_number(lvl_counter, lvl_fmt));
             }
@@ -620,6 +721,12 @@ mod tests {
         assert_eq!(format_number(9, "decimalZero"), "09");
         assert_eq!(format_number(10, "decimalZero"), "10");
         assert_eq!(format_number(99, "decimalZero"), "99");
+        assert_eq!(format_number(1, "cardinalText"), "One");
+        assert_eq!(format_number(21, "cardinalText"), "Twenty-one");
+        assert_eq!(format_number(20, "ordinalText"), "Twentieth");
+        assert_eq!(format_number(3, "ordinalText"), "Third");
+        assert_eq!(format_number(112, "ordinal"), "112th");
+        assert_eq!(format_number(22, "ordinal"), "22nd");
     }
 
     #[test]
