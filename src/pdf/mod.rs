@@ -701,20 +701,39 @@ fn own_space_before(gap: f32, prev_space_after: f32) -> f32 {
 pub(super) struct ParaAnchor {
     float: f32,
     on_line: f32,
+    /// The highest a wrapping paragraph-relative picture may sit: the top
+    /// margin under compat 15 (Word probes: -30pt from a first paragraph
+    /// lands on the margin; compat 14 and older keep the -30pt).
+    ceiling: Option<f32>,
 }
 
 impl ParaAnchor {
     /// `pending`: a floating table's one-shot override for its anchor
     /// paragraph; `line_top`: the first line's top, below the space before.
-    fn new(pending: Option<f32>, line_top: f32, own_before: f32) -> Self {
+    fn new(pending: Option<f32>, line_top: f32, own_before: f32, ceiling: Option<f32>) -> Self {
         Self {
             float: pending.unwrap_or(line_top + own_before),
             on_line: pending.unwrap_or(line_top),
+            ceiling,
         }
     }
 
     pub(super) fn top(self, on_line: bool) -> f32 {
         if on_line { self.on_line } else { self.float }
+    }
+
+    /// A body float's top (`resolve_fi_y_top`) under the anchor's ceiling.
+    pub(super) fn fi_y_top(self, fi: &crate::model::FloatingImage, sp: &SectionProperties) -> f32 {
+        let y = resolve_fi_y_top(fi, sp, self.top(fi.on_line));
+        match self.ceiling {
+            Some(c)
+                if fi.wrap_type != WrapType::None
+                    && matches!(fi.v_relative_from, VRelativeFrom::Paragraph) =>
+            {
+                y.min(c)
+            }
+            _ => y,
+        }
     }
 }
 
@@ -1444,6 +1463,26 @@ impl PageBuilder {
             && (self.slot_top - self.page_top_y).abs() < 0.01
             && self.deferred_shapes.is_empty()
             && self.footnote_ids.is_empty()
+    }
+
+    /// Where a paragraph's floats anchor: its slot top, except that a page's
+    /// first paragraph pushed down by header floats anchors where the header's
+    /// text alone ends (Word probes under a 133pt floating letterhead: offsets
+    /// 0 and +30pt land at the 56.7pt margin and 30pt below it, while the
+    /// text sits under the letterhead; a header of flowing text moves both).
+    fn anchor_slot_top(&self, sp: &SectionProperties, ctx: &RenderContext) -> f32 {
+        if !self.is_at_page_top(sp) {
+            return self.slot_top;
+        }
+        let page = self.page_count();
+        for is_first in [true, false] {
+            if (effective_slot_top(sp, is_first, page, ctx) - self.page_top_y).abs() < 0.01 {
+                return self
+                    .slot_top
+                    .max(header_footer::flow_slot_top(sp, is_first, page, ctx));
+            }
+        }
+        self.slot_top
     }
 
     fn is_at_page_top(&self, sp: &SectionProperties) -> bool {
@@ -2183,8 +2222,9 @@ fn render_paragraph_block(
     // taken when the drawings render).
     let pre_anchor = ParaAnchor::new(
         state.pb.pending_float_anchor,
-        state.pb.slot_top - inter_gap,
+        state.pb.anchor_slot_top(sp, ctx) - inter_gap,
         own_space_before(inter_gap, state.prev_space_after),
+        (ctx.compat_mode >= 15).then_some(sp.page_height - sp.margin_top),
     );
 
     let (mut font_size, mut tallest_lhr, tallest_ar) =
@@ -2312,7 +2352,7 @@ fn render_paragraph_block(
         // The previous paragraph may have re-wrapped around this float and
         // grown; the float stays where that look-ahead anchored it
         // (peeked here, taken below).
-        let fi_y_top = resolve_fi_y_top(fi, sp, pre_anchor.top(fi.on_line));
+        let fi_y_top = pre_anchor.fi_y_top(fi, sp);
         state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
         // Re-narrow para_text_x / para_text_width using the
         // new float zone (same logic as the block above).
@@ -2421,7 +2461,7 @@ fn render_paragraph_block(
             .skip(1)
             .map(|fi| {
                 let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                let fi_y_top = resolve_fi_y_top(fi, sp, pre_anchor.top(fi.on_line));
+                let fi_y_top = pre_anchor.fi_y_top(fi, sp);
                 FloatZone::for_float(fi, fi_x, fi_y_top)
             })
             .collect()
@@ -2614,7 +2654,7 @@ fn render_paragraph_block(
             .iter()
             .filter(|fi| fi.wrap_type.wraps_beside())
             .filter_map(|fi| {
-                let fi_y_top = resolve_fi_y_top(fi, sp, pre_anchor.top(fi.on_line));
+                let fi_y_top = pre_anchor.fi_y_top(fi, sp);
                 let fi_y_bottom = fi_y_top - fi.image.display_height;
                 // Only images vertically overlapping the first line band.
                 if fi_y_bottom > slot_top + 2.0 || fi_y_top < slot_top - 40.0 {
@@ -2847,6 +2887,8 @@ fn render_paragraph_block(
     // the text content — used only for page-break decisions,
     // not for cursor advancement (text wraps beside the image).
     let mut float_overflow_h = 0.0f32;
+    // How far a topAndBottom float over the first line pushes the text down.
+    let mut text_drop = 0.0f32;
 
     for fi in &para.floating_images {
         let reserve = match fi.wrap_type {
@@ -2880,11 +2922,10 @@ fn render_paragraph_block(
             // bottom, and Word probes with paragraph- and margin-relative
             // offsets, square and topAndBottom wrapping all do the same.
             let content_top = state.pb.slot_top - inter_gap;
-            let anchor = pre_anchor.top(fi.on_line);
             let zone = FloatZone::for_float(
                 fi,
                 resolve_fi_x(fi, sp, col_x, col_w, text_width),
-                resolve_fi_y_top(fi, sp, anchor),
+                pre_anchor.fi_y_top(fi, sp),
             );
             // ponytail: only a float that starts at or below the paragraph top,
             // or a paragraph opening the page (the probed cases); a float
@@ -2893,8 +2934,18 @@ fn render_paragraph_block(
             let covers_line = zone.top_y > content_top - content_h
                 && zone.bottom_y < content_top
                 && (zone.top_y <= state.pb.slot_top + 0.5 || state.pb.is_at_page_top(sp));
+            // A topAndBottom picture over a text paragraph's first line moves
+            // its lines below it (Word probe: offset 0 puts the first baseline
+            // under the picture; +30pt leaves the first line above it).
+            let covers_first_line = matches!(fi.wrap_type, WrapType::TopAndBottom)
+                && zone.top_y > content_top - line_h
+                && zone.bottom_y < content_top
+                && (zone.top_y <= state.pb.slot_top + 0.5 || state.pb.is_at_page_top(sp));
             if text_empty && !para.paragraph_mark_vanish && covers_line {
                 content_h = content_h.max(content_top - zone.bottom_y + content_h);
+            } else if !text_empty && covers_first_line {
+                text_drop = text_drop.max(content_top - zone.bottom_y);
+                content_h = content_h.max(fi_h).max(lines_h + text_drop);
             } else {
                 content_h = content_h.max(fi_h);
             }
@@ -3461,8 +3512,9 @@ fn render_paragraph_block(
     // stays below the table). One-shot: consumed by this, the next, paragraph.
     let anchor = ParaAnchor::new(
         state.pb.pending_float_anchor.take(),
-        state.pb.slot_top,
+        state.pb.anchor_slot_top(sp, ctx),
         own_space_before(applied_inter_gap, state.prev_space_after),
+        (ctx.compat_mode >= 15).then_some(sp.page_height - sp.margin_top),
     );
     let tb_col_x = |tb: &crate::model::Textbox| {
         if tb.on_line {
@@ -3603,7 +3655,7 @@ fn render_paragraph_block(
         .filter(|fi| wraps_in_column(fi, sp, col_x, col_w, text_width))
     {
         let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-        let fi_y_top = resolve_fi_y_top(fi, sp, anchor.top(fi.on_line));
+        let fi_y_top = anchor.fi_y_top(fi, sp);
         state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
     }
 
@@ -3835,7 +3887,7 @@ fn render_paragraph_block(
         } else {
             first_baseline_offset
         };
-        let baseline_y = state.pb.slot_top - bdr_top_pad - baseline_offset;
+        let baseline_y = state.pb.slot_top - bdr_top_pad - baseline_offset - text_drop;
 
         let tags = state.pb.para_tags(para, doc);
         state.pb.begin_para_tags(tags, |content| {

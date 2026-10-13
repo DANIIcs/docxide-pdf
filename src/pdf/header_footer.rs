@@ -318,6 +318,18 @@ fn compute_header_height(
     sp: &SectionProperties,
     is_header: bool,
 ) -> f32 {
+    header_height(hf, ctx, sp, is_header, true)
+}
+
+/// `compute_header_height`, optionally without the floats: the extent of the
+/// header's own text flow.
+fn header_height(
+    hf: &HeaderFooter,
+    ctx: &RenderContext,
+    sp: &SectionProperties,
+    is_header: bool,
+    with_floats: bool,
+) -> f32 {
     let text_width = sp.text_width();
     let mut height = 0.0f32;
     let mut prev_space_after = 0.0f32;
@@ -383,9 +395,13 @@ fn compute_header_height(
                     )
                 } else {
                     text_lines.unwrap_or(1) as f32 * line_h
-                } + float_text_push(para, text_width);
+                } + if with_floats {
+                    float_text_push(para, text_width)
+                } else {
+                    0.0
+                };
 
-                for fi in &para.floating_images {
+                for fi in para.floating_images.iter().filter(|_| with_floats) {
                     // Text flows beside a narrow wrapping image, and Word does
                     // not extend the header to its bottom: czech_municipal's
                     // logo hangs 5.5pt below the header text, where the body
@@ -427,7 +443,7 @@ fn compute_header_height(
                     content_h = content_h.max(fi_h);
                 }
 
-                for tb in &para.textboxes {
+                for tb in para.textboxes.iter().filter(|_| with_floats) {
                     if matches!(tb.wrap_type, WrapType::TopAndBottom) {
                         let tb_bottom = tb.v_offset_pt + tb.height_pt + tb.dist_bottom;
                         match tb.v_relative_from {
@@ -486,6 +502,24 @@ pub(super) fn effective_slot_top(
             base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx, sp, true))
         }
         None => base,
+    }
+}
+
+/// The body top a page's header text alone would leave: where Word anchors
+/// a page's first paragraph's floats when header floats push its lines lower
+/// (a 133pt floating letterhead pushes the text, not the anchor).
+pub(super) fn flow_slot_top(
+    sp: &SectionProperties,
+    is_first: bool,
+    page_idx: usize,
+    ctx: &RenderContext,
+) -> f32 {
+    let base = sp.page_height - sp.margin_top;
+    match layout_hf(sp, is_first, page_idx, true, ctx) {
+        Some(hf) if !sp.margin_top_fixed => {
+            base.min(sp.page_height - sp.header_margin - header_height(hf, ctx, sp, true, false))
+        }
+        _ => base,
     }
 }
 

@@ -118,7 +118,7 @@ pub(super) fn render_floating_images(
             col_x,
             col_w,
             text_width,
-            anchor.top(fi.on_line),
+            anchor,
             content,
             tags,
             page,
@@ -162,7 +162,7 @@ pub(super) fn render_foreground_floating_images_deferred(
             col_x,
             col_w,
             text_width,
-            anchor.top(fi.on_line),
+            anchor,
             &mut buf,
             tags,
             page,
@@ -185,7 +185,7 @@ fn render_one_floating_image(
     col_x: f32,
     col_w: f32,
     text_width: f32,
-    slot_top: f32,
+    anchor: super::ParaAnchor,
     content: &mut Content,
     // The picture is tagged as a Figure hoisted after its anchor, like Word;
     // `content` must be inside the default artifact.
@@ -197,7 +197,7 @@ fn render_one_floating_image(
     };
     let img = &fi.image;
     let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-    let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
+    let fi_y_top = anchor.fi_y_top(fi, sp);
     let fi_y_bottom = fi_y_top - img.display_height;
 
     // OOXML rotates a floating image about the center of its (unrotated) box, with
