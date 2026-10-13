@@ -2200,6 +2200,10 @@ fn find_next_tab_stop(
 fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
     let mut w: f32 = 0.0;
     let mut first = true;
+    // Whitespace since the last word, across run boundaries: every space
+    // counts ("Office:  317-477-4380" after a right tab has two), and runs
+    // that meet without one join their words.
+    let mut spaces = 0usize;
     let mut key_buf = String::new();
     for run in runs {
         let key = font_key_buf(run, &mut key_buf);
@@ -2209,14 +2213,21 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
         let cs = run.char_spacing;
         let text = effective_text(run);
         let mut prev_char = None;
-        for (i, word) in text.split_whitespace().enumerate() {
-            let space_w = word_space_width(run, entry, eff_fs, word, &mut prev_char);
-            if !first || i > 0 {
-                w += space_w;
+        for piece in text.split(char::is_whitespace) {
+            if piece.is_empty() {
+                spaces += 1;
+                continue;
             }
-            w += word_width_for_run(entry, run, word, eff_fs, run.kerns_at(eff_fs), cs, ts);
+            let space_w = word_space_width(run, entry, eff_fs, piece, &mut prev_char);
+            if !first {
+                w += space_w * spaces as f32;
+            }
+            w += word_width_for_run(entry, run, piece, eff_fs, run.kerns_at(eff_fs), cs, ts);
             first = false;
+            spaces = 1;
         }
+        // The last piece is followed by no separator of its own.
+        spaces -= 1;
     }
     w
 }
