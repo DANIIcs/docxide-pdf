@@ -228,10 +228,19 @@ fn comment_ranges(
             open.extend(id(n));
         } else if n.has_tag_name((WML_NS, "commentRangeEnd")) {
             open.retain(|o| Some(*o) != id(n));
-            // Word probe: a range ending between blocks (after a table) gets
-            // no balloon, wherever its reference is; ending inside the
-            // table's last paragraph it gets one.
-            if !n.ancestors().any(|a| a.has_tag_name((WML_NS, "p"))) {
+            // Word probes: a range ending before any text of its paragraph,
+            // or between blocks, gets no balloon wherever its reference is
+            // (after a table or a paragraph alike); one ending after text,
+            // in a cell's last paragraph too, gets one.
+            let text_before = n
+                .ancestors()
+                .find(|a| a.has_tag_name((WML_NS, "p")))
+                .is_some_and(|p| {
+                    p.descendants().take_while(|d| *d != n).any(|d| {
+                        d.has_tag_name((WML_NS, "t")) && d.text().is_some_and(|t| !t.is_empty())
+                    })
+                });
+            if !text_before {
                 unballooned.extend(id(n));
             }
         } else if n.has_tag_name((WML_NS, "commentReference")) {
