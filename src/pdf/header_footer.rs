@@ -200,12 +200,6 @@ fn top_border_band(para: &Paragraph) -> f32 {
 /// ponytail: "no room" = as wide as the text; measure the side gaps if a
 /// partly covering float turns up.
 fn float_text_push(para: &Paragraph, text_width: f32) -> f32 {
-    // An empty paragraph's mark stays in place (Word probes: a 567pt banner
-    // over an empty header paragraph, square or topAndBottom, leaves the
-    // header lines where they are).
-    if is_text_empty(&para.runs) {
-        return 0.0;
-    }
     para.floating_images
         .iter()
         .filter(|fi| matches!(fi.v_relative_from, VRelativeFrom::Paragraph) && !fi.behind_doc)
@@ -445,19 +439,6 @@ fn header_height(
                         }
                         _ => fi.image.display_height,
                     };
-                    // An empty header paragraph's mark stays put beside or under
-                    // its float; the float only reaches the header's extent to
-                    // its own foot (Word probes: a 567x89pt banner, square or
-                    // topAndBottom, -20pt or 0pt from an empty header paragraph,
-                    // leaves the three header lines in place and starts the body
-                    // at max(top margin, banner foot)).
-                    if is_header
-                        && is_text_empty(&para.runs)
-                        && matches!(fi.v_relative_from, VRelativeFrom::Paragraph)
-                    {
-                        placed_extent = placed_extent.max(height + fi_h);
-                        continue;
-                    }
                     // TopAndBottom or wide wrapping image
                     content_h = content_h.max(fi_h);
                 }
