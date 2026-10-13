@@ -33,10 +33,17 @@ regressions. Still open where WordCraft leads:
   of Word's. A floating table's offset does place its first cell's text even
   without a style (Word: text 72.02); only inline unstyled tables skip the
   outdent.
-- **132 references are desktop Word 2024 exports** (case83–case219, from
-  the external PRs: Creator "Microsoft® Word 2024", not "Microsoft Word").
-  case145's fresh online export differs by 0.1-0.2pt. Re-export them with
-  `tools/word_export.py` (online) before trusting sub-point work on them.
+- ~~**132 references were desktop Word 2024 exports**~~ Done 2026-10-13:
+  case83–case219 (the external PRs' fixtures) now carry Word online exports.
+  Before swapping, every build was scored on both sets: the refs differ by at
+  most 0.48pt per line, and the PR window (+20.1 desktop / +18.1 online J) and
+  this round (+10.3 / +10.0) helped both alike, so nothing was fitted to the
+  desktop export. Those fixtures fall 80.5 -> 76.2 J (suite 72.08 -> 70.62),
+  mostly the 66 without styles.xml, where our built-in defaults match desktop
+  Word rather than online (case135's cell line: desktop 633.22, us 633.20,
+  online 633.70). Next: probe Word online's defaults for a docx without
+  styles.xml. Online Word also tags case152–168's tables as paragraphs, so
+  a11y_struct reads 33–37% there; our Table tagging is unchanged.
 
 ## Floating table positioning
 
