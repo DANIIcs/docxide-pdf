@@ -574,10 +574,10 @@ mod tests {
 
         let rpr = r#"<w:rFonts w:ascii="Courier New" w:cs="Times New Roman"/><w:b/><w:sz w:val="24"/><w:szCs w:val="40"/>"#;
         let document = format!(
-            r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="Rtl"/></w:pPr><w:r><w:rPr>{rpr}</w:rPr><w:t>plain</w:t></w:r><w:r><w:rPr>{rpr}<w:rtl/></w:rPr><w:t>rtl</w:t></w:r><w:r><w:rPr>{rpr}<w:iCs/><w:cs/></w:rPr><w:t>cs</w:t></w:r></w:p><w:sectPr/></w:body></w:document>"#
+            r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="Rtl"/></w:pPr><w:r><w:rPr>{rpr}</w:rPr><w:t>plain</w:t></w:r><w:r><w:rPr>{rpr}<w:rtl/></w:rPr><w:t>rtl</w:t></w:r><w:r><w:rPr>{rpr}<w:iCs/><w:cs/></w:rPr><w:t>cs</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Sub"/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>sub</w:t></w:r></w:p><w:sectPr/></w:body></w:document>"#
         );
         let styles = format!(
-            r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="Rtl"><w:name w:val="Rtl"/><w:pPr><w:bidi/></w:pPr><w:rPr><w:bCs/></w:rPr></w:style></w:styles>"#
+            r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="Rtl"><w:name w:val="Rtl"/><w:pPr><w:bidi/></w:pPr><w:rPr><w:bCs/><w:szCs w:val="30"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Sub"><w:name w:val="Sub"/><w:basedOn w:val="Rtl"/></w:style></w:styles>"#
         );
         let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
         for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
@@ -605,6 +605,12 @@ mod tests {
             props(&para.runs[2]),
             (font("Times New Roman"), 20.0, true, true, false)
         );
+        // basedOn passes the complex-script properties (and w:bidi) down.
+        let crate::model::Block::Paragraph(sub) = &parsed.sections[0].blocks[1] else {
+            panic!("expected a paragraph");
+        };
+        assert!(sub.bidi);
+        assert_eq!((sub.runs[0].font_size, sub.runs[0].bold), (15.0, true));
     }
 
     #[test]

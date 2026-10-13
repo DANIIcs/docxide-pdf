@@ -1430,6 +1430,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             // The chain starts with the style itself, so `inh` already holds
             // its own values: one field list serves both directions.
             inherit!(s, inh);
+            s.complex = inh.complex;
             s.tab_stops = inh.tab_stops;
         }
     }
