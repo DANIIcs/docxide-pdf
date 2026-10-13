@@ -200,6 +200,12 @@ fn top_border_band(para: &Paragraph) -> f32 {
 /// ponytail: "no room" = as wide as the text; measure the side gaps if a
 /// partly covering float turns up.
 fn float_text_push(para: &Paragraph, text_width: f32) -> f32 {
+    // An empty paragraph's mark stays in place (Word probes: a 567pt banner
+    // over an empty header paragraph, square or topAndBottom, leaves the
+    // header lines where they are).
+    if is_text_empty(&para.runs) {
+        return 0.0;
+    }
     para.floating_images
         .iter()
         .filter(|fi| matches!(fi.v_relative_from, VRelativeFrom::Paragraph) && !fi.behind_doc)
@@ -375,7 +381,7 @@ fn header_height(
                         &para.runs,
                         ctx,
                         (text_width - para.indent_left - para.indent_right).max(1.0),
-                        ctx.cjk(true, para.alignment),
+                        ctx.cjk(true, para),
                         &LineOpts {
                             tab_stops: &para.tab_stops,
                             indent_left: para.indent_left,
@@ -439,6 +445,19 @@ fn header_height(
                         }
                         _ => fi.image.display_height,
                     };
+                    // An empty header paragraph's mark stays put beside or under
+                    // its float; the float only reaches the header's extent to
+                    // its own foot (Word probes: a 567x89pt banner, square or
+                    // topAndBottom, -20pt or 0pt from an empty header paragraph,
+                    // leaves the three header lines in place and starts the body
+                    // at max(top margin, banner foot)).
+                    if is_header
+                        && is_text_empty(&para.runs)
+                        && matches!(fi.v_relative_from, VRelativeFrom::Paragraph)
+                    {
+                        placed_extent = placed_extent.max(height + fi_h);
+                        continue;
+                    }
                     // TopAndBottom or wide wrapping image
                     content_h = content_h.max(fi_h);
                 }
@@ -869,52 +888,173 @@ pub(super) fn render_header_footer(
                     )
                     .unwrap_or(font_size * ascender_ratio);
 
-                // Render textboxes
-                for tb in &para.textboxes {
-                    let tb_height = super::textbox_render::textbox_height(tb, ctx);
-                    let tb_x = super::resolve_h_position(
-                        tb.h_relative_from,
-                        &tb.h_position,
-                        tb.width_pt,
-                        sp,
-                        sp.margin_left,
-                        text_width,
-                        text_width,
-                    );
-                    let tb_y_top = resolve_tb_y_top(
-                        tb.v_relative_from,
-                        &tb.v_position,
-                        tb_height,
-                        sp,
-                        slot_top,
-                    );
+                // Paint in z-order: the shapes above the pictures after them
+                // (a white "Agenda" title box over a banner picture).
+                let pictures_first = para
+                    .floating_images
+                    .iter()
+                    .map(|f| f.z_index)
+                    .max()
+                    .zip(para.textboxes.iter().map(|t| t.z_index).min())
+                    .is_some_and(|(top_picture, low_box)| top_picture < low_box);
+                for pictures in [pictures_first, !pictures_first] {
+                    if pictures {
+                        // Render floating images and register float zones
+                        for (fi_idx, fi) in para.floating_images.iter().enumerate() {
+                            if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
+                                let img = &fi.image;
+                                let fi_x = super::resolve_h_position(
+                                    fi.h_relative_from,
+                                    &fi.h_position,
+                                    img.display_width,
+                                    sp,
+                                    sp.margin_left,
+                                    text_width,
+                                    text_width,
+                                );
+                                let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
+                                super::smartart::render_image_with_clip(
+                                    content,
+                                    pdf_name,
+                                    fi_x,
+                                    fi_y_top - img.display_height,
+                                    img.display_width,
+                                    img.display_height,
+                                    img.clip_geometry.as_ref(),
+                                );
+                                // Register float zone for wrapping images
+                                if fi.wrap_type.wraps_beside() {
+                                    hdr_fz.push(HfFloatZone::for_float(fi, fi_x, fi_y_top));
+                                }
+                            }
+                        }
+                    } else {
+                        // Render textboxes
+                        for tb in &para.textboxes {
+                            let tb_height = super::textbox_render::textbox_height(tb, ctx);
+                            let tb_x = super::resolve_h_position(
+                                tb.h_relative_from,
+                                &tb.h_position,
+                                tb.width_pt,
+                                sp,
+                                sp.margin_left,
+                                text_width,
+                                text_width,
+                            );
+                            let tb_y_top = resolve_tb_y_top(
+                                tb.v_relative_from,
+                                &tb.v_position,
+                                tb_height,
+                                sp,
+                                slot_top,
+                            );
 
-                    if let Some(ref fill) = tb.fill {
-                        super::render_shape_fill(
-                            content,
-                            fill,
-                            tb_x,
-                            tb_y_top - tb_height,
-                            tb.width_pt,
-                            tb_height,
-                            &tb.shape_type,
-                            gradient_specs,
-                        );
-                    }
+                            if let Some(ref fill) = tb.fill {
+                                super::render_shape_fill(
+                                    content,
+                                    fill,
+                                    tb_x,
+                                    tb_y_top - tb_height,
+                                    tb.width_pt,
+                                    tb_height,
+                                    &tb.shape_type,
+                                    gradient_specs,
+                                );
+                            }
 
-                    let content_x = tb_x + tb.margin_left;
-                    let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+                            let content_x = tb_x + tb.margin_left;
+                            let content_w =
+                                (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
 
-                    // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
-                    // The body textbox path (textbox_render::render_single_textbox) applies this,
-                    // but the header/footer loop is a separate renderer that historically
-                    // top-anchored everything. Mirror the body math here. The per-paragraph
-                    // height calc must match the rendering advances below (block image / empty /
-                    // text), so keep the two in sync.
-                    let anchor_offset = match tb.text_anchor {
-                        TextAnchor::Top => 0.0,
-                        TextAnchor::Middle | TextAnchor::Bottom => {
-                            let tp_height = |tp: &Paragraph| -> f32 {
+                            // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
+                            // The body textbox path (textbox_render::render_single_textbox) applies this,
+                            // but the header/footer loop is a separate renderer that historically
+                            // top-anchored everything. Mirror the body math here. The per-paragraph
+                            // height calc must match the rendering advances below (block image / empty /
+                            // text), so keep the two in sync.
+                            let anchor_offset = match tb.text_anchor {
+                                TextAnchor::Top => 0.0,
+                                TextAnchor::Middle | TextAnchor::Bottom => {
+                                    let tp_height = |tp: &Paragraph| -> f32 {
+                                        let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                                        let tp_text_w =
+                                            (content_w - tp.indent_left - tp.indent_right).max(1.0);
+                                        let tp_hanging = if !tp.list_label.is_empty() {
+                                            if tp.indent_first_line > 0.0
+                                                && tp.indent_hanging == 0.0
+                                            {
+                                                -tp.indent_first_line
+                                            } else {
+                                                0.0
+                                            }
+                                        } else if tp.indent_hanging > 0.0 {
+                                            tp.indent_hanging
+                                        } else {
+                                            -tp.indent_first_line
+                                        };
+                                        if let Some(img) =
+                                            super::textbox_render::textbox_para_block_image(tp)
+                                        {
+                                            return tp.space_before
+                                                + img.display_height
+                                                + img.layout_extra_height
+                                                + tp.space_after;
+                                        }
+                                        let inline_imgs: HashMap<usize, String> =
+                                            if tp.runs.iter().any(|r| r.inline_image.is_some()) {
+                                                tp.runs
+                                                    .iter()
+                                                    .enumerate()
+                                                    .filter_map(|(ri, run)| {
+                                                        let img = run.inline_image.as_ref()?;
+                                                        ctx.textbox_image_names
+                                                            .get(&img.key())
+                                                            .map(|name| (ri, name.clone()))
+                                                    })
+                                                    .collect()
+                                            } else {
+                                                HashMap::new()
+                                            };
+                                        let tb_lines = build_lines(
+                                            &tp.runs,
+                                            ctx,
+                                            tp_text_w,
+                                            ctx.cjk(true, tp),
+                                            &LineOpts {
+                                                inline_images: Some(&inline_imgs),
+                                                tab_stops: &tp.tab_stops,
+                                                indent_left: tp.indent_left,
+                                                indent_right: tp.indent_right,
+                                                hanging: tp_hanging,
+                                                ..Default::default()
+                                            },
+                                        );
+                                        if tb_lines.is_empty() {
+                                            let (fs, _, _) =
+                                                tallest_run_metrics(&tp.runs, ctx.fonts);
+                                            let lh = resolve_line_h(tp_ls, fs, None);
+                                            return tp.space_before + lh + tp.space_after;
+                                        }
+                                        let (tb_fs, _, tb_ar) =
+                                            tallest_run_metrics(&tp.runs, ctx.fonts);
+                                        let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
+                                        tp.space_before
+                                            + (tb_lines.len() as f32) * tb_line_h
+                                            + tp.space_after
+                                    };
+                                    let total_h: f32 = tb.paragraphs.iter().map(tp_height).sum();
+                                    let available =
+                                        (tb_height - tb.margin_top - tb.margin_bottom).max(0.0);
+                                    let gap = (available - total_h).max(0.0);
+                                    match tb.text_anchor {
+                                        TextAnchor::Middle => gap / 2.0,
+                                        TextAnchor::Bottom => gap,
+                                        TextAnchor::Top => 0.0,
+                                    }
+                                }
+                            };
+                            let mut tb_cursor = tb_y_top - tb.margin_top - anchor_offset;
+                            for tp in &tb.paragraphs {
                                 let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
                                 let tp_text_w =
                                     (content_w - tp.indent_left - tp.indent_right).max(1.0);
@@ -929,14 +1069,37 @@ pub(super) fn render_header_footer(
                                 } else {
                                     -tp.indent_first_line
                                 };
+
                                 if let Some(img) =
                                     super::textbox_render::textbox_para_block_image(tp)
                                 {
-                                    return tp.space_before
+                                    if let Some(pdf_name) = ctx.textbox_image_names.get(&img.key())
+                                    {
+                                        let img_x = content_x
+                                            + tp.indent_left
+                                            + align_offset(
+                                                tp.alignment,
+                                                (tp_text_w - img.display_width).max(0.0),
+                                            );
+                                        let img_y =
+                                            tb_cursor - tp.space_before - img.display_height;
+                                        super::smartart::render_image_with_clip(
+                                            content,
+                                            pdf_name,
+                                            img_x,
+                                            img_y,
+                                            img.display_width,
+                                            img.display_height,
+                                            img.clip_geometry.as_ref(),
+                                        );
+                                    }
+                                    tb_cursor -= tp.space_before
                                         + img.display_height
                                         + img.layout_extra_height
                                         + tp.space_after;
+                                    continue;
                                 }
+
                                 let inline_imgs: HashMap<usize, String> =
                                     if tp.runs.iter().any(|r| r.inline_image.is_some()) {
                                         tp.runs
@@ -969,172 +1132,53 @@ pub(super) fn render_header_footer(
                                 if tb_lines.is_empty() {
                                     let (fs, _, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
                                     let lh = resolve_line_h(tp_ls, fs, None);
-                                    return tp.space_before + lh + tp.space_after;
+                                    tb_cursor -= tp.space_before + lh + tp.space_after;
+                                    continue;
                                 }
                                 let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, ctx.fonts);
+                                let tb_ascender = tb_ar.unwrap_or(0.75);
                                 let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
-                                tp.space_before
-                                    + (tb_lines.len() as f32) * tb_line_h
-                                    + tp.space_after
-                            };
-                            let total_h: f32 = tb.paragraphs.iter().map(tp_height).sum();
-                            let available = (tb_height - tb.margin_top - tb.margin_bottom).max(0.0);
-                            let gap = (available - total_h).max(0.0);
-                            match tb.text_anchor {
-                                TextAnchor::Middle => gap / 2.0,
-                                TextAnchor::Bottom => gap,
-                                TextAnchor::Top => 0.0,
-                            }
-                        }
-                    };
-                    let mut tb_cursor = tb_y_top - tb.margin_top - anchor_offset;
-                    for tp in &tb.paragraphs {
-                        let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
-                        let tp_hanging = if !tp.list_label.is_empty() {
-                            if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
-                                -tp.indent_first_line
-                            } else {
-                                0.0
-                            }
-                        } else if tp.indent_hanging > 0.0 {
-                            tp.indent_hanging
-                        } else {
-                            -tp.indent_first_line
-                        };
-
-                        if let Some(img) = super::textbox_render::textbox_para_block_image(tp) {
-                            if let Some(pdf_name) = ctx.textbox_image_names.get(&img.key()) {
-                                let img_x = content_x
-                                    + tp.indent_left
-                                    + align_offset(
-                                        tp.alignment,
-                                        (tp_text_w - img.display_width).max(0.0),
-                                    );
-                                let img_y = tb_cursor - tp.space_before - img.display_height;
-                                super::smartart::render_image_with_clip(
-                                    content,
-                                    pdf_name,
-                                    img_x,
-                                    img_y,
-                                    img.display_width,
-                                    img.display_height,
-                                    img.clip_geometry.as_ref(),
+                                let tb_baseline = tb_cursor - tp.space_before - tb_fs * tb_ascender;
+                                let tb_metrics = (
+                                    tb_fs * tb_ascender,
+                                    if inline_imgs.is_empty() {
+                                        0.0
+                                    } else {
+                                        picture_line_bottom(&tp.runs, tp, ctx.fonts, tp_ls)
+                                    },
                                 );
+                                super::render_list_label(
+                                    content,
+                                    tp,
+                                    ctx.fonts,
+                                    content_x + tp.indent_left - tp.indent_hanging,
+                                    tb_baseline,
+                                    tb_fs,
+                                );
+                                render_paragraph_lines(
+                                    content,
+                                    &tb_lines,
+                                    &tp.alignment,
+                                    content_x + tp.indent_left,
+                                    tp_text_w,
+                                    tb_baseline,
+                                    tb_line_h,
+                                    tb_metrics,
+                                    tb_lines.len(),
+                                    0,
+                                    links,
+                                    0.0,
+                                    ctx.fonts,
+                                    None,
+                                    gradient_specs,
+                                    None,
+                                    None,
+                                    None,
+                                );
+                                tb_cursor -= tp.space_before
+                                    + (tb_lines.len() as f32) * tb_line_h
+                                    + tp.space_after;
                             }
-                            tb_cursor -= tp.space_before
-                                + img.display_height
-                                + img.layout_extra_height
-                                + tp.space_after;
-                            continue;
-                        }
-
-                        let inline_imgs: HashMap<usize, String> =
-                            if tp.runs.iter().any(|r| r.inline_image.is_some()) {
-                                tp.runs
-                                    .iter()
-                                    .enumerate()
-                                    .filter_map(|(ri, run)| {
-                                        let img = run.inline_image.as_ref()?;
-                                        ctx.textbox_image_names
-                                            .get(&img.key())
-                                            .map(|name| (ri, name.clone()))
-                                    })
-                                    .collect()
-                            } else {
-                                HashMap::new()
-                            };
-                        let tb_lines = build_lines(
-                            &tp.runs,
-                            ctx,
-                            tp_text_w,
-                            ctx.cjk(true, tp),
-                            &LineOpts {
-                                inline_images: Some(&inline_imgs),
-                                tab_stops: &tp.tab_stops,
-                                indent_left: tp.indent_left,
-                                indent_right: tp.indent_right,
-                                hanging: tp_hanging,
-                                ..Default::default()
-                            },
-                        );
-                        if tb_lines.is_empty() {
-                            let (fs, _, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
-                            let lh = resolve_line_h(tp_ls, fs, None);
-                            tb_cursor -= tp.space_before + lh + tp.space_after;
-                            continue;
-                        }
-                        let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, ctx.fonts);
-                        let tb_ascender = tb_ar.unwrap_or(0.75);
-                        let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
-                        let tb_baseline = tb_cursor - tp.space_before - tb_fs * tb_ascender;
-                        let tb_metrics = (
-                            tb_fs * tb_ascender,
-                            if inline_imgs.is_empty() {
-                                0.0
-                            } else {
-                                picture_line_bottom(&tp.runs, tp, ctx.fonts, tp_ls)
-                            },
-                        );
-                        super::render_list_label(
-                            content,
-                            tp,
-                            ctx.fonts,
-                            content_x + tp.indent_left - tp.indent_hanging,
-                            tb_baseline,
-                            tb_fs,
-                        );
-                        render_paragraph_lines(
-                            content,
-                            &tb_lines,
-                            &tp.alignment,
-                            content_x + tp.indent_left,
-                            tp_text_w,
-                            tb_baseline,
-                            tb_line_h,
-                            tb_metrics,
-                            tb_lines.len(),
-                            0,
-                            links,
-                            0.0,
-                            ctx.fonts,
-                            None,
-                            gradient_specs,
-                            None,
-                            None,
-                            None,
-                        );
-                        tb_cursor -=
-                            tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
-                    }
-                }
-
-                // Render floating images and register float zones
-                for (fi_idx, fi) in para.floating_images.iter().enumerate() {
-                    if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
-                        let img = &fi.image;
-                        let fi_x = super::resolve_h_position(
-                            fi.h_relative_from,
-                            &fi.h_position,
-                            img.display_width,
-                            sp,
-                            sp.margin_left,
-                            text_width,
-                            text_width,
-                        );
-                        let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
-                        super::smartart::render_image_with_clip(
-                            content,
-                            pdf_name,
-                            fi_x,
-                            fi_y_top - img.display_height,
-                            img.display_width,
-                            img.display_height,
-                            img.clip_geometry.as_ref(),
-                        );
-                        // Register float zone for wrapping images
-                        if fi.wrap_type.wraps_beside() {
-                            hdr_fz.push(HfFloatZone::for_float(fi, fi_x, fi_y_top));
                         }
                     }
                 }
