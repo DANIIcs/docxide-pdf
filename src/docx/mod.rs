@@ -539,6 +539,12 @@ pub(super) fn parse_frame_props(
     if attr("yAlign") == Some("inline") {
         return None;
     }
+    // A framePr setting nothing but its wrap (a Normal style's
+    // `<w:framePr w:wrap="auto"/>`) places nothing: Word flows such
+    // paragraphs as plain ones.
+    if attrs.keys().all(|k| k == "wrap") {
+        return None;
+    }
     let twips = |name| {
         attr(name)
             .and_then(|v| v.parse::<f32>().ok())
