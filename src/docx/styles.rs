@@ -152,6 +152,8 @@ pub(super) struct StyleDefaults {
     pub(super) lang: Option<String>,
     pub(super) lang_east_asia: Option<String>,
     pub(super) lang_bidi: Option<String>,
+    pub(super) complex: ComplexProps,
+    pub(super) bidi: bool,
     pub(super) widow_control: bool,
     pub(super) indent_left: f32,
     pub(super) indent_right: f32,
@@ -173,6 +175,9 @@ pub(super) struct ParagraphStyle {
     pub(super) lang: Option<String>,
     pub(super) lang_east_asia: Option<String>,
     pub(super) lang_bidi: Option<String>,
+    pub(super) complex: ComplexProps,
+    /// `w:bidi`: a right-to-left paragraph.
+    pub(super) bidi: Option<bool>,
     pub(super) vanish: Option<bool>,
     pub(super) underline: Option<bool>,
     pub(super) double_underline: Option<bool>,
@@ -256,6 +261,51 @@ pub(super) struct RunProps {
     pub(super) text_fill: Option<TextFill>,
     pub(super) text_shadow: Option<TextShadow>,
     pub(super) text_glow: Option<TextGlow>,
+    pub(super) complex: ComplexProps,
+}
+
+/// Complex-script formatting (`w:szCs`, `w:bCs`, `w:iCs`) and the two run
+/// flags that switch a run over to it (`w:rtl`, `w:cs`). Inherited like the
+/// other run properties, field by field.
+#[derive(Clone, Copy, Default)]
+pub(super) struct ComplexProps {
+    pub(super) size: Option<f32>,
+    pub(super) bold: Option<bool>,
+    pub(super) italic: Option<bool>,
+    pub(super) rtl: Option<bool>,
+    pub(super) cs: Option<bool>,
+}
+
+impl ComplexProps {
+    fn parse(rpr: roxmltree::Node) -> Self {
+        Self {
+            size: half_points(rpr, "szCs"),
+            bold: wml_bool(rpr, "bCs"),
+            italic: wml_bool(rpr, "iCs"),
+            rtl: wml_bool(rpr, "rtl"),
+            cs: wml_bool(rpr, "cs"),
+        }
+    }
+
+    /// Each property from `self`, else from `fallback` (the next level up).
+    pub(super) fn or(self, fallback: Self) -> Self {
+        Self {
+            size: self.size.or(fallback.size),
+            bold: self.bold.or(fallback.bold),
+            italic: self.italic.or(fallback.italic),
+            rtl: self.rtl.or(fallback.rtl),
+            cs: self.cs.or(fallback.cs),
+        }
+    }
+
+    /// Word formats a run with its complex-script properties (cs font,
+    /// szCs, bCs, iCs) only when it is marked `w:rtl` or `w:cs`, and then
+    /// all of its text, Latin included. Arabic letters in a plain run take
+    /// the run's own size, bold and italic (Word probes 2026-10-13: szCs 20
+    /// on a plain run leaves its Arabic at sz 12; bCs alone bolds nothing).
+    pub(super) fn applies(self) -> bool {
+        self.rtl == Some(true) || self.cs == Some(true)
+    }
 }
 
 pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunProps {
@@ -289,6 +339,7 @@ pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunPr
         text_fill: parse_text_fill(rpr, theme),
         text_shadow: parse_text_shadow(rpr, theme),
         text_glow: parse_text_glow(rpr, theme),
+        complex: ComplexProps::parse(rpr),
     }
 }
 
@@ -298,8 +349,9 @@ impl RunProps {
         macro_rules! fill {
             ($($f:ident),+ $(,)?) => {{
                 // Exhaustive on purpose: a new field fails to compile until it is listed here.
-                let RunProps { $($f),+ } = parent;
+                let RunProps { $($f),+, complex } = parent;
                 $(if self.$f.is_none() { self.$f = $f.clone(); })+
+                self.complex = self.complex.or(*complex);
             }};
         }
         fill!(
@@ -810,6 +862,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
         lang: None,
         lang_east_asia: None,
         lang_bidi: None,
+        complex: ComplexProps::default(),
+        bidi: false,
         widow_control: true,
         indent_left: 0.0,
         indent_right: 0.0,
@@ -867,6 +921,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             defaults.char_spacing = r.char_spacing.unwrap_or(0.0);
             (defaults.lang, defaults.lang_east_asia, defaults.lang_bidi) =
                 (r.lang, r.lang_east_asia, r.lang_bidi);
+            defaults.complex = r.complex;
         }
         // A docDefaults with no pPrDefault at all (PHPWord writes these) takes
         // Word's built-in paragraph defaults, 8pt after and line 278 auto:
@@ -878,6 +933,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
             defaults.line_spacing = LineSpacing::Auto(278.0 / 240.0);
         }
         let default_ppr = wml(doc_defaults, "pPrDefault").and_then(|n| wml(n, "pPr"));
+        defaults.bidi = default_ppr
+            .and_then(|ppr| wml_bool(ppr, "bidi"))
+            .unwrap_or(false);
         if let Some(wc) = default_ppr.and_then(|ppr| wml_bool(ppr, "widowControl")) {
             defaults.widow_control = wc;
         }
@@ -980,6 +1038,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     text_fill,
                     text_shadow,
                     text_glow,
+                    complex,
                     ..
                 } = wml(style_node, "rPr")
                     .map(|rpr| parse_run_props(rpr, theme))
@@ -1021,6 +1080,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     .filter(|&lvl| lvl <= 9)
                     .or_else(|| builtin_heading_level(wml_attr(style_node, "name")?));
 
+                let bidi = ppr.and_then(|ppr| wml_bool(ppr, "bidi"));
                 let snap_to_grid = ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"));
                 let auto_space_de = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDE"));
                 let auto_space_dn = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDN"));
@@ -1042,6 +1102,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         lang,
                         lang_east_asia,
                         lang_bidi,
+                        complex,
+                        bidi,
                         vanish,
                         underline,
                         double_underline,
@@ -1294,6 +1356,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     lang,
                     lang_east_asia,
                     lang_bidi,
+                    bidi,
                     vanish,
                     underline,
                     double_underline,
@@ -1339,6 +1402,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         for ancestor_id in chain.iter().rev() {
             if let Some(s) = styles.get(ancestor_id) {
                 inherit!(inh, s);
+                inh.complex = s.complex.or(inh.complex);
                 // firstLine and hanging are one value: a style setting either
                 // replaces both of its parent's.
                 if s.indent_hanging.is_some() || s.indent_first_line.is_some() {

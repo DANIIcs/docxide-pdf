@@ -12,8 +12,8 @@ use super::images::{
     parse_run_drawing,
 };
 use super::styles::{
-    ParagraphStyle, RunProps, StyleDefaults, ThemeFonts, half_points, parse_font_size,
-    parse_run_props, resolve_font_from_node_opt,
+    ComplexProps, ParagraphStyle, RunProps, StyleDefaults, ThemeFonts, half_points,
+    parse_font_size, parse_run_props, resolve_font_from_node_opt,
 };
 use super::textbox::parse_textbox_from_vml;
 use super::{
@@ -276,6 +276,7 @@ struct ParagraphRunDefaults {
     lang: Option<String>,
     lang_east_asia: Option<String>,
     lang_bidi: Option<String>,
+    complex: ComplexProps,
 }
 
 /// The paragraph mark's formatting, resolved like any run: its rPr, its
@@ -325,6 +326,7 @@ impl ParagraphRunDefaults {
             lang: style_or_clone(|s| s.lang.as_ref(), &defaults.lang),
             lang_east_asia: style_or_clone(|s| s.lang_east_asia.as_ref(), &defaults.lang_east_asia),
             lang_bidi: style_or_clone(|s| s.lang_bidi.as_ref(), &defaults.lang_bidi),
+            complex: para_style.map_or(defaults.complex, |s| s.complex.or(defaults.complex)),
             kern_threshold: para_style
                 .and_then(|s| s.kern_threshold)
                 .or(defaults.kern_threshold),
@@ -377,26 +379,44 @@ impl ParagraphRunDefaults {
         let legacy_shadow = rpr.and_then(|n| wml_bool(n, "shadow")).unwrap_or(false);
         let legacy_emboss = rpr.and_then(|n| wml_bool(n, "emboss")).unwrap_or(false);
         let legacy_imprint = rpr.and_then(|n| wml_bool(n, "imprint")).unwrap_or(false);
+        let complex = own
+            .complex
+            .or(char_style.map_or(ComplexProps::default(), |c| c.complex))
+            .or(self.complex);
+        let cs_font_name = own
+            .cs_font
+            .or_else(|| char_style.and_then(|cs| cs.cs_font.clone()))
+            .or_else(|| self.cs_font.clone());
+        let bold = own.bold.or_else(|| cs(|c| c.bold)).unwrap_or(self.bold);
+        let italic = own
+            .italic
+            .or_else(|| cs(|c| c.italic))
+            .unwrap_or(self.italic);
+        let mut font_name = own
+            .font_name
+            .or(char_style_font_name)
+            .unwrap_or_else(|| self.font_name.clone());
+        let (mut font_size, mut bold, mut italic) = (font_size, bold, italic);
+        if complex.applies() {
+            // Arial as in `split_run_by_script` for a document naming no cs font.
+            font_name = cs_font_name.clone().unwrap_or_else(|| "Arial".into());
+            // ponytail: no szCs anywhere keeps sz; Word may use its own 10pt default
+            font_size = complex.size.unwrap_or(font_size);
+            bold = complex.bold.unwrap_or(false);
+            italic = complex.italic.unwrap_or(false);
+        }
 
         Run {
             font_size,
-            font_name: own
-                .font_name
-                .or(char_style_font_name)
-                .unwrap_or_else(|| self.font_name.clone()),
+            font_name,
             east_asia_font_name: own
                 .east_asia_font
                 .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
                 .or_else(|| self.east_asia_font.clone()),
-            cs_font_name: own
-                .cs_font
-                .or_else(|| char_style.and_then(|cs| cs.cs_font.clone()))
-                .or_else(|| self.cs_font.clone()),
-            bold: own.bold.or_else(|| cs(|c| c.bold)).unwrap_or(self.bold),
-            italic: own
-                .italic
-                .or_else(|| cs(|c| c.italic))
-                .unwrap_or(self.italic),
+            cs_font_name,
+            bold,
+            italic,
+            rtl: complex.rtl == Some(true),
             // Decide underline from the w:val attribute, not the mere presence
             // of <w:u>. Word treats a bare <w:u> with no val (e.g.
             // <w:u w:color="000000"/>) as "no underline applied" and inherits,
@@ -821,6 +841,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && run.checkbox.is_none()
                 && prev.font_name == run.font_name
                 && prev.east_asia_font_name == run.east_asia_font_name
+                && prev.rtl == run.rtl
                 && prev.font_size == run.font_size
                 && prev.bold == run.bold
                 && prev.italic == run.italic

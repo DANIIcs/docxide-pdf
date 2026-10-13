@@ -109,6 +109,11 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .or_else(|| para_style.and_then(|s| s.auto_space_dn))
         .unwrap_or(true);
 
+    let bidi = ppr
+        .and_then(|ppr| wml_bool(ppr, "bidi"))
+        .or_else(|| para_style.and_then(|s| s.bidi))
+        .unwrap_or(ctx.styles.defaults.bidi);
+
     let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
     let style_num = opts.style_num_id.as_deref();
     let style_ilvl = opts.style_num_ilvl;
@@ -328,6 +333,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         snap_to_grid,
         auto_space_de,
         auto_space_dn,
+        bidi,
         frame_props: parse_frame_props(ppr, para_style.and_then(|s| s.frame_attrs.as_ref())),
     }
 }
@@ -379,6 +385,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         snap_to_grid: para.snap_to_grid,
         auto_space_de: para.auto_space_de,
         auto_space_dn: para.auto_space_dn,
+        bidi: para.bidi,
         ..Paragraph::default()
     };
     Some(rest)
@@ -558,6 +565,46 @@ mod tests {
             assert_eq!(para.runs[0].font_name, font);
             assert_eq!(para.runs[0].font_size, size);
         }
+    }
+
+    #[test]
+    fn rtl_and_cs_runs_take_the_complex_script_formatting() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+
+        let rpr = r#"<w:rFonts w:ascii="Courier New" w:cs="Times New Roman"/><w:b/><w:sz w:val="24"/><w:szCs w:val="40"/>"#;
+        let document = format!(
+            r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="Rtl"/></w:pPr><w:r><w:rPr>{rpr}</w:rPr><w:t>plain</w:t></w:r><w:r><w:rPr>{rpr}<w:rtl/></w:rPr><w:t>rtl</w:t></w:r><w:r><w:rPr>{rpr}<w:iCs/><w:cs/></w:rPr><w:t>cs</w:t></w:r></w:p><w:sectPr/></w:body></w:document>"#
+        );
+        let styles = format!(
+            r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="Rtl"><w:name w:val="Rtl"/><w:pPr><w:bidi/></w:pPr><w:rPr><w:bCs/></w:rPr></w:style></w:styles>"#
+        );
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
+            zip.start_file(name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let parsed = crate::docx::parse_bytes(&bytes).unwrap();
+        let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
+            panic!("expected a paragraph");
+        };
+        assert!(para.bidi);
+        let props = |r: &Run| (r.font_name.clone(), r.font_size, r.bold, r.italic, r.rtl);
+        let font = |f: &str| f.to_string();
+        assert_eq!(
+            props(&para.runs[0]),
+            (font("Courier New"), 12.0, true, false, false)
+        );
+        // The style's bCs reaches both; w:b does not.
+        assert_eq!(
+            props(&para.runs[1]),
+            (font("Times New Roman"), 20.0, true, false, true)
+        );
+        assert_eq!(
+            props(&para.runs[2]),
+            (font("Times New Roman"), 20.0, true, true, false)
+        );
     }
 
     #[test]

@@ -513,6 +513,8 @@ pub struct Paragraph {
     pub auto_space_de: bool,
     pub auto_space_dn: bool,
     pub frame_props: Option<FrameProperties>,
+    /// `w:bidi`: a right-to-left paragraph.
+    pub bidi: bool,
 }
 
 pub struct HorizontalRule {
@@ -594,6 +596,9 @@ pub struct Run {
     /// Cambria Math) has very tall metrics for big operators; such runs must not
     /// inflate the surrounding text line height.
     pub is_math: bool,
+    /// `w:rtl`: weak and neutral characters read right to left (bidi
+    /// ordering); the run is already formatted with its cs properties.
+    pub rtl: bool,
     /// The Office Math zone's spoken form, shared by the zone's runs: the
     /// /Alt of the Formula they are tagged as. None when it says nothing.
     pub formula: Option<std::sync::Arc<str>>,
@@ -705,6 +710,7 @@ impl Default for Run {
             italic_is_direct: false,
             comment_ids: Vec::new(),
             is_math: false,
+            rtl: false,
             formula: None,
             checkbox: None,
         }
