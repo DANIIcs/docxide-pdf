@@ -335,6 +335,8 @@ impl ArrowEnd {
 
 #[derive(Clone)]
 pub struct ConnectorShape {
+    /// Anchored connector belongs behind paragraph text and inline pictures.
+    pub behind_doc: bool,
     /// The anchor's position and the frame it is measured from: a page- or
     /// margin-anchored line must not follow its paragraph.
     pub h_position: HorizontalPosition,
