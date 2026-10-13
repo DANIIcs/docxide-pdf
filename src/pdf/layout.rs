@@ -1715,6 +1715,10 @@ pub(super) fn build_paragraph_lines(
                 ));
                 current_x += img_w;
                 word_start = current_chunks.len();
+                // A picture is an object character: a line may break after
+                // it (UAX #14 LB20), so the text glued to it can wrap (Word
+                // moves "Step" below a full-width banner picture).
+                prev_last_char = Some('\u{FFFC}');
             }
             continue;
         }
