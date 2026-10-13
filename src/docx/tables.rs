@@ -347,7 +347,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     });
 
     let tbl_style_borders = tbl_style.and_then(|s| s.base_borders.as_ref());
-    let has_tbl_style = tbl_style_borders.is_some();
+    // A bordered table style without paragraph spacing sets its cells single
+    // with no space only over Word's built-in defaults; a document's own
+    // pPrDefault reaches the cells (a resume's 1.2-line docDefaults step its
+    // cell lines 14.64pt in Word).
+    let has_tbl_style = tbl_style_borders.is_some() && ctx.styles.defaults.builtin_para_defaults;
 
     let inline_tbl_borders = tbl_pr
         .and_then(|pr| wml(pr, "tblBorders"))

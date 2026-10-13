@@ -127,6 +127,9 @@ impl ThemeFonts {
 }
 
 pub(super) struct StyleDefaults {
+    /// The document has no pPrDefault: paragraphs take Word's built-in
+    /// 8pt-after, 1.158-line defaults (`space_after`, `line_spacing`).
+    pub(super) builtin_para_defaults: bool,
     pub(super) font_size: f32,
     pub(super) font_name: String,
     pub(super) east_asia_font: Option<String>,
@@ -837,6 +840,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
     from_normal_template: bool,
 ) -> StylesInfo {
     let mut defaults = StyleDefaults {
+        builtin_para_defaults: false,
         font_size: 10.0,
         font_name: theme.minor.clone(),
         east_asia_font: None,
@@ -929,6 +933,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
         // 13.79 × 1.158 + 8 and 11.49 × 1.158 + 8. An empty pPrDefault keeps
         // the OOXML defaults (single, nothing after).
         if wml(doc_defaults, "pPrDefault").is_none() {
+            defaults.builtin_para_defaults = true;
             defaults.space_after = 8.0;
             defaults.line_spacing = LineSpacing::Auto(278.0 / 240.0);
         }
