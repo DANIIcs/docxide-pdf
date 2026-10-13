@@ -1,4 +1,5 @@
 mod alt_chunk;
+pub(crate) mod arabic;
 mod charts;
 mod color;
 mod comments;

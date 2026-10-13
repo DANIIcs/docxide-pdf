@@ -635,10 +635,14 @@ fn split_run_by_script(run: Run) -> Vec<Run> {
 
     let mut result = Vec::new();
     let mut segment_start = 0;
-    let mut current = None;
+    let mut current: Option<&String> = None;
     for (i, ch) in run.text.char_indices() {
-        // Whitespace inherits the current script context.
-        let font = if ch.is_whitespace() && i > 0 {
+        // Whitespace inherits an East Asian context. Between complex-script
+        // letters it keeps the run's font: arabic_rice's Arabic words step by
+        // Aptos's 2.44pt space, not Arial's 3.33pt (its lines stay Arial-tall,
+        // as whitespace never sizes a line).
+        let after_cs = matches!(current, Some(f) if std::ptr::eq(f, &cs_font));
+        let font = if ch.is_whitespace() && i > 0 && !after_cs {
             current
         } else {
             script_font(ch)
@@ -1483,6 +1487,14 @@ pub(super) fn parse_runs<R: Read + Seek>(
         // followed by a paragraph holding only the break).
         (has_content || column_break_at).then_some(at)
     });
+    // After merging: Word splits words over runs that look alike (rsid), and
+    // a letter's form depends on its neighbours.
+    // ponytail: no joining across runs that differ (a bold letter in a word)
+    for run in &mut runs {
+        if run.text.chars().any(is_complex_script_char) {
+            run.text = super::arabic::shape(&run.text);
+        }
+    }
 
     ParsedRuns {
         runs,
@@ -1606,12 +1618,12 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let seg = |t: &str, f: &str| (t.to_string(), f.to_string());
-        // Spaces follow the letters before them; digits keep the run's font.
+        // Spaces and digits keep the run's font.
         let expect = |cs| {
             vec![
                 seg("rice ", "Aptos"),
-                seg("الأرز ", cs),
-                seg("150 x", "Aptos"),
+                seg("الأرز", cs),
+                seg(" 150 x", "Aptos"),
             ]
         };
         assert_eq!(split(None), expect("Arial"));

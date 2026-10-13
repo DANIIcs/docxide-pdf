@@ -166,7 +166,11 @@ pub(super) fn embed_truetype(
             .or_insert(uni);
     }
     for (cid, uni) in cid_unicode {
-        cmap.pair(cid, uni);
+        match crate::docx::arabic::source_letters(uni) {
+            Some((letter, None)) => cmap.pair(cid, letter),
+            Some((lam, Some(alef))) => cmap.pair_with_multiple(cid, [lam, alef]),
+            None => cmap.pair(cid, uni),
+        }
     }
     pdf.stream(tounicode_ref, cmap.finish().as_slice());
 
@@ -331,6 +335,9 @@ fn resolve_glyph(face: &Face, ch: char) -> Option<ttf_parser::GlyphId> {
                 .then(|| face.glyph_index(' '))
                 .flatten()
         })
+        // An Arabic form the font lacks draws its plain letter (see
+        // `docx::arabic`); a lam-alef ligature draws only the lam.
+        .or_else(|| face.glyph_index(crate::docx::arabic::source_letters(ch)?.0))
 }
 
 fn extract_kern_pairs(
