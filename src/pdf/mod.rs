@@ -4380,7 +4380,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         // there (the break paragraph's mark line).
                         let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                         let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        state.pb.slot_top = fz.bottom_y - resolve_line_h(ls, fs, lhr);
+                        let extra_breaks = if p.runs.iter().all(|r| r.text.is_empty() && r.inline_image.is_none()) {
+                            p.runs.iter().filter(|r| r.is_line_break).count().saturating_sub(1)
+                        } else { 0 };
+                        state.pb.slot_top = fz.bottom_y
+                            - resolve_line_h(ls, fs, lhr) * (1 + extra_breaks) as f32;
                     }
                     state.pb.float_zone = None;
                 }
