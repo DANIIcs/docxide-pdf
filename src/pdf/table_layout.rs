@@ -1192,6 +1192,18 @@ pub(super) fn compute_row_layouts(
                                             line_h,
                                             font_size * ascender_ratio,
                                         );
+                                        // A final empty line after a break contains the
+                                        // paragraph mark, rather than the preceding text.
+                                        if runs.last().is_some_and(|r| r.is_line_break)
+                                            && let Some(last) = lines.last_mut().filter(|l| l.chunks.is_empty())
+                                            && let Some(mark_size) = para.paragraph_mark_font_size
+                                        {
+                                            let mark_lhr = para.paragraph_mark_font_name.as_deref()
+                                                .and_then(|name| ctx.fonts.get(name))
+                                                .and_then(|font| run_line_metrics(font, "").0)
+                                                .or(tallest_lhr);
+                                            last.pitch = Some(resolve_line_h(effective_ls, mark_size, mark_lhr));
+                                        }
                                     }
                                     // hideMark also hides the mark left alone on the
                                     // line after the cell's closing break, with its

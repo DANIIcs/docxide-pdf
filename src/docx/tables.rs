@@ -831,6 +831,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         }
                     }
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
+                    let mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
                     cell_blocks.push(Block::Paragraph(Paragraph {
                         runs,
                         alignment,
@@ -868,6 +869,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             .and_then(|ppr| wml_bool(ppr, "keepNext"))
                             .or_else(|| para_style.and_then(|s| s.keep_next))
                             .unwrap_or(false),
+                        paragraph_mark_font_size: Some(mark.font_size),
+                        paragraph_mark_font_name: Some(mark.font_name.clone()),
                         paragraph_mark_position: super::paragraph::paragraph_mark_position(
                             ppr.and_then(|ppr| wml(ppr, "rPr")),
                             para_style,
