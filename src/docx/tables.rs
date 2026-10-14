@@ -908,6 +908,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             cant_split,
         });
     }
+    share_row_top_margins(&mut rows, cell_margins);
     settle_row_borders(&mut rows, cell_margins);
     apply_cell_spacing(&mut rows, &row_spacing, num_cols, cell_margins);
 
@@ -926,6 +927,27 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         grid_inferred,
         header_first_row: tbl_look_node.is_none() || look_first_row,
         header_first_col: tbl_look_node.is_none() || look_first_col,
+    }
+}
+
+/// A row's cells all start their text at the row's largest top margin. Word
+/// probe: two cells with tcMar top 4pt beside one with none line up; raising
+/// the two to 20pt moves the third's text down the same 16pt.
+// ponytail: bottom margins untested, left per cell.
+fn share_row_top_margins(rows: &mut [TableRow], table_margins: CellMargins) {
+    for row in rows {
+        let top = row
+            .cells
+            .iter()
+            .map(|c| c.cell_margins.unwrap_or(table_margins).top)
+            .fold(0.0f32, f32::max);
+        for cell in &mut row.cells {
+            let mut m = cell.cell_margins.unwrap_or(table_margins);
+            if m.top < top {
+                m.top = top;
+                cell.cell_margins = Some(m);
+            }
+        }
     }
 }
 
