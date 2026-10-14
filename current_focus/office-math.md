@@ -45,6 +45,14 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   upright; `b` → bold, `bi` → bold italic, `p` → as typed; `m:scr` picks the
   alphabet (Letterlike holes: ℝ, ℒ, ℎ…). A hyphen-minus draws as − (U+2212).
 
+- `m:nor` text is set in the run's own font (its `w:rPr` resolved like a text
+  run's: family, bold, size; Calibri when it has none), upright whatever
+  `m:sty` says, scaled down in scripts (8.5pt in a 12pt zone's superscript),
+  as one ordinary atom with the usual spacing around it; a hyphen stays a
+  hyphen and an = gets no operator space. Its ink, not the text font's line
+  box, sizes it: the math lines keep their height (probe `mp14_nor`, Calibri
+  and Times New Roman documents: positions within 0.1pt).
+
 ### Spacing
 - TeX's table with thin 3/18, medium 4/18, thick 5/18 em: `a+b` 2.67pt each
   side of + at 12pt, `=` 3.33pt. A binary sign at the start, after an
@@ -159,4 +167,4 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - Accents over tall bases, display-math wrap (`m:wrapIndent`): not yet
   measured. `&` outside an equation array still draws. The parts of a broken inline zone keep
   the whole zone's height.
-- `m:nor` text draws in the math font, upright; Word uses the run's font.
+- An `m:nor` superscript sits 0.6pt closer to its base than Word's (e^max).

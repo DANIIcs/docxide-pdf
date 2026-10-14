@@ -62,7 +62,7 @@ Open, in order:
 2. ~~eqArr alignment points (`&`) and row spacing~~ done.
 3. ~~Breaks inside long inline zones~~ done (after operators, as Word);
    display math wrap (`m:wrapIndent`).
-4. `m:nor` runs in the run's own font.
+4. ~~`m:nor` runs in the run's own font~~ done.
 
 ## Floating table positioning
 

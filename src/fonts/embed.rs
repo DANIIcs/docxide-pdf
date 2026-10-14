@@ -54,6 +54,7 @@ pub(super) fn embed_truetype(
     let mut remapper = subsetter::GlyphRemapper::new();
     let mut char_to_gid = HashMap::with_capacity(used_chars.len());
     let mut char_widths_1000 = HashMap::with_capacity(used_chars.len());
+    let mut char_ink_1000 = HashMap::with_capacity(used_chars.len());
 
     // HashSet order differs per process, and the remapper numbers glyphs in visit order:
     // sorting keeps the subset, and so the PDF bytes, the same from run to run.
@@ -65,6 +66,9 @@ pub(super) fn embed_truetype(
             let new_gid = remapper.remap(gid.0);
             char_to_gid.insert(ch, new_gid);
             char_widths_1000.insert(ch, advance_1000(gid));
+            if let Some(r) = face.glyph_bounding_box(gid) {
+                char_ink_1000.insert(ch, (to_1000(r.y_max as f32), to_1000(-r.y_min as f32)));
+            }
         }
     }
 
@@ -223,6 +227,7 @@ pub(super) fn embed_truetype(
         plain_ascender_ratio: lm.plain_ascender_ratio,
         char_to_gid,
         char_widths_1000,
+        char_ink_1000,
         kern_pairs,
         gid_remap,
     })

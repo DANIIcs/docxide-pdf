@@ -10,6 +10,51 @@ pub struct MathZone {
 
 pub type MathRow = Vec<MathNode>;
 
+impl MathZone {
+    /// Every run in the zone, nested ones included.
+    pub fn runs(&self) -> Vec<&MathRun> {
+        let mut out = Vec::new();
+        let mut stack: Vec<&MathRow> = vec![&self.root];
+        while let Some(row) = stack.pop() {
+            for node in row {
+                match node {
+                    MathNode::Run(r) => out.push(r),
+                    _ => stack.extend(node.rows()),
+                }
+            }
+        }
+        out
+    }
+}
+
+impl MathNode {
+    /// The rows directly inside this node.
+    fn rows(&self) -> Vec<&MathRow> {
+        use MathNode::*;
+        match self {
+            Run(_) => Vec::new(),
+            Frac { num, den, .. } => vec![num, den],
+            Scripts { base, sub, sup, .. } => [Some(base), sub.as_ref(), sup.as_ref()]
+                .into_iter()
+                .flatten()
+                .collect(),
+            Rad { degree, body } => degree.iter().chain([body]).collect(),
+            Nary { sub, sup, body, .. } => sub.iter().chain(sup).chain([body]).collect(),
+            Delim { items, .. } => items.iter().collect(),
+            Func { name, body } => vec![name, body],
+            Limit { body, limit, .. } => vec![body, limit],
+            Matrix { rows } => rows.iter().flatten().collect(),
+            EqArr { rows } => rows.iter().collect(),
+            Accent { body, .. }
+            | Bar { body, .. }
+            | GroupChr { body, .. }
+            | Boxed(body)
+            | BorderBox { body, .. }
+            | Phantom { body, .. } => vec![body],
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum MathNode {
     Run(MathRun),
@@ -105,9 +150,20 @@ pub struct MathRun {
     /// `m:sty`; None: Word's default, italic letters and upright everything else.
     pub style: Option<MathStyle>,
     pub script: MathScript,
-    /// `m:nor`: ordinary text, no math italic and no operator spacing.
-    pub normal: bool,
+    /// `m:nor`: ordinary text in the run's own font, no math italic and no
+    /// operator spacing.
+    pub normal: Option<TextFont>,
     pub color: Option<[u8; 3]>,
+}
+
+/// The font an `m:nor` run is drawn in: its `w:rPr` resolved like a text
+/// run's.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextFont {
+    pub name: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub size: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

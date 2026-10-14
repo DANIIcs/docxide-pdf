@@ -342,7 +342,7 @@ pub(super) struct WordChunk {
 
 /// A run's Office Math box and the math font it draws with, once laid out
 /// (`fonts::register_math_font`); None leaves the zone's linear text.
-pub(super) fn math_box<'f>(
+fn math_box<'f>(
     run: &'f Run,
     fonts: &'f HashMap<String, FontEntry>,
 ) -> Option<(&'f FontEntry, &'f Arc<crate::math::MathBox>)> {
@@ -3744,29 +3744,53 @@ pub(super) fn render_paragraph_lines(
                         content.set_font(Name(chunk.pdf_font.as_bytes()), 1.0);
                         cur_font_size = 1.0;
                     }
+                    // m:nor text switches to its own font, glyphs back to the
+                    // math font.
+                    let mut font = chunk.pdf_font.as_str();
                     for item in &mb.items {
-                        match *item {
+                        let (gx, gy, size, color, item_font, bytes) = match item {
+                            crate::math::MathItem::Rule { x: rx, y: ry, w, h } => {
+                                decorations.push((x + rx, cy + ry, *w, *h, effective_color));
+                                continue;
+                            }
                             crate::math::MathItem::Glyph {
                                 gid,
-                                x: gx,
-                                y: gy,
+                                x,
+                                y,
                                 size,
                                 color,
                                 ..
                             } => {
-                                let color = color.or(effective_color);
-                                if color != current_color {
-                                    fill_color_or_black(content, color);
-                                    current_color = color;
-                                }
-                                (td_x, td_y) = (x + gx, cy + gy);
-                                content.set_text_matrix([size, 0.0, 0.0, size, td_x, td_y]);
-                                content.show(Str(&gid.to_be_bytes()));
+                                let bytes = gid.to_be_bytes().to_vec();
+                                (*x, *y, *size, *color, chunk.pdf_font.as_str(), bytes)
                             }
-                            crate::math::MathItem::Rule { x: rx, y: ry, w, h } => {
-                                decorations.push((x + rx, cy + ry, w, h, effective_color));
+                            crate::math::MathItem::Text {
+                                text,
+                                font,
+                                x,
+                                y,
+                                size,
+                                color,
+                            } => {
+                                let bytes = encode_text_for_pdf(text, font, &pdf_name_to_entry);
+                                (*x, *y, *size, *color, font.as_str(), bytes)
                             }
+                        };
+                        let color = color.or(effective_color);
+                        if color != current_color {
+                            fill_color_or_black(content, color);
+                            current_color = color;
                         }
+                        if item_font != font {
+                            content.set_font(Name(item_font.as_bytes()), 1.0);
+                            font = item_font;
+                        }
+                        (td_x, td_y) = (x + gx, cy + gy);
+                        content.set_text_matrix([size, 0.0, 0.0, size, td_x, td_y]);
+                        content.show(Str(&bytes));
+                    }
+                    if font != chunk.pdf_font {
+                        content.set_font(Name(chunk.pdf_font.as_bytes()), 1.0);
                     }
                     if let Some(entry) = primary_entry.filter(|_| boundary_space) {
                         let size = chunk.font_size;

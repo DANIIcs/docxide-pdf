@@ -10,7 +10,7 @@ fn run(text: &str) -> MathNode {
         text: text.to_string(),
         style: None,
         script: MathScript::Roman,
-        normal: false,
+        normal: None,
         color: None,
     })
 }
@@ -28,7 +28,14 @@ fn glyphs(b: &MathBox) -> Vec<(char, f32, f32, f32)> {
 fn layout_at(root: Vec<MathNode>, display: bool, size: f32) -> MathBox {
     let data = cambria_math();
     let font = MathFont::new(&data, 1).expect("Cambria Math face");
-    layout(&root, display, size, &font, &MathSettings::default())
+    layout(
+        &root,
+        display,
+        size,
+        &font,
+        &MathSettings::default(),
+        &|_, _, _| None,
+    )
 }
 
 #[test]
@@ -187,6 +194,60 @@ fn eq_arr_alignment_points() {
     assert!((eq[0] - eq[1]).abs() < 0.01, "= at {eq:?}");
     let y = eq_x(&["2&x+&3&y+", "4&x+&&y−"], '\u{1D466}');
     assert!((y[0] - y[1]).abs() < 0.01, "y at {y:?}");
+}
+
+#[test]
+fn normal_text_in_its_own_font() {
+    // Word (probe mp14_nor): e^max sets "max" in the text font at script size,
+    // one atom, upright.
+    let data = cambria_math();
+    let font = MathFont::new(&data, 1).expect("Cambria Math face");
+    let normal = MathNode::Run(MathRun {
+        text: "max".into(),
+        style: None,
+        script: MathScript::Roman,
+        normal: Some(crate::model::TextFont {
+            name: "Calibri".into(),
+            bold: false,
+            italic: false,
+            size: 12.0,
+        }),
+        color: None,
+    });
+    let root = vec![MathNode::Scripts {
+        base: vec![run("e")],
+        sub: None,
+        sup: Some(vec![normal]),
+        pre: false,
+    }];
+    let measure = |tf: &crate::model::TextFont, text: &str, size: f32| {
+        assert_eq!((tf.name.as_str(), text), ("Calibri", "max"));
+        Some(TextBox {
+            w: size,
+            asc: 0.7 * size,
+            desc: 0.0,
+            font: "F9".into(),
+        })
+    };
+    let b = layout(
+        &root,
+        false,
+        12.0,
+        &font,
+        &MathSettings::default(),
+        &measure,
+    );
+    let texts: Vec<_> = b
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            MathItem::Text {
+                text, font, size, ..
+            } => Some((text.as_str(), font.as_str(), *size)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, [("max", "F9", 8.5)]);
 }
 
 #[test]

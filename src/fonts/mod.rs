@@ -35,6 +35,8 @@ pub(crate) struct FontMetrics {
     pub(crate) east_asian: bool,
     pub(crate) char_to_gid: HashMap<char, u16>,
     pub(crate) char_widths_1000: HashMap<char, f32>,
+    /// Each used character's ink above and below the baseline, per 1000 em.
+    pub(crate) char_ink_1000: HashMap<char, (f32, f32)>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
     /// Subset ids of `FontContext::extra_glyphs`, by original id.
     pub(crate) gid_remap: HashMap<u16, u16>,
@@ -75,6 +77,8 @@ pub(crate) struct FontEntry {
     pub(crate) east_asian: bool,
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
+    /// See `FontMetrics::char_ink_1000`.
+    pub(crate) char_ink_1000: Option<HashMap<char, (f32, f32)>>,
     pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
     pub(crate) synthetic_bold: bool,
     /// The face found has no italic: Word shears it (`pdf::layout`).
@@ -118,6 +122,7 @@ impl FontEntry {
             plain_ascender_ratio: None,
             char_to_gid: None,
             char_widths_1000: None,
+            char_ink_1000: None,
             kern_pairs: None,
             synthetic_bold: false,
             synthetic_italic: false,
@@ -832,6 +837,7 @@ pub(crate) fn register_font(
             plain_ascender_ratio: Some(r.metrics.plain_ascender_ratio),
             char_to_gid: Some(r.metrics.char_to_gid),
             char_widths_1000: Some(r.metrics.char_widths_1000),
+            char_ink_1000: Some(r.metrics.char_ink_1000),
             kern_pairs: if r.metrics.kern_pairs.is_empty() {
                 None
             } else {
@@ -881,6 +887,7 @@ pub(crate) fn register_font(
                 plain_ascender_ratio: None,
                 char_to_gid: None,
                 char_widths_1000: None,
+                char_ink_1000: None,
                 kern_pairs: None,
                 synthetic_bold: false,
                 synthetic_italic: false,

@@ -187,7 +187,12 @@ impl MathParser<'_> {
                 Some("monospace") => MathScript::Monospace,
                 _ => MathScript::Roman,
             },
-            normal: flag(r, "rPr", "nor"),
+            normal: flag(r, "rPr", "nor").then(|| crate::model::TextFont {
+                name: fmt.font_name.clone(),
+                bold: fmt.bold,
+                italic: fmt.italic,
+                size: fmt.font_size,
+            }),
             color: fmt.color,
         }))
     }

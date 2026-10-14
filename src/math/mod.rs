@@ -15,7 +15,7 @@
 mod alphanumeric;
 mod font;
 
-use crate::model::{FracKind, MathNode, MathRow, MathRun, MathSettings};
+use crate::model::{FracKind, MathNode, MathRow, MathRun, MathSettings, TextFont};
 pub(crate) use font::MathFont;
 use ttf_parser::math::{Constants, MathValue};
 
@@ -53,7 +53,28 @@ pub enum MathItem {
     /// A filled rectangle (fraction bar, radical overbar) in the text colour,
     /// `y` its bottom.
     Rule { x: f32, y: f32, w: f32, h: f32 },
+    /// An `m:nor` run's text in its own font, by the font's PDF name.
+    Text {
+        text: String,
+        font: String,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: Option<[u8; 3]>,
+    },
 }
+
+/// How `m:nor` text measures in its font: width, ascent, descent and the
+/// font's PDF name.
+pub(crate) struct TextBox {
+    pub(crate) w: f32,
+    pub(crate) asc: f32,
+    pub(crate) desc: f32,
+    pub(crate) font: String,
+}
+
+/// Measures `m:nor` text at a size; None when its font isn't available.
+pub(crate) type TextMeasure<'a> = &'a dyn Fn(&TextFont, &str, f32) -> Option<TextBox>;
 
 impl MathBox {
     /// The parts before `end` and from `start` (a break point): the first
@@ -69,7 +90,7 @@ impl MathBox {
 
     fn split(&self, (end, start): (f32, f32)) -> (MathBox, MathBox) {
         let x = |it: &MathItem| match it {
-            MathItem::Glyph { x, .. } | MathItem::Rule { x, .. } => *x,
+            MathItem::Glyph { x, .. } | MathItem::Rule { x, .. } | MathItem::Text { x, .. } => *x,
         };
         let (head, tail): (Vec<_>, Vec<_>) = self.items.iter().cloned().partition(|it| x(it) < end);
         let part = |items: Vec<MathItem>, width: f32, breaks: Vec<(f32, f32)>| MathBox {
@@ -103,12 +124,14 @@ pub(crate) fn layout(
     size: f32,
     font: &MathFont,
     settings: &MathSettings,
+    text: TextMeasure,
 ) -> MathBox {
     let cx = Ctx {
         font,
         settings,
         base: size,
         display,
+        text,
     };
     let style = if display { Style::D } else { Style::T };
     let st = St::new(style);
@@ -284,7 +307,9 @@ impl B {
 
 fn shift(mut it: MathItem, dx: f32, dy: f32) -> MathItem {
     match &mut it {
-        MathItem::Glyph { x, y, .. } | MathItem::Rule { x, y, .. } => {
+        MathItem::Glyph { x, y, .. }
+        | MathItem::Rule { x, y, .. }
+        | MathItem::Text { x, y, .. } => {
             *x += dx;
             *y += dy;
         }
@@ -298,6 +323,7 @@ struct Ctx<'a> {
     base: f32,
     /// A display zone (`m:oMathPara`).
     display: bool,
+    text: TextMeasure<'a>,
 }
 
 /// Floor to the half point, as Word sizes its script levels.
@@ -430,13 +456,35 @@ impl<'a> Ctx<'a> {
     /// `text` set in `run`'s style.
     fn run_text(&self, text: &str, run: &MathRun, st: St) -> Vec<B> {
         let size = self.size(st);
+        // Word sets m:nor text in the run's own font, upright whatever m:sty
+        // says, at the run's size (scaled down in scripts), as one ordinary
+        // atom: probe `mp14_nor`.
+        if let Some(tf) = &run.normal {
+            let size = size * tf.size / self.base;
+            if let Some(tb) = (self.text)(tf, text, size) {
+                return vec![B {
+                    w: tb.w,
+                    asc: tb.asc,
+                    desc: tb.desc,
+                    items: vec![MathItem::Text {
+                        text: text.to_string(),
+                        font: tb.font,
+                        x: 0.0,
+                        y: 0.0,
+                        size,
+                        color: run.color,
+                    }],
+                    ..B::empty()
+                }];
+            }
+        }
         text.chars()
             .map(|ch| {
                 let (drawn, italic) = alphanumeric::styled(ch, run.style, run.script);
                 let drawn = match drawn {
                     // Word draws a hyphen-minus in math as the minus sign.
-                    '-' if !run.normal => '\u{2212}',
-                    '\'' if !run.normal => '\u{2032}',
+                    '-' if run.normal.is_none() => '\u{2212}',
+                    '\'' if run.normal.is_none() => '\u{2032}',
                     c => c,
                 };
                 let gid = self.font.glyph(drawn, st.script_level());
@@ -447,7 +495,7 @@ impl<'a> Ctx<'a> {
                 }
                 let class = match drawn {
                     ' ' => Class::Space,
-                    _ if run.normal => Class::Ord,
+                    _ if run.normal.is_some() => Class::Ord,
                     c => class_of(c),
                 };
                 b.first = class;

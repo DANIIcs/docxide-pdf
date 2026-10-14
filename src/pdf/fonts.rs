@@ -74,7 +74,7 @@ pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
 fn collect_used_chars(
     doc: &Document,
     all_runs: &[&Run],
-    fonts: &HashMap<String, FontEntry>,
+    math_font: bool,
 ) -> HashMap<String, HashSet<char>> {
     let mut used: HashMap<String, HashSet<char>> = HashMap::new();
     let mut key_buf = String::new();
@@ -110,8 +110,8 @@ fn collect_used_chars(
         // Word boundaries are drawn with the preceding word's font, which may
         // not be the font of the run that holds the space.
         chars.insert(' ');
-        if super::layout::math_box(run, fonts).is_some() {
-            // Drawn from its box in the math font.
+        if math_font && run.math.is_some() {
+            // Drawn from its box in the math font (m:nor text below).
         } else if run.caps || run.small_caps {
             chars.extend(run.text.to_uppercase().chars());
         } else {
@@ -132,6 +132,15 @@ fn collect_used_chars(
         if run.endnote_id.is_some() || run.is_endnote_ref_mark {
             chars.extend('0'..='9');
             extend_chars_for_num_format(chars, en_mark_fmt);
+        }
+    }
+    // m:nor text, in its own font.
+    let zones = all_runs.iter().filter_map(|r| r.math.as_deref());
+    for r in zones.filter(|_| math_font).flat_map(|z| z.runs()) {
+        if let Some(tf) = &r.normal {
+            used.entry(crate::fonts::font_key_for(&tf.name, tf.bold, tf.italic))
+                .or_default()
+                .extend(r.text.chars());
         }
     }
 
@@ -380,13 +389,39 @@ fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
 /// The `seen_fonts` key of the math font (`register_math_font`).
 pub(super) const MATH_FONT_KEY: &str = "__math";
 
-/// Lay out every Office Math zone with the document's math font, then embed
-/// that font with the glyphs the boxes draw (by id: script-size alternates and
-/// stretched variants have no characters). Without a font that has a MATH
-/// table the zones stay unlaid and draw their linear text.
+/// The document's math font (`m:mathFont`, else Cambria Math) when there are
+/// zones and it has a MATH table: its name and file.
+fn math_font_file<'d>(doc: &'d Document, all_runs: &[&Run]) -> Option<(&'d str, (Vec<u8>, u32))> {
+    all_runs.iter().find(|r| r.math.is_some())?;
+    let (name, (data, index)) = [doc.math.font.as_str(), "Cambria Math"]
+        .into_iter()
+        .find_map(|n| Some((n, crate::fonts::font_file(n, &doc.embedded_fonts)?)))?;
+    if crate::math::MathFont::new(&data, index).is_none() {
+        log::warn!("Math font {name} has no MATH table: equations stay linear");
+        return None;
+    }
+    Some((name, (data, index)))
+}
+
+/// The ink of `text` in `entry`'s font, per em: (above the baseline, below
+/// it).
+fn text_ink(entry: &FontEntry, text: &str) -> Option<(f32, f32)> {
+    let ink = entry.char_ink_1000.as_ref()?;
+    let (top, bottom) = text
+        .chars()
+        .filter_map(|c| ink.get(&c))
+        .fold((0.0f32, 0.0f32), |(t, b), &(a, d)| (t.max(a), b.max(d)));
+    Some((top / 1000.0, bottom / 1000.0))
+}
+
+/// Lay out every Office Math zone with the math font, then embed that font
+/// with the glyphs the boxes draw (by id: script-size alternates and
+/// stretched variants have no characters). `m:nor` text measures in its own
+/// font, registered before this.
 fn register_math_font(
     doc: &Document,
     all_runs: &[&Run],
+    (name, (data, index)): (&str, (Vec<u8>, u32)),
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     seen_fonts: &mut HashMap<String, FontEntry>,
@@ -403,22 +438,24 @@ fn register_math_font(
             zones.push((z, run.font_size));
         }
     }
-    if zones.is_empty() {
-        return;
-    }
-    let Some((name, (data, index))) = [doc.math.font.as_str(), "Cambria Math"]
-        .into_iter()
-        .find_map(|n| Some((n, crate::fonts::font_file(n, &doc.embedded_fonts)?)))
-    else {
+    let Some(font) = crate::math::MathFont::new(&data, index) else {
         return;
     };
-    let Some(font) = crate::math::MathFont::new(&data, index) else {
-        log::warn!("Math font {name} has no MATH table: equations stay linear");
-        return;
+    // The text's ink, like any atom's: Word's math lines don't grow for the
+    // text font's ascent and descent (probe `mp14_nor`).
+    let measure = |tf: &crate::model::TextFont, text: &str, size: f32| {
+        let e = seen_fonts.get(&crate::fonts::font_key_for(&tf.name, tf.bold, tf.italic))?;
+        let (asc, desc) = text_ink(e, text).unwrap_or((e.ascender_ratio.unwrap_or(0.8), 0.2));
+        Some(crate::math::TextBox {
+            w: e.word_width(text, size, false),
+            asc: asc * size,
+            desc: desc * size,
+            font: e.pdf_name.clone(),
+        })
     };
     let mut boxes: Vec<crate::math::MathBox> = zones
         .iter()
-        .map(|(z, size)| crate::math::layout(&z.root, z.display, *size, &font, &doc.math))
+        .map(|(z, size)| crate::math::layout(&z.root, z.display, *size, &font, &doc.math, &measure))
         .collect();
     let mut glyphs = BTreeMap::new();
     for item in boxes.iter().flat_map(|b| &b.items) {
@@ -459,8 +496,8 @@ pub(super) fn collect_and_register_fonts(
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
     let all_runs = collect_all_runs(doc);
-    register_math_font(doc, &all_runs, pdf, alloc, &mut seen_fonts, &mut font_order);
-    let mut used_chars_per_font = collect_used_chars(doc, &all_runs, &seen_fonts);
+    let math_font = math_font_file(doc, &all_runs);
+    let mut used_chars_per_font = collect_used_chars(doc, &all_runs, math_font.is_some());
 
     for section in &doc.sections {
         for block in &section.blocks {
@@ -547,6 +584,18 @@ pub(super) fn collect_and_register_fonts(
         let entry = register_font(pdf, base, bold, italic, pdf_name, alloc, &ctx);
         seen_fonts.insert(key.clone(), entry);
         font_order.push(key.clone());
+    }
+
+    if let Some(math_font) = math_font {
+        register_math_font(
+            doc,
+            &all_runs,
+            math_font,
+            pdf,
+            alloc,
+            &mut seen_fonts,
+            &mut font_order,
+        );
     }
 
     // Collect all CJK chars missing from their primary fonts and register a
