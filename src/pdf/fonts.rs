@@ -427,10 +427,12 @@ fn register_math_font(
         }
     }
     let pdf_name = format!("F{}", font_order.len() + 1);
+    // A space marks the word boundary after a zone (`WordChunk::space_after`).
+    let space = HashSet::from([' ']);
     let ctx = FontContext {
         embedded_fonts: &doc.embedded_fonts,
         font_table: &doc.font_table,
-        used_chars: &HashSet::new(),
+        used_chars: &space,
         word_text: false,
         extra_glyphs: Some(&glyphs),
     };

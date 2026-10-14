@@ -3768,6 +3768,12 @@ pub(super) fn render_paragraph_lines(
                             }
                         }
                     }
+                    if let Some(entry) = primary_entry.filter(|_| boundary_space) {
+                        let size = chunk.font_size;
+                        (td_x, td_y) = (x + mb.width, cy);
+                        content.set_text_matrix([size, 0.0, 0.0, size, td_x, td_y]);
+                        content.show(Str(&entry.encode(" ")));
+                    }
                     // Unscaled again, so the next chunk's relative move is in points.
                     content.set_text_matrix([1.0, 0.0, 0.0, 1.0, td_x, td_y]);
                     cur_shear = 0.0;

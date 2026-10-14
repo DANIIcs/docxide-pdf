@@ -869,15 +869,16 @@ impl<'a> Ctx<'a> {
             b.put(part, x, dy);
         };
         centre(base, 0.0);
-        if let Some(h) = hi {
-            let dy = (base_asc + self.k(st, Constants::upper_limit_gap_min) + h.desc)
-                .max(base_asc + self.k(st, Constants::upper_limit_baseline_rise_min));
-            centre(h, dy);
-        }
+        // Drawn lower limit first, so text extraction reads "∑ i=1 n".
         if let Some(l) = lo {
             let dy = (base_desc + self.k(st, Constants::lower_limit_gap_min) + l.asc)
                 .max(base_desc + self.k(st, Constants::lower_limit_baseline_drop_min));
             centre(l, -dy);
+        }
+        if let Some(h) = hi {
+            let dy = (base_asc + self.k(st, Constants::upper_limit_gap_min) + h.desc)
+                .max(base_asc + self.k(st, Constants::upper_limit_baseline_rise_min));
+            centre(h, dy);
         }
         b
     }
