@@ -163,6 +163,12 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
                 Some("newSection") => LineNumberRestart::NewSection,
                 _ => LineNumberRestart::NewPage,
             },
+            // Word draws the numbers in the document's default run font, not
+            // the line's: a contract in 12pt Times New Roman numbered in its
+            // 10.5pt DengXian default. ponytail: a LineNumber style's own
+            // rPr is not applied yet.
+            font_name: ctx.styles.defaults.font_name.clone(),
+            font_size: ctx.styles.defaults.font_size,
         });
 
     let vertical_align = wml_attr(sect_node, "vAlign")

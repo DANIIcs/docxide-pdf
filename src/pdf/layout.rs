@@ -2979,6 +2979,9 @@ pub(super) struct LineNumberArg<'a> {
     pub continuous_offset: u32,
     /// Page-coordinate x of the right edge the (right-aligned) numbers end at.
     pub right_x: f32,
+    /// The registered face (PDF name) and size of the numbers; None falls
+    /// back to the line's own font.
+    pub font: Option<(String, f32)>,
 }
 
 pub(super) fn line_max_image_h(line: &TextLine) -> f32 {
@@ -3127,11 +3130,12 @@ pub(super) fn render_paragraph_lines(
             let value = ln.start + ln.continuous_offset as i32 + idx as i32;
             let show = value >= 1 && (ln.count_by <= 1 || value % ln.count_by as i32 == 0);
             if show
-                && let Some((font, fs)) = line
-                    .chunks
-                    .iter()
-                    .find(|c| c.inline_image_name.is_none() && !c.text.is_empty())
-                    .map(|c| (c.pdf_font.clone(), c.font_size))
+                && let Some((font, fs)) = ln.font.clone().or_else(|| {
+                    line.chunks
+                        .iter()
+                        .find(|c| c.inline_image_name.is_none() && !c.text.is_empty())
+                        .map(|c| (c.pdf_font.clone(), c.font_size))
+                })
             {
                 let s = value.to_string();
                 let w = pdf_name_to_entry

@@ -2111,6 +2111,11 @@ fn render_paragraph_block(
             sp.margin_left - ln.distance.unwrap_or(18.0),
         )
     });
+    let ln_font: Option<(String, f32)> = sp.line_numbering.as_ref().and_then(|ln| {
+        ctx.fonts
+            .get(&crate::fonts::font_key_for(&ln.font_name, false, false))
+            .map(|e| (e.pdf_name.clone(), ln.font_size))
+    });
     let adjacent_para = |idx: usize| block_para(section_blocks, idx);
 
     // Skip empty section-break paragraphs — Word gives these zero height, also
@@ -3310,6 +3315,7 @@ fn render_paragraph_block(
                         count_by,
                         continuous_offset,
                         right_x,
+                        font: ln_font.clone(),
                     },
                 ),
                 Some(LinkTagger::new(
@@ -3419,6 +3425,7 @@ fn render_paragraph_block(
                             count_by,
                             continuous_offset,
                             right_x,
+                            font: ln_font.clone(),
                         },
                     ),
                     Some(LinkTagger::new(
@@ -3942,6 +3949,7 @@ fn render_paragraph_block(
                     count_by,
                     continuous_offset,
                     right_x,
+                    font: ln_font.clone(),
                 },
             ),
             Some(LinkTagger::new(

@@ -161,7 +161,7 @@ impl SectionProperties {
 }
 
 /// §17.6.8 `w:lnNumType` — line numbers shown in the margin (legal/contract docs).
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct LineNumbering {
     /// `@countBy` — show a number on every Nth line (default 1 = every line).
     pub count_by: u32,
@@ -172,6 +172,9 @@ pub struct LineNumbering {
     pub distance: Option<f32>,
     /// `@restart` — when the counter resets (ST_LineNumberRestart §17.18.47).
     pub restart: LineNumberRestart,
+    /// The face and size the numbers are drawn in: the document defaults.
+    pub font_name: String,
+    pub font_size: f32,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]

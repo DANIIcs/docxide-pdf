@@ -91,6 +91,15 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         .find_map(|s| s.properties.endnote_num_fmt.as_deref())
         .unwrap_or("lowerRoman");
 
+    for ln in doc
+        .sections
+        .iter()
+        .filter_map(|s| s.properties.line_numbering.as_ref())
+    {
+        used.entry(crate::fonts::font_key_for(&ln.font_name, false, false))
+            .or_default()
+            .extend('0'..='9');
+    }
     for run in all_runs {
         let key = font_key_buf(run, &mut key_buf);
         let chars = used.entry(key.to_string()).or_default();
