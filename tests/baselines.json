@@ -414,8 +414,8 @@
     "a11y_text": 1.0
   },
   "cases/case14": {
-    "jaccard": 0.7336,
-    "ssim": 0.8902,
+    "jaccard": 0.7352,
+    "ssim": 0.8908,
     "text_boundary": 1.0,
     "convert_ms": 4.6,
     "ua_fail": 2,
@@ -1322,6 +1322,16 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/case220": {
+    "jaccard": 0.6291,
+    "ssim": 0.7794,
+    "text_boundary": 0.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.0
   },
   "cases/case23": {
     "jaccard": 0.6822,
@@ -2309,8 +2319,8 @@
     "a11y_text": 1.0
   },
   "samples/run-borders": {
-    "jaccard": 0.4491,
-    "ssim": 0.5837,
+    "jaccard": 0.4539,
+    "ssim": 0.5831,
     "text_boundary": 0.3429,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -2352,8 +2362,8 @@
     "a11y_text": 0.5821
   },
   "scraped/alfies_arc_adult..": {
-    "jaccard": 0.6041,
-    "ssim": 0.7985,
+    "jaccard": 0.6453,
+    "ssim": 0.7988,
     "text_boundary": 0.9702,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2382,8 +2392,8 @@
     "a11y_text": 0.8816
   },
   "scraped/arabic_rice_bene..": {
-    "jaccard": 0.0583,
-    "ssim": 0.2134,
+    "jaccard": 0.7299,
+    "ssim": 0.8734,
     "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2412,7 +2422,7 @@
     "a11y_text": 0.9879
   },
   "scraped/australian_highe..": {
-    "jaccard": 0.6553,
+    "jaccard": 0.6554,
     "ssim": 0.833,
     "text_boundary": 0.8786,
     "ua_fail": 2,
@@ -2453,7 +2463,7 @@
   },
   "scraped/bosch_software_a..": {
     "jaccard": 0.6735,
-    "ssim": 0.9177,
+    "ssim": 0.9178,
     "text_boundary": 0.959,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -2473,8 +2483,8 @@
     "a11y_text": 0.9928
   },
   "scraped/bulgarian_farmla..": {
-    "jaccard": 0.6613,
-    "ssim": 0.8585,
+    "jaccard": 0.6615,
+    "ssim": 0.8586,
     "text_boundary": 0.9556,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -2483,8 +2493,8 @@
     "a11y_text": 1.0
   },
   "scraped/bulgarian_road_s..": {
-    "jaccard": 0.4825,
-    "ssim": 0.8392,
+    "jaccard": 0.5233,
+    "ssim": 0.9145,
     "text_boundary": 0.9873,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2504,8 +2514,8 @@
     "a11y_text": 0.9985
   },
   "scraped/candidate_refere..": {
-    "jaccard": 0.6916,
-    "ssim": 0.8551,
+    "jaccard": 0.6907,
+    "ssim": 0.8541,
     "text_boundary": 0.5714,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2514,7 +2524,7 @@
     "a11y_text": 1.0
   },
   "scraped/carbon_farming_i..": {
-    "jaccard": 0.6061,
+    "jaccard": 0.6067,
     "ssim": 0.7939,
     "text_boundary": 0.8257,
     "ua_fail": 3,
@@ -2546,7 +2556,7 @@
   },
   "scraped/chinese_costume_..": {
     "jaccard": 0.2103,
-    "ssim": 0.4907,
+    "ssim": 0.4902,
     "text_boundary": 0.3171,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2596,8 +2606,8 @@
     "a11y_text": 0.8976
   },
   "scraped/construction_bat..": {
-    "jaccard": 0.6885,
-    "ssim": 0.8913,
+    "jaccard": 0.7087,
+    "ssim": 0.9144,
     "text_boundary": 0.8548,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2626,8 +2636,8 @@
     "a11y_text": 0.9895
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.456,
-    "ssim": 0.6567,
+    "jaccard": 0.4557,
+    "ssim": 0.6559,
     "text_boundary": 0.7229,
     "convert_ms": 270.5,
     "ua_fail": 2,
@@ -2689,8 +2699,8 @@
     "a11y_text": 1.0
   },
   "scraped/czech_census_202..": {
-    "jaccard": 0.6316,
-    "ssim": 0.836,
+    "jaccard": 0.6345,
+    "ssim": 0.8373,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2699,8 +2709,8 @@
     "a11y_text": 1.0
   },
   "scraped/czech_crisis_mea..": {
-    "jaccard": 0.7486,
-    "ssim": 0.9138,
+    "jaccard": 0.7477,
+    "ssim": 0.913,
     "text_boundary": 0.9552,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2709,8 +2719,8 @@
     "a11y_text": 0.9193
   },
   "scraped/czech_expert_wit..": {
-    "jaccard": 0.6488,
-    "ssim": 0.8194,
+    "jaccard": 0.6468,
+    "ssim": 0.8167,
     "text_boundary": 1.0,
     "convert_ms": 39.4,
     "ua_fail": 2,
@@ -2891,8 +2901,8 @@
     "a11y_text": 1.0
   },
   "scraped/environmental_la..": {
-    "jaccard": 0.5283,
-    "ssim": 0.7581,
+    "jaccard": 0.53,
+    "ssim": 0.76,
     "text_boundary": 0.7985,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2901,8 +2911,8 @@
     "a11y_text": 0.9905
   },
   "scraped/erasmus_plus_sta..": {
-    "jaccard": 0.6983,
-    "ssim": 0.8842,
+    "jaccard": 0.6986,
+    "ssim": 0.884,
     "text_boundary": 0.0265,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -2911,8 +2921,8 @@
     "a11y_text": 0.8056
   },
   "scraped/estonian_communi..": {
-    "jaccard": 0.6975,
-    "ssim": 0.8361,
+    "jaccard": 0.7123,
+    "ssim": 0.8562,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -2921,8 +2931,8 @@
     "a11y_text": 1.0
   },
   "scraped/family_kinship_l..": {
-    "jaccard": 0.7156,
-    "ssim": 0.8413,
+    "jaccard": 0.7155,
+    "ssim": 0.8412,
     "text_boundary": 0.9437,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2931,8 +2941,8 @@
     "a11y_text": 1.0
   },
   "scraped/federal_procurem..": {
-    "jaccard": 0.7135,
-    "ssim": 0.8966,
+    "jaccard": 0.7137,
+    "ssim": 0.8967,
     "text_boundary": 0.9296,
     "convert_ms": 57.1,
     "ua_fail": 3,
@@ -3097,8 +3107,8 @@
     "a11y_text": 0.9544
   },
   "scraped/italian_project_..": {
-    "jaccard": 0.3963,
-    "ssim": 0.6505,
+    "jaccard": 0.5324,
+    "ssim": 0.8231,
     "text_boundary": 0.0,
     "convert_ms": 2.4,
     "ua_fail": 2,
@@ -3108,8 +3118,8 @@
     "a11y_text": 1.0
   },
   "scraped/italian_teacher_..": {
-    "jaccard": 0.7252,
-    "ssim": 0.9002,
+    "jaccard": 0.7251,
+    "ssim": 0.8997,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3149,8 +3159,8 @@
     "a11y_text": 0.8057
   },
   "scraped/k4_regulations_s..": {
-    "jaccard": 0.5981,
-    "ssim": 0.8378,
+    "jaccard": 0.5986,
+    "ssim": 0.8379,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3159,7 +3169,7 @@
     "a11y_text": 1.0
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.5891,
+    "jaccard": 0.589,
     "ssim": 0.7392,
     "text_boundary": 0.8192,
     "convert_ms": 1027.5,
@@ -3232,9 +3242,9 @@
     "a11y_text": 1.0
   },
   "scraped/maine_criminal_h..": {
-    "jaccard": 0.0459,
-    "ssim": 0.1526,
-    "text_boundary": 0.3175,
+    "jaccard": 0.3938,
+    "ssim": 0.51,
+    "text_boundary": 0.4773,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -3273,7 +3283,7 @@
     "a11y_text": 1.0
   },
   "scraped/mongolian_human_..": {
-    "jaccard": 0.7609,
+    "jaccard": 0.761,
     "ssim": 0.9136,
     "text_boundary": 1.0,
     "convert_ms": 32.0,
@@ -3335,8 +3345,8 @@
     "a11y_text": 0.9753
   },
   "scraped/physical_educati..": {
-    "jaccard": 0.6848,
-    "ssim": 0.8223,
+    "jaccard": 0.7778,
+    "ssim": 0.9266,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3366,8 +3376,8 @@
     "a11y_text": 1.0
   },
   "scraped/polish_building_..": {
-    "jaccard": 0.5764,
-    "ssim": 0.7693,
+    "jaccard": 0.576,
+    "ssim": 0.7689,
     "text_boundary": 0.8034,
     "convert_ms": 56.9,
     "ua_fail": 2,
@@ -3399,7 +3409,7 @@
   },
   "scraped/polish_ministry_..": {
     "jaccard": 0.3797,
-    "ssim": 0.6971,
+    "ssim": 0.6972,
     "text_boundary": 0.7129,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3450,8 +3460,8 @@
     "a11y_text": 1.0
   },
   "scraped/premises_approva..": {
-    "jaccard": 0.6925,
-    "ssim": 0.8937,
+    "jaccard": 0.6924,
+    "ssim": 0.8936,
     "text_boundary": 0.9208,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -3460,8 +3470,8 @@
     "a11y_text": 0.9896
   },
   "scraped/radiographer_int..": {
-    "jaccard": 0.7586,
-    "ssim": 0.8658,
+    "jaccard": 0.773,
+    "ssim": 0.8845,
     "text_boundary": 0.9917,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -3583,8 +3593,8 @@
     "a11y_text": 0.9918
   },
   "scraped/sao_paulo_procur..": {
-    "jaccard": 0.7241,
-    "ssim": 0.8902,
+    "jaccard": 0.724,
+    "ssim": 0.8901,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3701,8 +3711,8 @@
     "a11y_text": 1.0
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.7243,
-    "ssim": 0.8601,
+    "jaccard": 0.736,
+    "ssim": 0.8606,
     "text_boundary": 0.808,
     "convert_ms": 32.2,
     "ua_fail": 0,
@@ -3732,8 +3742,8 @@
     "a11y_text": 0.992
   },
   "scraped/streamnet_steeri..": {
-    "jaccard": 0.7768,
-    "ssim": 0.928,
+    "jaccard": 0.7776,
+    "ssim": 0.9283,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3848,8 +3858,8 @@
     "a11y_text": 1.0
   },
   "scraped/ukrainian_munici..": {
-    "jaccard": 0.7854,
-    "ssim": 0.9114,
+    "jaccard": 0.8117,
+    "ssim": 0.9289,
     "text_boundary": 0.9818,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3858,7 +3868,7 @@
     "a11y_text": 1.0
   },
   "scraped/usep_handbook": {
-    "jaccard": 0.8634,
+    "jaccard": 0.8635,
     "ssim": 0.9268,
     "text_boundary": 0.9955,
     "convert_ms": 38.6,
@@ -3922,7 +3932,7 @@
   },
   "scraped/welsh_palliative..": {
     "jaccard": 0.5477,
-    "ssim": 0.7559,
+    "ssim": 0.7558,
     "text_boundary": 0.8506,
     "ua_fail": 4,
     "a11y_missing": 0,
