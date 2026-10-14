@@ -63,15 +63,19 @@ fn resolve_tab_aligned_start(
     seen_fonts: &HashMap<String, FontEntry>,
     min_x: f32,
 ) -> f32 {
+    // The segment's leading spaces sit before the aligned text, not inside
+    // it (Word probes on a right tab: 0 or 4 leading spaces end the text at
+    // the stop alike; 24 push it right by what no longer fits before it).
+    let lead = || leading_space_width(seg_runs, seen_fonts);
     match stop.alignment {
         TabAlignment::Left => tab_target.max(min_x),
         TabAlignment::Center => {
             let sw = segment_width(seg_runs, seen_fonts);
-            (tab_target - sw / 2.0).max(min_x)
+            (tab_target - sw / 2.0 - lead()).max(min_x)
         }
         TabAlignment::Right => {
             let sw = segment_width(seg_runs, seen_fonts);
-            (tab_target - sw).max(min_x)
+            (tab_target - sw - lead()).max(min_x)
         }
         TabAlignment::Decimal => {
             let bw = decimal_before_width(seg_runs, seen_fonts);
@@ -2195,6 +2199,26 @@ fn find_next_tab_stop(
         leader: None,
     };
     (default, false)
+}
+
+/// The width of the whitespace a tab segment opens with, before its first
+/// word (`segment_width` leaves it out).
+fn leading_space_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
+    let mut w = 0.0;
+    let mut key_buf = String::new();
+    for run in runs {
+        let key = font_key_buf(run, &mut key_buf);
+        let entry = seen_fonts.get(key).expect("font registered");
+        let eff_fs = effective_font_size(run, entry);
+        let text = effective_text(run);
+        let spaces = text.chars().take_while(|c| c.is_whitespace()).count();
+        let mut prev_char = None;
+        w += spaces as f32 * word_space_width(run, entry, eff_fs, " ", &mut prev_char);
+        if spaces < text.chars().count() {
+            break;
+        }
+    }
+    w
 }
 
 fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
