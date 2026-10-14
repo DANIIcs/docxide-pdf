@@ -731,10 +731,29 @@ fn vml_shape_preset(shape: roxmltree::Node) -> Option<&'static str> {
 /// textbox/textpath (e.g. a curly brace). Returns None for unrecognized presets
 /// so such shapes remain dropped rather than rendered as a stray rectangle.
 fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
-    let preset = vml_shape_preset(shape)?;
+    // A plain v:rect / v:oval / v:roundrect names its geometry by element.
+    let element_preset = match shape.tag_name().name() {
+        "rect" => Some("rect"),
+        "roundrect" => Some("roundRect"),
+        "oval" => Some("ellipse"),
+        _ => None,
+    };
+    let preset = vml_shape_preset(shape).or(element_preset)?;
 
-    let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"));
-    if !stroked {
+    // VML fills white by default; only a written fillcolor is drawn
+    // (ponytail: the implicit white fill would cover text we place behind).
+    // A page-wide v:rect filled #2c3e50 behind a book cover's white title.
+    let fill = (!matches!(shape.attribute("filled"), Some("f") | Some("false")))
+        .then(|| shape.attribute("fillcolor").and_then(parse_vml_color))
+        .flatten()
+        .map(ShapeFill::Solid);
+    // A shape named only by its element draws the default black outline
+    // only when the stroke is written out, like the fill.
+    let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"))
+        && (vml_shape_preset(shape).is_some()
+            || shape.attribute("stroked").is_some()
+            || shape.attribute("strokecolor").is_some());
+    if !stroked && fill.is_none() {
         return None;
     }
     let stroke_width = shape
@@ -746,6 +765,12 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         .attribute("strokecolor")
         .and_then(parse_vml_color)
         .unwrap_or([0, 0, 0]);
+    // A negative z-index in the style puts the shape behind the text.
+    let behind_doc = shape.attribute("style").unwrap_or("").split(';').any(|p| {
+        p.split_once(':').is_some_and(|(k, v)| {
+            k.trim() == "z-index" && v.trim().parse::<i64>().is_ok_and(|z| z < 0)
+        })
+    });
 
     let style_str = shape.attribute("style").unwrap_or("");
     let VmlBoxStyle {
@@ -773,8 +798,10 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
             adjustments: Vec::new(),
             custom: None,
         },
-        stroke_color: Some(stroke_color),
+        stroke_color: stroked.then_some(stroke_color),
         stroke_width,
+        fill,
+        behind_doc,
         no_text_wrap: true,
         ..Textbox::default()
     })
