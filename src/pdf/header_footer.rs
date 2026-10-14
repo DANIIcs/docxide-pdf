@@ -855,6 +855,33 @@ pub(super) fn render_header_footer(
                         // as the body path's bottom pad places it.
                         draw_h_border(content, b, box_bottom - b.space_pt - b.width_pt / 2.0);
                     }
+                    // Side borders as in the body: their inner edge `space`
+                    // plus Word's 1.47 / 1.73pt outside the text.
+                    let v_bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
+                    if let Some(b) = &bdr.left {
+                        let x = box_left - b.space_pt - super::LEFT_BORDER_GAP - b.width_pt / 2.0;
+                        stroke_segment(content, (x, box_top), (x, v_bottom), b.width_pt, Some(b.color));
+                    }
+                    if let Some(b) = &bdr.right {
+                        let x = box_right + b.space_pt + super::RIGHT_BORDER_GAP + b.width_pt / 2.0;
+                        stroke_segment(content, (x, box_top), (x, v_bottom), b.width_pt, Some(b.color));
+                    }
+                };
+                // Paragraph shading under the text, out to the side borders'
+                // inner edges and down to the bottom border (a footer's blue
+                // address bar with white text drew as white on white).
+                let draw_para_shading = |content: &mut Content, box_bottom: f32| {
+                    let Some(color) = para.shading else { return };
+                    let left = box_left
+                        - bdr.left.as_ref().map_or(0.0, |b| b.space_pt + super::LEFT_BORDER_GAP);
+                    let right = box_right
+                        + bdr.right.as_ref().map_or(0.0, |b| b.space_pt + super::RIGHT_BORDER_GAP);
+                    let bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
+                    content.save_state();
+                    super::color::fill_rgb(content, color);
+                    content.rect(left, bottom, right - left, box_top - bottom);
+                    content.fill_nonzero();
+                    content.restore_state();
                 };
 
                 let mut baseline_y = cursor_y
@@ -1467,6 +1494,7 @@ pub(super) fn render_header_footer(
                 if !matches!(effective_ls, LineSpacing::Exact(_)) {
                     size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, metrics.0);
                 }
+                draw_para_shading(content, cursor_y - lines_height(&lines, line_h, metrics));
                 render_paragraph_lines(
                     content,
                     &lines,
