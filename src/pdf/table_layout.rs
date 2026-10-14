@@ -1,11 +1,7 @@
 use std::collections::HashMap;
-use std::sync::LazyLock;
 
 use crate::fonts::{FontEntry, font_key_buf};
 
-static EMPTY_INLINE_IMAGE_MAP: LazyLock<HashMap<usize, String>> = LazyLock::new(HashMap::new);
-static EMPTY_EFFECT_MAP: LazyLock<HashMap<usize, super::images::EffectXObjs>> =
-    LazyLock::new(HashMap::new);
 use crate::model::{
     Alignment, Block, CellMargins, HorizontalPosition, Table, TextDirection, VMerge,
     VerticalPosition, WrapType,
@@ -148,7 +144,13 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
 pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize>) -> f32 {
     p.lines[range]
         .iter()
-        .map(|l| l.pitch.unwrap_or(p.line_h))
+        .map(|l| {
+            super::layout::inline_line_advance(
+                l,
+                p.line_h,
+                (p.image_line_ascent, p.font_size * p.descender_ratio),
+            )
+        })
         .sum()
 }
 
@@ -648,6 +650,9 @@ pub(super) struct CellParagraphLayout {
     pub(super) line_h: f32,
     pub(super) font_size: f32,
     pub(super) ascender_ratio: f32,
+    /// Picture-line ascent; exact spacing keeps the fixed baseline and pitch.
+    pub(super) image_line_ascent: f32,
+    pub(super) clip_inline_pictures: bool,
     pub(super) descender_ratio: f32,
     pub(super) font_substituted: bool,
     pub(super) alignment: Alignment,
@@ -987,6 +992,22 @@ pub(super) fn compute_row_layouts(
                                     // line has no extra hanging width.
                                     let hanging = super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
                                     let has_tabs = runs.iter().any(|r| r.is_tab);
+                                    let inline_images: HashMap<usize, String> = runs
+                                        .iter()
+                                        .enumerate()
+                                        .filter_map(|(ri, run)| {
+                                            let img = run.inline_image.as_ref()?;
+                                            Some((ri, ctx.table_cell_image_names.get(&img.key())?.clone()))
+                                        })
+                                        .collect();
+                                    let inline_effects: HashMap<usize, super::images::EffectXObjs> = runs
+                                        .iter()
+                                        .enumerate()
+                                        .filter_map(|(ri, run)| {
+                                            let img = run.inline_image.as_ref()?;
+                                            Some((ri, ctx.effect_table_names.get(&img.key())?.clone()))
+                                        })
+                                        .collect();
                                     let mut lines = if has_tabs {
                                         build_tabbed_line(
                                             runs,
@@ -996,8 +1017,8 @@ pub(super) fn compute_row_layouts(
                                             para_text_w,
                                             para.indent_right,
                                             hanging,
-                                            &EMPTY_INLINE_IMAGE_MAP,
-                                            &EMPTY_EFFECT_MAP,
+                                            &inline_images,
+                                            &inline_effects,
                                             ctx.default_tab_stop,
                                             &[],
                                             ctx.compat_mode,
@@ -1009,8 +1030,8 @@ pub(super) fn compute_row_layouts(
                                             ctx.fonts,
                                             para_text_w,
                                             hanging,
-                                            &EMPTY_INLINE_IMAGE_MAP,
-                                            &EMPTY_EFFECT_MAP,
+                                            &inline_images,
+                                            &inline_effects,
                                             None,
                                             None,
                                             None,
@@ -1048,7 +1069,12 @@ pub(super) fn compute_row_layouts(
                                         lines.pop();
                                         break_mark_hidden = true;
                                     }
-                                    total_h += lines.iter().map(|l| l.pitch.unwrap_or(line_h)).sum::<f32>();
+                                    let image_ascent = if matches!(effective_ls, crate::model::LineSpacing::Exact(_)) {
+                                        super::layout::runs_max_image_h(runs).max(font_size * ascender_ratio)
+                                    } else {
+                                        font_size * ascender_ratio
+                                    };
+                                    total_h += lines.iter().map(|l| super::layout::inline_line_advance(l, line_h, (image_ascent, font_size * descender_ratio))).sum::<f32>();
                                     lines
                                 } else {
                                     if para.paragraph_mark_vanish {
@@ -1165,6 +1191,12 @@ pub(super) fn compute_row_layouts(
                                         |a| a / font_size,
                                     ),
                                     descender_ratio,
+                                    image_line_ascent: if matches!(effective_ls, crate::model::LineSpacing::Exact(_)) {
+                                        super::layout::runs_max_image_h(runs).max(font_size * ascender_ratio)
+                                    } else {
+                                        font_size * ascender_ratio
+                                    },
+                                    clip_inline_pictures: matches!(effective_ls, crate::model::LineSpacing::Exact(_)),
                                     font_substituted,
                                     alignment: para.alignment,
                                     space_before,
