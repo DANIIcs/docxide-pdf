@@ -1405,7 +1405,7 @@ pub(super) fn compute_row_layouts(
                                         && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty()
                                 };
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && matches!(cell.v_align, crate::model::CellVAlign::Top))
+                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (matches!(cell.v_align, crate::model::CellVAlign::Top) || (block_idx == 0 && pos.v_offset_pt > 0.0 && matches!(cell.v_align, crate::model::CellVAlign::Center))))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
@@ -1418,7 +1418,8 @@ pub(super) fn compute_row_layouts(
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
-                                        }) || spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)
+                                        }) || (matches!(cell.v_align, crate::model::CellVAlign::Top)
+                                            && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
@@ -1454,7 +1455,9 @@ pub(super) fn compute_row_layouts(
                                     floating_x_offset,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
-                                prev_was_nested_table = floating_offset.is_none();
+                                prev_was_nested_table = floating_offset.is_none()
+                                    || (matches!(cell.v_align, crate::model::CellVAlign::Center)
+                                        && floating_offset.is_some_and(|offset| offset > 0.0));
                                 para_idx += 1;
                             }
                         }
@@ -1466,7 +1469,9 @@ pub(super) fn compute_row_layouts(
                     // the row height — the mark glyph height and line_h are
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
-                        && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset: None, .. }))
+                        && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
+                            if floating_offset.is_none() || (matches!(cell.v_align, crate::model::CellVAlign::Center)
+                                && floating_offset.is_some_and(|offset| offset > 0.0)))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
