@@ -887,6 +887,9 @@ pub(super) struct TextLine {
     /// The breaker kept this line's last word by narrowing its spaces
     /// (`SPACE_SQUEEZE`), so it is wider than the measure until justified.
     pub(super) squeezed: bool,
+    /// The squeeze narrows every character, not just the spaces
+    /// (`CjkLayout::squeeze_line`).
+    pub(super) squeeze_chars: bool,
     /// Left at natural width although justified (`doNotExpandShiftReturn`).
     pub(super) natural_width: bool,
     /// This line's own advance when its tallest face differs from the
@@ -1318,6 +1321,10 @@ pub(super) struct CjkLayout {
     /// the measure and the line's spaces can shrink to make room (see
     /// `SPACE_SQUEEZE`).
     pub(super) squeeze_spaces: bool,
+    /// Justified paragraph under `wpJustification`: a word that overflows by
+    /// at most two spaces' width stays, and the whole line is squeezed
+    /// (`SQUEEZE_LINE_SPACES`).
+    pub(super) squeeze_line: bool,
     /// Justify a line that ends in a manual break, as Word does unless
     /// `doNotExpandShiftReturn` is set.
     pub(super) expand_shift_return: bool,
@@ -1332,6 +1339,15 @@ pub(super) struct CjkLayout {
 /// 14,122 line-end decisions in those PDFs, "within this cap and the word's
 /// midpoint inside the margin" reproduces 94.6%; either condition alone ~90%.
 const SPACE_SQUEEZE: f32 = 0.25;
+
+/// How far a `wpJustification` line may overflow and still keep its last
+/// word, in spaces of the word's font. Measured on three compat-14 Courier
+/// New statute documents: 58 squeezed lines all overflow by two characters
+/// or less (letters and spaces narrowed alike, to 0.965-0.985), none by
+/// three; the cap sits between the two. ponytail: a few lines one character
+/// over still wrap in Word, which no width cap explains; find that rule if
+/// a proportional-font document turns up.
+const SQUEEZE_LINE_SPACES: f32 = 2.5;
 
 /// Per chunk, how many word spaces precede it on the line. Justification
 /// stretches or squeezes those, not the joins between runs inside a word: a
@@ -1859,6 +1875,15 @@ pub(super) fn build_paragraph_lines(
                 overflows = false;
                 squeezed_lines.push(lines.len());
             }
+            if overflows
+                && cjk.squeeze_line
+                && (need_space || is_continuation)
+                && !in_right_region
+                && proposed_x + ww - cur_max <= SQUEEZE_LINE_SPACES * entry.space_width(eff_fs)
+            {
+                overflows = false;
+                squeezed_lines.push(lines.len());
+            }
 
             // compressPunctuation: before wrapping, make room for this word by
             // squeezing the full-width punctuation already on the line.
@@ -2163,6 +2188,7 @@ pub(super) fn build_paragraph_lines(
     for i in squeezed_lines {
         if let Some(line) = lines.get_mut(i) {
             line.squeezed = true;
+            line.squeeze_chars = cjk.squeeze_line;
         }
     }
     if !cjk.expand_shift_return {
@@ -3185,8 +3211,11 @@ pub(super) fn render_paragraph_lines(
             _ => false,
         };
 
-        let char_justify_gaps =
-            char_justify_gaps(*alignment, can_justify, has_cjk_content, left_char_count);
+        let char_justify_gaps = if squeezed && line.squeeze_chars {
+            Some(left_char_count.saturating_sub(1).max(1))
+        } else {
+            char_justify_gaps(*alignment, can_justify, has_cjk_content, left_char_count)
+        };
         let is_char_justified = char_justify_gaps.is_some();
         let is_justified = is_char_justified || (can_justify && left_gaps > 0);
 
@@ -4120,6 +4149,7 @@ mod tests {
             auto_space: false,
             compress_punct: false,
             squeeze_spaces,
+            squeeze_line: false,
             expand_shift_return: true,
             bidi: false,
         }

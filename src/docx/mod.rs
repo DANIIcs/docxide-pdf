@@ -1250,6 +1250,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         compress_punctuation: settings.compress_punctuation,
         compat_mode: settings.compat_mode,
         do_not_expand_shift_return: settings.do_not_expand_shift_return,
+        wp_justification: settings.wp_justification,
         additive_paragraph_spacing: settings.no_html_auto_spacing,
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
     })

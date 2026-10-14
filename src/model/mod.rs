@@ -285,6 +285,8 @@ pub struct Document {
     pub compat_mode: u32,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub do_not_expand_shift_return: bool,
+    /// Word's `wpJustification` (see `docx::settings`).
+    pub wp_justification: bool,
     /// `w:doNotUseHTMLParagraphAutoSpacing`: a paragraph's space before adds
     /// to the previous one's space after instead of overlapping it.
     pub additive_paragraph_spacing: bool,

@@ -31,6 +31,9 @@ pub(super) struct DocumentSettings {
     /// `w:doNotUseHTMLParagraphAutoSpacing`: before/afterAutospacing is
     /// ignored and the written before/after values apply.
     pub no_html_auto_spacing: bool,
+    /// `w:compat/w:wpJustification`: justified lines may keep a word by
+    /// squeezing the whole line (WordPerfect-style justification).
+    pub wp_justification: bool,
 }
 
 impl Default for DocumentSettings {
@@ -49,6 +52,7 @@ impl Default for DocumentSettings {
             do_not_expand_shift_return: false,
             adjust_line_height_in_table: false,
             no_html_auto_spacing: false,
+            wp_justification: false,
         }
     }
 }
@@ -101,5 +105,6 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         do_not_expand_shift_return: compat_flag("doNotExpandShiftReturn"),
         adjust_line_height_in_table: compat_flag("adjustLineHeightInTable"),
         no_html_auto_spacing: compat_flag("doNotUseHTMLParagraphAutoSpacing"),
+        wp_justification: compat_flag("wpJustification"),
     }
 }

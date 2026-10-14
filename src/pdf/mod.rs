@@ -395,6 +395,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) compat_mode: u32,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub(super) do_not_expand_shift_return: bool,
+    /// Word's `wpJustification` (see `docx::settings`).
+    pub(super) wp_justification: bool,
     /// `Document::additive_paragraph_spacing`.
     pub(super) additive_paragraph_spacing: bool,
     /// The current section's docGrid line pitch when its grid snaps lines
@@ -439,6 +441,8 @@ impl RenderContext<'_> {
             auto_space,
             compress_punct: self.compress_punctuation,
             squeeze_spaces: self.compat_mode >= 15
+                && matches!(para.alignment, crate::model::Alignment::Justify),
+            squeeze_line: self.wp_justification
                 && matches!(para.alignment, crate::model::Alignment::Justify),
             expand_shift_return: !self.do_not_expand_shift_return,
             bidi: para.bidi,
@@ -4169,6 +4173,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         endnote_marks: &endnote_display_order,
         compat_mode: doc.compat_mode,
         do_not_expand_shift_return: doc.do_not_expand_shift_return,
+        wp_justification: doc.wp_justification,
         additive_paragraph_spacing: doc.additive_paragraph_spacing,
         note_separator: footnotes::NoteSeparator::new(
             doc.footnote_separator.as_ref(),
