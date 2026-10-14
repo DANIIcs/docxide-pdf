@@ -4329,7 +4329,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     state.pb.is_first_page_of_section = true;
                 }
                 SectionBreakType::Continuous => {
-                    if state.pb.is_at_page_top(cur_sp) {
+                    if state.pb.is_at_page_top(cur_sp)
+                        && !doc.sections[sect_idx - 1].blocks.iter().any(|block| {
+                            matches!(block, Block::Paragraph(p) if p.frame_props.is_some())
+                        })
+                    {
                         // No content on this page belongs to the preceding
                         // section. The continuous section therefore owns this
                         // sheet, including its first-page header/footer variant.
