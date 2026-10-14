@@ -965,6 +965,25 @@ pub(super) fn compute_row_layouts(
                                 } else {
                                     &para.runs
                                 };
+                                // A cell paragraph containing only ordinary
+                                // padding spaces has the paragraph mark's line
+                                // metrics in Word, not the spaces' run format.
+                                let padding_mark;
+                                let runs = if !runs.is_empty()
+                                    && runs.iter().any(|run| !run.text.is_empty())
+                                    && runs.iter().all(|run| !run.is_tab
+                                        && !run.is_line_break && !run.is_math
+                                        && run.inline_image.is_none()
+                                        && run.text.chars().all(|ch| ch == ' '))
+                                    && para.content_height == 0.0
+                                {
+                                    padding_mark = vec![crate::model::Run {
+                                        font_size: para.paragraph_mark_font_size.unwrap_or(10.0),
+                                        font_name: para.paragraph_mark_font_name.clone().unwrap_or_default(),
+                                        ..Default::default()
+                                    }];
+                                    &padding_mark
+                                } else { runs };
                                 // Size the cell line from the tallest run, not the
                                 // first — a small leading run (e.g. padding spaces)
                                 // must not pull the baseline up. Math runs are
