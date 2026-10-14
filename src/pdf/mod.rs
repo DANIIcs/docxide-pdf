@@ -4623,13 +4623,31 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     && p.clears_floats
                     && let Some(ref fz) = state.pb.float_zone
                 {
-                    if state.pb.slot_top > fz.bottom_y {
+                    let empty_clear = p
+                        .runs
+                        .iter()
+                        .all(|r| r.text.is_empty() && r.inline_image.is_none())
+                        && p.image.is_none()
+                        && p.inline_chart.is_none()
+                        && p.smartart.is_empty()
+                        && p.floating_images.is_empty()
+                        && p.textboxes.is_empty();
+                    let extra_breaks = if empty_clear {
+                        p.runs
+                            .iter()
+                            .filter(|r| r.is_line_break)
+                            .count()
+                            .saturating_sub(1)
+                    } else {
+                        0
+                    };
+                    if state.pb.slot_top > fz.bottom_y || (fz.from_table && extra_breaks > 0) {
                         // The line following the break resumes below the
                         // float and still occupies its full line height
                         // there (the break paragraph's mark line).
                         let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                         let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        state.pb.slot_top = fz.bottom_y - resolve_line_h(ls, fs, lhr);
+                        state.pb.slot_top = fz.bottom_y - resolve_line_h(ls, fs, lhr) * (1 + extra_breaks) as f32;
                     }
                     state.pb.float_zone = None;
                 }
