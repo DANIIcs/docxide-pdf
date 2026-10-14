@@ -531,7 +531,6 @@ mod tests {
     use super::*;
     use crate::model::Run;
 
-
     #[test]
     fn list_level_hanging_survives_direct_left_or_right() {
         use std::io::{Cursor, Write};
@@ -571,6 +570,7 @@ mod tests {
             assert!((p.indent_first_line - first).abs() < 0.001, "{ind}");
         }
     }
+
     #[test]
     fn hanging_indent_adds_one_stop_at_the_indent() {
         let mut stops = Vec::new();
