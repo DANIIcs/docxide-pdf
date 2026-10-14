@@ -1,4 +1,16 @@
 {
+  "cases/autofit-indent-first-line": [
+    "9a62058d2e69eefe4a300c86a5e4127447ba39da65fbd5bfb2b9bc0cb40bcf0c"
+  ],
+  "cases/autofit-indent-no-indent": [
+    "58e72f9d885b2e5d3c44fa3d523298f0bcc8e945390fb0ff8621cb167053a96e"
+  ],
+  "cases/autofit-indent-positive-left": [
+    "142cf27d1883240db547e974e54a944d10cec46fe2a11f2423ca6e37221ca617"
+  ],
+  "cases/autofit-indent-right-indent": [
+    "58e72f9d885b2e5d3c44fa3d523298f0bcc8e945390fb0ff8621cb167053a96e"
+  ],
   "cases/case1": [
     "b999437ed5297d6f9d4926a2306f81fe8f3bbf4f95536de1f2aae02e525ca5e3"
   ],
@@ -405,6 +417,9 @@
   "cases/case220": [
     "dc94a87a0da205bdd5e382842ac1fa3789ebb47638f37d50dd97ca7c2d8c8230"
   ],
+  "cases/case221": [
+    "a58304930d5f314949a1645e0c57c7c6cc80c9e041c2d24e8676cb6a4c864b19"
+  ],
   "cases/case23": [
     "56622e894050175fbd11815050ddd60b96a053dcef280c1c53e3314a0748f42b"
   ],
@@ -736,6 +751,192 @@
   "cases/case99": [
     "3bfd340bc4ba4c599a035bf5a4814d0f6d8bcea4268114df64e1b6173f8219c3"
   ],
+  "cases/cell-inline-body": [
+    "5279beb6626c46408bb0d3e949a62cd96ee88cdbd76e3409d111d787eec5d57f"
+  ],
+  "cases/cell-inline-exact": [
+    "9aa564f48e56d93a8f9a563eede47ef6c6f31c75db516dd32aa177f6a2451920"
+  ],
+  "cases/cell-inline-header": [
+    "7da4cca31323dad713689249fe159b979bd62b45273fb294c99504ae39305898"
+  ],
+  "cases/cell-inline-nested": [
+    "5279beb6626c46408bb0d3e949a62cd96ee88cdbd76e3409d111d787eec5d57f"
+  ],
+  "cases/cell-inline-tabbed": [
+    "6d1704a1937bcce72c87269ffa43642e044f0eaaa2e4e7a41d63dfd4a2b989f2"
+  ],
+  "cases/clear-break-lines-one": [
+    "80230bcb5332a733bb6c659d176a35b6edaacefb8d5ed5e9c5fab288fa4460e9"
+  ],
+  "cases/clear-break-lines-three": [
+    "f1682d2188236f40cc9f7e576e488c73a06c884ff0ff7581047b3f9e3430f4dc"
+  ],
+  "cases/clear-break-lines-two": [
+    "fb32ca51e777c3177c57ecd950939dc4992bb641714452544562ee2cc0fdcbc2"
+  ],
+  "cases/clear-break-lines-two-no-float": [
+    "0ade532cbedddb98eda769712cf76cc7790fa34b2815c68d79cef50cf5ad6859"
+  ],
+  "cases/cont-first-empty-overflow": [
+    "42195c1118c496791f42a38935c4a383292eeac4cde6a65c36ffaba4bf2282d1",
+    "58b5b587f690cb43ca5e4d12a7a78be18e2f7dfac513ecb956d23e2625893de4"
+  ],
+  "cases/cont-first-first-fits": [
+    "03ffeb576dbaaf95fc9dbe2d365a066e51bc068a4542f323fa93e3e6886e4da6",
+    "8bb3c38f89ed93e6f6c8a1dc694a1bfc95fcc871cebec9126c98c6f1e26cb2e9"
+  ],
+  "cases/cont-first-text-overflow": [
+    "1b70b4ad0e65ac384a29e397c7deaa4dcd108445a4aaae7b668bf3745115e917",
+    "4ba9c3496e143b0f5052eb5c552452461bc683ac3ba6f1d2c2cd6618440098a6"
+  ],
+  "cases/empty-frame-control": [
+    "cc6ac2496500278660b185f9c8576fe174390d1322ab412039cdea738c930713"
+  ],
+  "cases/fullwidth-float-empty-clear": [
+    "1b93d74607c4e47c5e9265bcbe252e69e8d033db49e5579f0539c530ad1af047"
+  ],
+  "cases/header-inline-connector-behind": [
+    "bcd22cc4a7ae94ac43fed39a4cebb3807763270a6bf3f1b30d8476f6d8d6d91b"
+  ],
+  "cases/header-inline-connector-foreground": [
+    "4ba363e2fb415bc3054c9341d89e9c0e521215ea52c53b459bd1e3d64e16c137"
+  ],
+  "cases/header-inline-connector-line-only": [
+    "9011936779a2d7dc0634bf1e3bb7ad1fe49787b8e9a82d31ee6e84fa1f238824"
+  ],
+  "cases/header-inline-connector-picture-only": [
+    "8db12eec1990dd0070350063f9c0bb8f29203470d5e7cc6951e73b7f7e1b8684"
+  ],
+  "cases/header-textbox-line-metrics-bottom": [
+    "59f1ad03860a65aa1b633344f5eb587e441dd035aa72c0209198809e921d9e0b"
+  ],
+  "cases/header-textbox-line-metrics-center": [
+    "593292f82d14ca58e442a65cea8aa61bfdc31318487605b814d844aee4bded42"
+  ],
+  "cases/header-textbox-line-metrics-exact": [
+    "a9ab00be1ae5c93af0269a364f9ee12b6294207a5c5f4c99cca958747b34c375"
+  ],
+  "cases/header-textbox-line-metrics-multiline": [
+    "196ab0e59fc5171012ae8fc50c38440daf3808885d26157f71f90dc1f7faecfa"
+  ],
+  "cases/header-textbox-line-metrics-tahoma": [
+    "f1c1d8893632b561e48fcf77a8172a183d34d1ab2190fd000df3413e008071ea"
+  ],
+  "cases/header-textbox-line-metrics-times": [
+    "4bb396316f0e1e2b5b2efea3f9003fb4231ca9b1dc555f9fcadbbf49b9a25f07"
+  ],
+  "cases/leading-picture-image-fits": [
+    "d9d1e92df7d3fec1f8bbec7ab957dc709a5f85719725b7b0d76ca4207b840efd"
+  ],
+  "cases/leading-picture-image-no-spaces": [
+    "da4a19fa107c5e8d963970eef882410810857a5c25b36932bf4e97329304a396"
+  ],
+  "cases/leading-picture-image-overflow": [
+    "da5ae05f05c868aba0f9920936ae6507433805e7251e10e7961887f543b4c736"
+  ],
+  "cases/leading-table-clear-empty-clear": [
+    "8216daaf28d0d84622e7c94ecdfabaa12a97c263e11dd9c0448e24446f0104a0"
+  ],
+  "cases/leading-table-clear-leading-clear": [
+    "f2fd6cfd08eaae2f00452ee268148d5a1c9f1ab43e32e20405beaec4e2a1bfb5"
+  ],
+  "cases/leading-table-clear-leading-no-clear": [
+    "68fe092b2cf6028d51e3587594c1ab15661320e7dfa86e56438e20a73e497036"
+  ],
+  "cases/leading-table-clear-space-only-clear": [
+    "880253776085d39aed48b76a86b9095b213273b91a9caa5e483e6c96c2334c0f"
+  ],
+  "cases/leading-table-clear-trailing-clear": [
+    "c53b0d35099a147c28d4101e90de16ede2c6a438bbcc57cc8872a7a5a58e092d"
+  ],
+  "cases/min-width-run-spaces": [
+    "721f479def3e792d04092dad3343d514974d81e91d75004680a3e4681c83bd2e"
+  ],
+  "cases/min-width-run-split": [
+    "f023c7fa30948f3b6e63365b589340aa84ea9eb711d61713da32a4095c1eb15c"
+  ],
+  "cases/min-width-run-whole": [
+    "1e50c470d1e6231b157399f8bdeb588e8925dfba4b8d222ef810626bee813608"
+  ],
+  "cases/nested-float-no-spacer-inline": [
+    "75366b047dc690d4c95b216a8d2ee325a9a0f3aca11ddf40b3e0780399a7d2c6"
+  ],
+  "cases/nested-float-spacer-inline": [
+    "75366b047dc690d4c95b216a8d2ee325a9a0f3aca11ddf40b3e0780399a7d2c6"
+  ],
+  "cases/nested-float-spacer-only": [
+    "bb8d2e72b71bd617c862ff2eb8e34cfdd16fd30f6f6ff04ef28f206c0952febc"
+  ],
+  "cases/nested-inline-spacer-inline": [
+    "669b34f52d557058fda664ca6c1b2710a93482267c13e709533d2e2228e47fcb"
+  ],
+  "cases/page-header-frame-marker": [
+    "da2b37ec565aef28deafd55e3924a37bc8d1d92ae2db511fa14d912277ac599d"
+  ],
+  "cases/page-header-ordinary-marker": [
+    "f2889818eb280c96b9b7c96b48c7ddcb91829a34872d1eb4869f4a243e84e7c7"
+  ],
+  "cases/paragraph-offset-frame-exact": [
+    "a8918c1a119bfff3702f6541408a5d1071ca9f9cef1a67bbce3e42b06387a951"
+  ],
+  "cases/paragraph-offset-frame-immediate": [
+    "daec5c2845b1329cbd2e8a153c41b517ad5f0bb6140e4d9bfc4e74b4c6fa1970"
+  ],
+  "cases/paragraph-offset-frame-immediate-long": [
+    "ec71f493e7752f75bbfaca07002e18c93b91ee8bcc2aa1fe82702242889c1259"
+  ],
+  "cases/paragraph-offset-frame-no-frame": [
+    "79c9b739fd62d0e7cf85dbf6e637a14d2b41bf2518d5a5013b798b1247cbb368"
+  ],
+  "cases/picture-padding-mixed": [
+    "a3d7658f480682376c7aab93802563c32a37fd578c98ab1772a1b70cb8c598dc"
+  ],
+  "cases/picture-padding-no-padding": [
+    "013f63d72ecbbf3de9d4551e643def9cfc3a287c8c64a04346a242f056383ab5"
+  ],
+  "cases/picture-padding-no-placeholder": [
+    "a3d7658f480682376c7aab93802563c32a37fd578c98ab1772a1b70cb8c598dc"
+  ],
+  "cases/picture-padding-small-picture-font": [
+    "a3d7658f480682376c7aab93802563c32a37fd578c98ab1772a1b70cb8c598dc"
+  ],
+  "cases/repeated-clear-tab-one-tab": [
+    "880253776085d39aed48b76a86b9095b213273b91a9caa5e483e6c96c2334c0f"
+  ],
+  "cases/repeated-clear-tab-short-one-tab": [
+    "a93432e98d24178b418c73dd5c1a14c8e7a86842b21a06c6d825a45f2535b546"
+  ],
+  "cases/repeated-clear-tab-short-three-tab": [
+    "c1f6bc4c573706a1e53608df66a5fa53a6651ba042039f5c8075b99f1526e466"
+  ],
+  "cases/repeated-clear-tab-short-two-no-tab": [
+    "cc3226820fd44f43c0de1b5184a985034dd1a05969834aaac7e27f524dca7e75"
+  ],
+  "cases/repeated-clear-tab-short-two-tab": [
+    "429c318fd0518e4d39805f018866f7e037efdc74f0e9d3cd91b86f4bf25199c4"
+  ],
+  "cases/repeated-clear-tab-short-two-tab-mixed-spacing": [
+    "2dcc6479e11716cea1797b130aa94147a3dd57aafc2fd04a4825ce8181e17a48"
+  ],
+  "cases/repeated-clear-tab-three-tab": [
+    "96aaa037129b07eaa0f84068c633b6d293aa558ffc7937d96c7ad020ac342782"
+  ],
+  "cases/repeated-clear-tab-two-no-tab": [
+    "0a789da2f5b8bea89f888109758fc6b7f494641b990a82a57de078f3f7984050"
+  ],
+  "cases/repeated-clear-tab-two-tab": [
+    "cdae051cba38fc2d620295a6e7365b817de245c70bcc94e2afc0c3e1971d6d29"
+  ],
+  "cases/space-only-frame": [
+    "cc6ac2496500278660b185f9c8576fe174390d1322ab412039cdea738c930713"
+  ],
+  "cases/tab-break": [
+    "3ef297fe879c3f61afabd225fddc553e4563b71ef898e127a0ab818219c8d40d"
+  ],
+  "cases/tab-no-break": [
+    "8bbaec9845495793be5e9c2b03032cbd4b19cd5960868fbf3cc4ae5bab695620"
+  ],
   "fonts/arial": [
     "cefde7932aa0b9c9e21c664f8f40dd0db2beae693da8bc640bd1366a119ef511",
     "31500d0149897e26bedd5b144fe641bcb53d8964d21311c6e11c6833c9b93c6c"
@@ -957,7 +1158,7 @@
     "6417f42b316571f82098a4f8c037f77f5082825c6e9822b038f78d120bd1534a"
   ],
   "scraped/bahamas_sustainable_development_hosting": [
-    "c8571131fcf0533ef7fff2e38ced2af564e57e1eb150009ca95f588c58db1d54",
+    "6ba6d2937037a2c91329c914f62f06bd0ee771afec2badc35fa7ad5c5872d5c7",
     "c23b2d14d17d173fcf2d2012b65f0cf0c77caebf6afee92c1a60a8122efb567d"
   ],
   "scraped/belgian_youth_program_certificate": [
@@ -1571,9 +1772,9 @@
     "e1002274c49101296ec326081634c3dba343b3caddbea900cde8a444c89d2ad5"
   ],
   "scraped/erasmus_plus_staff_mobility_agreement": [
-    "ca7c391d12b3ae20676a049a849e2250f745f81e103a7ddff9ab435e9d1a3fbe",
-    "4b1d071ea826b6fee920c5fdf3d874a9112d7fa6d5b894c23fc8a703288db37e",
-    "9d6b88d1010826d32c6220c166e8079d0151766e72fdfdc552a5475cc76b551c"
+    "8f022c57ea26f97ed6933da2a433a98ee723ffb9828636e99c5a0a8c3a2d29ea",
+    "be7c35a38bcdf31599c06f279dc5a1ceb0ce3d355fe9d61a6196918f33a8b263",
+    "9524f93a51daf239cfa61793b76929ba0dd31559eb90a1ae91ba72ed7d6d34fe"
   ],
   "scraped/estonian_community_development_grant": [
     "feb7137361ff823329f5a776d3409ac88679cecade75b3ea9543ae4073353a37",
@@ -2131,8 +2332,8 @@
     "3e01bae8b8169a70ef0416acee22714e1346cb9699570df6d2f7c3f342d207e0"
   ],
   "scraped/pendulum_mechanics_oscillation_lab": [
-    "4085b374f675286d471cc70bd22fd32ef59a99dc95043c0ea0a8ca84d6d1de48",
-    "26a66c40b9f0e465c68103cfea2e528951272b6c66b4277ca305a788154f64d8"
+    "b8ef1135055ace680ee4c09b2782c1e66ecadfcdcd4516bd1fd9720dc9cbbb05",
+    "66308b26497eada2e00f63f727b46a40958f5196c4176f34ee33a15e3e4e4417"
   ],
   "scraped/physical_education_curriculum_map": [
     "f118f216ee624e41feeceacc5b5f0db08ac31097db7e86aea9b0ac595bda9259"
@@ -2199,17 +2400,17 @@
     "6c8e85e972449412dfdad41bb21bcf5a388c4f376b2eea0bb1d395543ca6ecd1"
   ],
   "scraped/premises_approval_registration_form": [
-    "34824a131dabe13313e3d69ba09475e675d6e92b48e32b5847ec4eef4c8929da",
-    "b481aa8ac35e296105a81ec3ff05254d2b82fc4a5c8c9cbce885a0c843c3aea2",
-    "6fa223c659910cb65d6d1b7d8a7e1fbc2f131672b2086c4f2d6ccc4fcb2f85a8",
-    "05f4b6cf78adfdf88cf7250623ef79011f91faf5d51666f081a2b0c177fd9a77",
-    "3ccfe466e064d4b7fcfef322d940203e1d62cce45b66c453dee4e31e41c5053a",
-    "9001461d2c6036fbac9ea077831fb3cbc16d517a5d0ee15c022fb0584854c2d0",
-    "a772d6b94a46afdc833d2486133a3042391b9f4191115bd0b019fef519e8c869",
-    "1f68174717bed7b3e48053e1f13a94ff09561e0cc20de5022f1b3622539ae21a",
-    "51ec2d4746a850dd7dfb0fefbebcc357f01f3fa35a223ddbdfdb6297454d2bbd",
-    "1c38b0da4c01476d9beb43d87739a4138e54d4627b8e54d8bc288ac7be9a89cb",
-    "3801cea9d7dd82f58a5199950099f13c0324f5958adefc46a3dd5b4557a2f6fa"
+    "1c057133f4c61d88d66455b454b1649b3c243e1e2ec8670dffa834fffcdc5976",
+    "13896a8557a79e03b1a089c517bb428eedbf6ab4bd5085170ee879557147c743",
+    "4fddd1acf2e2554618f52dfa80f9e1b015a0acb9dfff8a3bed8d833499a89adc",
+    "655f8637938435d0ee633370f1fcc44b4175bfc658b61558da3f3bb07604d660",
+    "af1082ae6e638b28f2e1599b20d852cbb2f9259432a84a112c9227806ca80688",
+    "3dd1530647124caaa29a7c14b2e35318ebd98069bdfd3348a0dc4b080bd9af5f",
+    "c5d4becc56772ac7926c0c16b2fb5699fe290254acb30e74ebef3e44334c1151",
+    "21a2c1eb7a0dee15b8765124858aaf7d7d0ae4ccffd35aa7ecb32b4215d0b282",
+    "3f140142b47dcd7326713e72ceaad2f2fb1fec701dd2e1ca959ebe6b6c405a9c",
+    "92a6fe82292b76d99b45d1a4e82d37b97d18330b947e37ea7a4ddf613caab1ae",
+    "6d1738af01d4162b38d8ed1670db0bce20d9c49e1f893f61c23762a05f48fe2b"
   ],
   "scraped/radiographer_interventional_job_desc": [
     "fefc99d355d1b23e7bce1f04c466b643293f7e594d93eab7a83914639c1541e1",

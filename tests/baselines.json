@@ -1,4 +1,44 @@
 {
+  "cases/autofit-indent-first-line": {
+    "jaccard": 0.2766,
+    "ssim": 0.4787,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4231,
+    "a11y_text": 1.0
+  },
+  "cases/autofit-indent-no-indent": {
+    "jaccard": 0.27,
+    "ssim": 0.4643,
+    "text_boundary": 0.75,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4231,
+    "a11y_text": 1.0
+  },
+  "cases/autofit-indent-positive-left": {
+    "jaccard": 0.2916,
+    "ssim": 0.4674,
+    "text_boundary": 0.75,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4231,
+    "a11y_text": 1.0
+  },
+  "cases/autofit-indent-right-indent": {
+    "jaccard": 0.2914,
+    "ssim": 0.4903,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4231,
+    "a11y_text": 1.0
+  },
   "cases/case1": {
     "jaccard": 0.6109,
     "ssim": 0.9025,
@@ -1333,6 +1373,16 @@
     "a11y_struct": 1.0,
     "a11y_text": 0.0
   },
+  "cases/case221": {
+    "jaccard": 0.6706,
+    "ssim": 0.8265,
+    "text_boundary": 0.7895,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8333,
+    "a11y_text": 0.563
+  },
   "cases/case23": {
     "jaccard": 0.6822,
     "ssim": 0.8944,
@@ -2151,6 +2201,616 @@
     "a11y_struct": 0.5455,
     "a11y_text": 1.0
   },
+  "cases/cell-inline-body": {
+    "jaccard": 0.9352,
+    "ssim": 0.9753,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4444,
+    "a11y_text": 1.0
+  },
+  "cases/cell-inline-exact": {
+    "jaccard": 0.9548,
+    "ssim": 0.9669,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4444,
+    "a11y_text": 1.0
+  },
+  "cases/cell-inline-header": {
+    "jaccard": 0.9664,
+    "ssim": 0.9756,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/cell-inline-nested": {
+    "jaccard": 0.9352,
+    "ssim": 0.9753,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4667,
+    "a11y_text": 1.0
+  },
+  "cases/cell-inline-tabbed": {
+    "jaccard": 0.9352,
+    "ssim": 0.9746,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4444,
+    "a11y_text": 1.0
+  },
+  "cases/clear-break-lines-one": {
+    "jaccard": 0.8119,
+    "ssim": 0.9354,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/clear-break-lines-three": {
+    "jaccard": 0.8119,
+    "ssim": 0.9342,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/clear-break-lines-two": {
+    "jaccard": 0.8119,
+    "ssim": 0.9355,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/clear-break-lines-two-no-float": {
+    "jaccard": 0.8934,
+    "ssim": 0.9802,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/cont-first-empty-overflow": {
+    "jaccard": 0.7944,
+    "ssim": 0.9768,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/cont-first-first-fits": {
+    "jaccard": 0.7742,
+    "ssim": 0.9691,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/cont-first-text-overflow": {
+    "jaccard": 0.7933,
+    "ssim": 0.9767,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/empty-frame-control": {
+    "jaccard": 0.2914,
+    "ssim": 0.4954,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/fullwidth-float-empty-clear": {
+    "jaccard": 0.9061,
+    "ssim": 0.9776,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4444,
+    "a11y_text": 1.0
+  },
+  "cases/header-inline-connector-behind": {
+    "jaccard": 0.9587,
+    "ssim": 0.9772,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-inline-connector-foreground": {
+    "jaccard": 0.9629,
+    "ssim": 0.9799,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-inline-connector-line-only": {
+    "jaccard": 0.9485,
+    "ssim": 0.9762,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-inline-connector-picture-only": {
+    "jaccard": 0.925,
+    "ssim": 0.9513,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-textbox-line-metrics-bottom": {
+    "jaccard": 0.7936,
+    "ssim": 0.8949,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-textbox-line-metrics-center": {
+    "jaccard": 0.7936,
+    "ssim": 0.8993,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-textbox-line-metrics-exact": {
+    "jaccard": 0.7936,
+    "ssim": 0.9002,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-textbox-line-metrics-multiline": {
+    "jaccard": 0.7959,
+    "ssim": 0.9014,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-textbox-line-metrics-tahoma": {
+    "jaccard": 0.7936,
+    "ssim": 0.8955,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/header-textbox-line-metrics-times": {
+    "jaccard": 0.7107,
+    "ssim": 0.9169,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/leading-picture-image-fits": {
+    "jaccard": 0.8999,
+    "ssim": 0.9932,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/leading-picture-image-no-spaces": {
+    "jaccard": 0.8993,
+    "ssim": 0.9932,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/leading-picture-image-overflow": {
+    "jaccard": 0.9081,
+    "ssim": 0.9949,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/leading-table-clear-empty-clear": {
+    "jaccard": 0.6672,
+    "ssim": 0.9409,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/leading-table-clear-leading-clear": {
+    "jaccard": 0.8526,
+    "ssim": 0.9347,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/leading-table-clear-leading-no-clear": {
+    "jaccard": 0.6241,
+    "ssim": 0.7357,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/leading-table-clear-space-only-clear": {
+    "jaccard": 0.8594,
+    "ssim": 0.9409,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/leading-table-clear-trailing-clear": {
+    "jaccard": 0.8064,
+    "ssim": 0.9071,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/min-width-run-spaces": {
+    "jaccard": 0.6996,
+    "ssim": 0.9164,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4,
+    "a11y_text": 1.0
+  },
+  "cases/min-width-run-split": {
+    "jaccard": 0.7603,
+    "ssim": 0.9451,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4,
+    "a11y_text": 1.0
+  },
+  "cases/min-width-run-whole": {
+    "jaccard": 0.7827,
+    "ssim": 0.9571,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4,
+    "a11y_text": 1.0
+  },
+  "cases/nested-float-no-spacer-inline": {
+    "jaccard": 0.2837,
+    "ssim": 0.4447,
+    "text_boundary": 0.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4,
+    "a11y_text": 1.0
+  },
+  "cases/nested-float-spacer-inline": {
+    "jaccard": 0.7664,
+    "ssim": 0.9605,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7619,
+    "a11y_text": 1.0
+  },
+  "cases/nested-float-spacer-only": {
+    "jaccard": 0.874,
+    "ssim": 0.9538,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4667,
+    "a11y_text": 1.0
+  },
+  "cases/nested-inline-spacer-inline": {
+    "jaccard": 0.8892,
+    "ssim": 0.9583,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4762,
+    "a11y_text": 1.0
+  },
+  "cases/page-header-frame-marker": {
+    "jaccard": 0.9102,
+    "ssim": 0.9722,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/page-header-ordinary-marker": {
+    "jaccard": 0.9102,
+    "ssim": 0.97,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/paragraph-offset-frame-exact": {
+    "jaccard": 0.8015,
+    "ssim": 0.9669,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5833,
+    "a11y_text": 0.72
+  },
+  "cases/paragraph-offset-frame-immediate": {
+    "jaccard": 0.9081,
+    "ssim": 0.9694,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4444,
+    "a11y_text": 0.72
+  },
+  "cases/paragraph-offset-frame-immediate-long": {
+    "jaccard": 0.7485,
+    "ssim": 0.9493,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4444,
+    "a11y_text": 0.9426
+  },
+  "cases/paragraph-offset-frame-no-frame": {
+    "jaccard": 0.933,
+    "ssim": 0.9769,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5833,
+    "a11y_text": 1.0
+  },
+  "cases/picture-padding-mixed": {
+    "jaccard": 0.9978,
+    "ssim": 0.9966,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5833,
+    "a11y_text": 1.0
+  },
+  "cases/picture-padding-no-padding": {
+    "jaccard": 0.9978,
+    "ssim": 0.9978,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/picture-padding-no-placeholder": {
+    "jaccard": 0.9978,
+    "ssim": 0.9966,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5833,
+    "a11y_text": 1.0
+  },
+  "cases/picture-padding-small-picture-font": {
+    "jaccard": 0.9978,
+    "ssim": 0.9966,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5833,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-one-tab": {
+    "jaccard": 0.8594,
+    "ssim": 0.9409,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-short-one-tab": {
+    "jaccard": 0.8594,
+    "ssim": 0.9463,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5455,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-short-three-tab": {
+    "jaccard": 0.8594,
+    "ssim": 0.9433,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5455,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-short-two-no-tab": {
+    "jaccard": 0.5959,
+    "ssim": 0.9455,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5455,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-short-two-tab": {
+    "jaccard": 0.8594,
+    "ssim": 0.9455,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5455,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-short-two-tab-mixed-spacing": {
+    "jaccard": 0.7548,
+    "ssim": 0.944,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5455,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-three-tab": {
+    "jaccard": 0.8594,
+    "ssim": 0.9442,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-two-no-tab": {
+    "jaccard": 0.6205,
+    "ssim": 0.9405,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/repeated-clear-tab-two-tab": {
+    "jaccard": 0.8594,
+    "ssim": 0.9405,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/space-only-frame": {
+    "jaccard": 0.2914,
+    "ssim": 0.4954,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/tab-break": {
+    "jaccard": 0.6282,
+    "ssim": 0.9326,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/tab-no-break": {
+    "jaccard": 0.7436,
+    "ssim": 0.894,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "fonts/arial": {
     "jaccard": 0.8374,
     "ssim": 0.9466,
@@ -2432,8 +3092,8 @@
     "a11y_text": 0.9209
   },
   "scraped/bahamas_sustainable_development_hosting": {
-    "jaccard": 0.7177,
-    "ssim": 0.9021,
+    "jaccard": 0.754,
+    "ssim": 0.9078,
     "text_boundary": 0.9429,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2911,9 +3571,9 @@
     "a11y_text": 0.9905
   },
   "scraped/erasmus_plus_staff_mobility_agreement": {
-    "jaccard": 0.6986,
-    "ssim": 0.884,
-    "text_boundary": 0.0265,
+    "jaccard": 0.7246,
+    "ssim": 0.8897,
+    "text_boundary": 0.9569,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -3335,14 +3995,14 @@
     "a11y_text": 1.0
   },
   "scraped/pendulum_mechanics_oscillation_lab": {
-    "jaccard": 0.1832,
-    "ssim": 0.3814,
-    "text_boundary": 0.1277,
+    "jaccard": 0.4577,
+    "ssim": 0.6402,
+    "text_boundary": 0.5625,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9496,
-    "a11y_text": 0.9753
+    "a11y_text": 0.9569
   },
   "scraped/physical_education_curriculum_map": {
     "jaccard": 0.7778,
@@ -3460,8 +4120,8 @@
     "a11y_text": 1.0
   },
   "scraped/premises_approval_registration_form": {
-    "jaccard": 0.6924,
-    "ssim": 0.8936,
+    "jaccard": 0.703,
+    "ssim": 0.894,
     "text_boundary": 0.9208,
     "ua_fail": 0,
     "a11y_missing": 0,
