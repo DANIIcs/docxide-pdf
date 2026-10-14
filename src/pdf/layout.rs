@@ -837,6 +837,8 @@ pub(super) struct RightRegion {
 
 #[derive(Default)]
 pub(super) struct TextLine {
+    /// An empty line retained by a wrapping tab; its consumed tabs size the line.
+    pub(super) leading_tab_wrap: bool,
     pub(super) chunks: Vec<WordChunk>,
     pub(super) total_width: f32,
     pub(super) ends_with_break: bool,
@@ -878,6 +880,16 @@ pub(super) fn size_lines_by_own_runs(
     let by_pdf_name: HashMap<&str, &FontEntry> =
         fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
     for line in lines.iter_mut() {
+        if line.leading_tab_wrap {
+            if let Some(fs) = line.break_font_size {
+                line.pitch = Some(super::helpers::resolve_line_h(
+                    line_spacing,
+                    fs,
+                    line.break_lhr,
+                ));
+            }
+            continue;
+        }
         if line.chunks.iter().any(|c| c.inline_image_name.is_some()) {
             continue;
         }
@@ -2287,6 +2299,7 @@ pub(super) fn build_tabbed_line(
     // or anywhere after an explicit stop past the margin before compat 15.
     let mut line_reach = 0.0f32;
 
+    let mut tab_line_metrics: Option<(f32, Option<f32>)> = None;
     for (seg_idx, (seg_runs, seg_indices, tab_before, tab_run_before)) in
         segments.iter().enumerate()
     {
@@ -2405,10 +2418,22 @@ pub(super) fn build_tabbed_line(
                 // tabs take two lines in Word); one tab on an empty line stays.
                 && (!all_chunks.is_empty() || current_x > 0.0)
             {
-                result_lines.push(TextLine {
+                let mut line = TextLine {
                     justify_from: std::mem::take(&mut justify_from),
                     ..finish_line(&mut all_chunks)
-                });
+                };
+                // Leading tabs occupy a line even without printable chunks.
+                // The overflowing tab moves with its following word; the
+                // tabs already consumed size the otherwise blank line.
+                if line.chunks.is_empty()
+                    && let Some((font_size, lhr)) = tab_line_metrics
+                {
+                    line.break_font_size = Some(font_size);
+                    line.break_lhr = lhr;
+                    line.leading_tab_wrap = true;
+                }
+                tab_line_metrics = None;
+                result_lines.push(line);
                 tab_wrapped_line = true;
                 line_reach = 0.0;
                 current_x = 0.0;
@@ -2423,6 +2448,18 @@ pub(super) fn build_tabbed_line(
             }
             if stop.alignment != TabAlignment::Left {
                 line_reach = line_reach.max(effective_tab_target);
+            }
+            if let Some(tab_run) = tab_run_before {
+                let entry = seen_fonts
+                    .get(&crate::fonts::font_key(tab_run))
+                    .expect("font registered");
+                let fs = effective_font_size(tab_run, entry);
+                let lhr = entry.line_h_ratio;
+                if tab_line_metrics.is_none_or(|(old_fs, old_lhr)| {
+                    fs * lhr.unwrap_or(1.2) > old_fs * old_lhr.unwrap_or(1.2)
+                }) {
+                    tab_line_metrics = Some((fs, lhr));
+                }
             }
 
             // Draw leader fill between end of previous text and start of aligned text
@@ -2511,6 +2548,7 @@ pub(super) fn build_tabbed_line(
                     ..finish_line_with_break(&mut all_chunks)
                 });
                 tab_wrapped_line = false;
+                tab_line_metrics = None;
                 line_reach = 0.0;
                 current_x = 0.0;
                 is_first_line = false;
@@ -2614,6 +2652,7 @@ pub(super) fn build_tabbed_line(
                         ..finish_line(&mut all_chunks)
                     });
                     tab_wrapped_line = false;
+                    tab_line_metrics = None;
                     line_reach = 0.0;
                     current_x = 0.0;
                     is_first_line = false;
