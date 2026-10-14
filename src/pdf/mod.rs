@@ -2648,6 +2648,31 @@ fn render_paragraph_block(
             },
         )
     };
+    // A pure one-break anchor can be taller than a short floating table.
+    // In that case its first line extends below the float and occupies flow
+    // height; dropping it also drops a full line before the paragraph mark.
+    let short_empty_clear = para.clears_floats
+        && para.runs.iter().filter(|r| r.is_line_break).count() == 1
+        && para
+            .runs
+            .iter()
+            .all(|r| r.text.is_empty() && !r.is_tab && r.inline_image.is_none())
+        && para.image.is_none()
+        && para.inline_chart.is_none()
+        && para.smartart.is_empty()
+        && para.floating_images.is_empty()
+        && para.textboxes.is_empty()
+        && state.pb.float_zone.as_ref().is_some_and(|zone| {
+            let first_pitch = para
+                .runs
+                .iter()
+                .find(|r| r.is_line_break)
+                .map_or(line_h, |r| {
+                    let lhr = break_run_lhr(&effective_runs, r.font_size, ctx.fonts);
+                    resolve_line_h(effective_ls, r.font_size, lhr)
+                });
+            zone.from_table && state.pb.slot_top - inter_gap - first_pitch < zone.bottom_y
+        });
     // A clearing break that opens the anchor paragraph of the floating table
     // above it sits beside that table's top; only what follows the break comes
     // below the table (indigenous_innovation's defined terms: one line, not two).
@@ -2655,6 +2680,7 @@ fn render_paragraph_block(
     // (case129's full-width table: both lines below it), so ask the table's
     // own extent.
     if para.clears_floats
+        && !short_empty_clear
         && block_idx
             .checked_sub(1)
             .and_then(|i| section_blocks.get(i))
