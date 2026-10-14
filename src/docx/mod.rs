@@ -413,9 +413,29 @@ pub(super) fn math_run_text(r: roxmltree::Node) -> String {
         .collect()
 }
 
-/// A WordprocessingML twips attribute in points.
+/// A WordprocessingML twips attribute in points. ST_TwipsMeasure also
+/// takes a universal measure such as "10mm" (§22.9.2.15): a page written
+/// with `w:left="10mm"` lost its margins to the 1in default.
 pub(super) fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
-    f32_attr(node, (WML_NS, attr)).map(twips_to_pts)
+    let v = node.attribute((WML_NS, attr))?;
+    v.parse::<f32>()
+        .ok()
+        .map(twips_to_pts)
+        .or_else(|| universal_measure_pt(v))
+}
+
+fn universal_measure_pt(v: &str) -> Option<f32> {
+    let per_unit = [
+        ("mm", 72.0 / 25.4),
+        ("cm", 72.0 / 2.54),
+        ("in", 72.0),
+        ("pt", 1.0),
+        ("pc", 12.0),
+        ("pi", 12.0),
+    ];
+    per_unit
+        .iter()
+        .find_map(|(unit, k)| Some(v.strip_suffix(unit)?.parse::<f32>().ok()? * k))
 }
 
 pub(super) fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder> {
@@ -1258,6 +1278,19 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn twips_take_universal_measures() {
+        let doc = roxmltree::Document::parse(
+            r#"<w:m xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:a="1440" w:b="10mm" w:c="1in" w:d="-2.5pt"/>"#,
+        )
+        .unwrap();
+        let n = doc.root_element();
+        assert_eq!(super::twips_attr(n, "a"), Some(72.0));
+        assert!((super::twips_attr(n, "b").unwrap() - 28.346).abs() < 0.01);
+        assert_eq!(super::twips_attr(n, "c"), Some(72.0));
+        assert_eq!(super::twips_attr(n, "d"), Some(-2.5));
+    }
+
     use super::*;
 
     #[test]
