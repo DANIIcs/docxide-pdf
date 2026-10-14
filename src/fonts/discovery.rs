@@ -53,15 +53,22 @@ fn font_family_names(face: &Face) -> (Vec<String>, bool) {
     (names, true)
 }
 
-/// Returns `(names, bold, italic, mac_roman_only)` — one entry with ALL localized
-/// family names.
-fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, bool, bool)> {
+/// Returns `(names, bold, italic, mac_roman_only, off_weight)` — one entry with
+/// ALL localized family names.
+fn read_font_style(
+    data: &[u8],
+    face_index: u32,
+) -> Option<(Vec<String>, bool, bool, bool, bool)> {
     let face = Face::parse(data, face_index).ok()?;
     let (names, mac_roman_only) = font_family_names(&face);
     if names.is_empty() {
         return None;
     }
-    Some((names, face.is_bold(), face.is_italic(), mac_roman_only))
+    // Thin, Light, Black… faces that share the family name of the regular
+    // and bold ones (Apple's HelveticaNeue.ttc: only its Thin face carries a
+    // Unicode family name, so it outranked the Mac-Roman-only Regular).
+    let off_weight = !(350..=750).contains(&face.weight().to_number());
+    Some((names, face.is_bold(), face.is_italic(), mac_roman_only, off_weight))
 }
 
 fn font_directories() -> Vec<PathBuf> {
@@ -132,6 +139,8 @@ fn scan_font_dirs() -> FontLookup {
     // Mac-Roman-only faces fill in only the families nothing else provides, so
     // Apple's Symbol never shadows the vendored Microsoft Symbol (bullets).
     let mut mac_roman_index = FontLookup::new();
+    // Off-weight faces fill in only the styles no regular-weight face provides.
+    let mut off_weight_index = FontLookup::new();
     let dirs = font_directories();
 
     let no_cache = env::var("DOCXSIDE_NO_FONT_CACHE").is_ok();
@@ -183,7 +192,9 @@ fn scan_font_dirs() -> FontLookup {
             for file_path in &font_files {
                 if let Some(cached_file) = cache.files.get(file_path) {
                     for face in &cached_file.faces {
-                        let tier = if face.mac_roman_only {
+                        let tier = if face.off_weight {
+                            &mut off_weight_index
+                        } else if face.mac_roman_only {
                             &mut mac_roman_index
                         } else {
                             &mut index
@@ -213,11 +224,13 @@ fn scan_font_dirs() -> FontLookup {
             let face_count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
             let mut faces = Vec::new();
             for face_idx in 0..face_count {
-                if let Some((families, bold, italic, mac_roman_only)) =
+                if let Some((families, bold, italic, mac_roman_only, off_weight)) =
                     read_font_style(&data, face_idx)
                 {
                     for family in families {
-                        let tier = if mac_roman_only {
+                        let tier = if off_weight {
+                            &mut off_weight_index
+                        } else if mac_roman_only {
                             &mut mac_roman_index
                         } else {
                             &mut index
@@ -230,6 +243,7 @@ fn scan_font_dirs() -> FontLookup {
                             italic,
                             face_index: face_idx,
                             mac_roman_only,
+                            off_weight,
                         });
                     }
                 }
@@ -244,6 +258,9 @@ fn scan_font_dirs() -> FontLookup {
             mac_only.insert(slot.key().0.clone());
             slot.insert(value);
         }
+    }
+    for (key, value) in off_weight_index {
+        index.entry(key).or_insert(value);
     }
     let _ = MAC_ONLY_FAMILIES.set(mac_only);
 
