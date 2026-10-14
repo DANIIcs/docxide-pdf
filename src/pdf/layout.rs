@@ -1868,25 +1868,22 @@ pub(super) fn build_paragraph_lines(
             } else {
                 (proposed_x, ww)
             };
-            if overflows
-                && cjk.squeeze_spaces
-                && (need_space || is_continuation)
-                && !in_right_region
-                && word_x + word_w / 2.0 <= cur_max
-                && proposed_x + ww - cur_max
-                    <= SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w)
-            {
-                overflows = false;
-                squeezed_lines.push(lines.len());
-            }
-            if overflows
-                && cjk.squeeze_line
-                && (need_space || is_continuation)
-                && !in_right_region
-                && proposed_x + ww - cur_max <= SQUEEZE_LINE_SPACES * entry.space_width(eff_fs)
-            {
-                overflows = false;
-                squeezed_lines.push(lines.len());
+            if overflows && (need_space || is_continuation) && !in_right_region {
+                // How far the word may overflow and stay: Word 2013+ narrows
+                // the spaces, wpJustification the whole line.
+                let space_room = (cjk.squeeze_spaces && word_x + word_w / 2.0 <= cur_max)
+                    .then(|| SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w));
+                let line_room = cjk
+                    .squeeze_line
+                    .then(|| SQUEEZE_LINE_SPACES * entry.space_width(eff_fs));
+                if [space_room, line_room]
+                    .into_iter()
+                    .flatten()
+                    .any(|room| proposed_x + ww - cur_max <= room)
+                {
+                    overflows = false;
+                    squeezed_lines.push(lines.len());
+                }
             }
 
             // compressPunctuation: before wrapping, make room for this word by

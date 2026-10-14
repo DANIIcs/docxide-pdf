@@ -197,31 +197,32 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     pub(in crate::docx) rels: &'a HashMap<String, String>,
     pub(in crate::docx) zip: &'a mut zip::ZipArchive<R>,
     pub(in crate::docx) numbering: &'a numbering::NumberingInfo,
+    /// The body's comment ranges (`comment_ranges`); empty for headers,
+    /// footers and notes.
+    pub(in crate::docx) comments: CommentRanges,
+}
+
+#[derive(Default)]
+pub(in crate::docx) struct CommentRanges {
     /// Comment ids Word shows a balloon for: referenced by a
-    /// `w:commentReference` in the body (`comment_ranges`).
-    pub(in crate::docx) referenced_comments: std::collections::HashSet<u32>,
+    /// `w:commentReference` in the body.
+    pub(in crate::docx) shown: std::collections::HashSet<u32>,
     /// Comment ids whose range holds no text (or that have no range).
-    pub(in crate::docx) textless_comments: std::collections::HashSet<u32>,
+    pub(in crate::docx) textless: std::collections::HashSet<u32>,
     /// Comment ids open where a paragraph starts, by its byte offset.
-    pub(in crate::docx) comments_open_at: HashMap<usize, Vec<u32>>,
+    pub(in crate::docx) open_at: HashMap<usize, Vec<u32>>,
+    /// Every `w:commentReference` id in document order.
+    pub(in crate::docx) reference_order: Vec<u32>,
 }
 
 /// Comment ranges as Word reads them, over the whole body (a range may start
-/// between blocks and span paragraphs and tables): the shown ids whose range
-/// encloses no text, the ids already open where each paragraph starts (keyed
-/// by the paragraph's byte offset), and the ids Word shows a balloon for.
-fn comment_ranges(
-    root: roxmltree::Node,
-) -> (
-    std::collections::HashSet<u32>,
-    HashMap<usize, Vec<u32>>,
-    std::collections::HashSet<u32>,
-) {
+/// between blocks and span paragraphs and tables).
+fn comment_ranges(root: roxmltree::Node) -> CommentRanges {
     let id = |n: roxmltree::Node| n.attribute((WML_NS, "id"))?.parse::<u32>().ok();
     let mut open: Vec<u32> = Vec::new();
     let mut open_at = HashMap::new();
     let mut with_text = std::collections::HashSet::new();
-    let mut referenced = std::collections::HashSet::new();
+    let mut reference_order = Vec::new();
     let mut unballooned = std::collections::HashSet::new();
     for n in root.descendants() {
         if n.has_tag_name((WML_NS, "commentRangeStart")) {
@@ -244,7 +245,7 @@ fn comment_ranges(
                 unballooned.extend(id(n));
             }
         } else if n.has_tag_name((WML_NS, "commentReference")) {
-            referenced.extend(id(n));
+            reference_order.extend(id(n));
         } else if n.has_tag_name((WML_NS, "t")) && n.text().is_some_and(|t| !t.is_empty()) {
             with_text.extend(open.iter().copied());
         } else if n.has_tag_name((WML_NS, "p")) && !open.is_empty() {
@@ -252,8 +253,14 @@ fn comment_ranges(
         }
     }
     // An empty range there keeps its balloon (it hangs at its reference).
+    let referenced: std::collections::HashSet<u32> = reference_order.iter().copied().collect();
     let shown = &referenced - &(&unballooned & &with_text);
-    (&shown - &with_text, open_at, shown)
+    CommentRanges {
+        textless: &shown - &with_text,
+        shown,
+        open_at,
+        reference_order,
+    }
 }
 
 pub(crate) fn is_east_asian_char(ch: char) -> bool {
@@ -1008,16 +1015,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
     let default_line_pitch = styles.defaults.font_size * 1.2;
 
-    let (textless_comments, comments_open_at, referenced_comments) = comment_ranges(root);
+    let comment_ranges = comment_ranges(root);
     // Word numbers balloons in the order of their reference marks.
     let mut next_index = 0;
-    for n in root.descendants() {
-        if n.has_tag_name((WML_NS, "commentReference"))
-            && let Some(c) = n
-                .attribute((WML_NS, "id"))
-                .and_then(|v| v.parse::<u32>().ok())
-                .and_then(|id| comments.get_mut(&id))
-        {
+    for id in &comment_ranges.reference_order {
+        if let Some(c) = comments.get_mut(id) {
             next_index += 1;
             c.display_index = next_index;
         }
@@ -1028,9 +1030,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         rels: &rels,
         zip,
         numbering: &numbering,
-        referenced_comments,
-        textless_comments,
-        comments_open_at,
+        comments: comment_ranges,
     };
 
     let mut sections: Vec<Section> = Vec::new();

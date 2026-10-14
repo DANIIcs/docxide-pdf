@@ -143,15 +143,6 @@ fn field_args(s: &str) -> Vec<String> {
     args
 }
 
-/// Vertical bands (top, bottom from the page top) of the header's page- or
-/// margin-anchored frames that forbid text beside them (`w:wrap`
-/// none/notBeside with an explicit `w:h`). An in-flow header line that would
-/// overlap such a band is laid out below it: bosch's first-page header has a
-/// 106pt "Persbericht" frame at 33pt, its first two 14.75pt lines fit above
-/// it and the third lands at 139pt, which is why Word starts the body at
-/// 153pt while the top margin says 86pt (annotation #195). ponytail: `w:h`
-/// is taken as the frame height whatever `w:hRule` says; grow it by the
-/// frame's content height if a frame ever overflows it.
 /// Header lines size as body lines do: runs of nothing but spaces or tabs
 /// size nothing, and a line left with nothing takes the paragraph mark's
 /// metrics. A header of a tab and spaces in 11pt Tahoma under a 20pt mark is
@@ -186,6 +177,15 @@ fn hf_run_metrics(
     (fs, lhr, ar)
 }
 
+/// Vertical bands (top, bottom from the page top) of the header's page- or
+/// margin-anchored frames that forbid text beside them (`w:wrap`
+/// none/notBeside with an explicit `w:h`). An in-flow header line that would
+/// overlap such a band is laid out below it: bosch's first-page header has a
+/// 106pt "Persbericht" frame at 33pt, its first two 14.75pt lines fit above
+/// it and the third lands at 139pt, which is why Word starts the body at
+/// 153pt while the top margin says 86pt (annotation #195). ponytail: `w:h`
+/// is taken as the frame height whatever `w:hRule` says; grow it by the
+/// frame's content height if a frame ever overflows it.
 fn blocking_frame_bands(hf: &HeaderFooter, sp: &SectionProperties) -> Vec<(f32, f32)> {
     hf.blocks
         .iter()
@@ -424,9 +424,45 @@ fn compute_header_height(
     header_height(hf, ctx, sp, is_header, true)
 }
 
+/// A header/footer (by address, it lives as long as the document) and the
+/// section geometry its measured height depends on.
+pub(super) type HfHeightKey = (usize, [u32; 8], bool, bool);
+
 /// `compute_header_height`, optionally without the floats: the extent of the
 /// header's own text flow.
 fn header_height(
+    hf: &HeaderFooter,
+    ctx: &RenderContext,
+    sp: &SectionProperties,
+    is_header: bool,
+    with_floats: bool,
+) -> f32 {
+    let geometry = [
+        sp.page_width,
+        sp.page_height,
+        sp.margin_left,
+        sp.margin_right,
+        sp.margin_top,
+        sp.margin_bottom,
+        sp.header_margin,
+        sp.footer_margin,
+    ]
+    .map(f32::to_bits);
+    let key = (
+        hf as *const HeaderFooter as usize,
+        geometry,
+        is_header,
+        with_floats,
+    );
+    if let Some(&h) = ctx.hf_heights.borrow().get(&key) {
+        return h;
+    }
+    let h = measure_header_height(hf, ctx, sp, is_header, with_floats);
+    ctx.hf_heights.borrow_mut().insert(key, h);
+    h
+}
+
+fn measure_header_height(
     hf: &HeaderFooter,
     ctx: &RenderContext,
     sp: &SectionProperties,
@@ -440,15 +476,13 @@ fn header_height(
     // How far page- or margin-placed floats reach from the header (footer)
     // margin, whatever the flow above them.
     let mut placed_extent = 0.0f32;
-    let bands = if is_header {
-        blocking_frame_bands(hf, sp)
+    let (bands, table_bands) = if is_header {
+        (
+            blocking_frame_bands(hf, sp),
+            blocking_table_bands(hf, sp, ctx),
+        )
     } else {
-        Vec::new()
-    };
-    let table_bands = if is_header {
-        blocking_table_bands(hf, sp, ctx)
-    } else {
-        Vec::new()
+        Default::default()
     };
     for block in &hf.blocks {
         match block {
@@ -784,15 +818,13 @@ pub(super) fn render_header_footer(
     // A header can hold several wrapping floats (e.g. a logo on each side of a
     // centered letterhead) — all of them constrain the text bounds together.
     let mut hdr_fz: Vec<HfFloatZone> = Vec::new();
-    let bands = if is_header {
-        blocking_frame_bands(hf, sp)
+    let (bands, table_bands) = if is_header {
+        (
+            blocking_frame_bands(hf, sp),
+            blocking_table_bands(hf, sp, ctx),
+        )
     } else {
-        Vec::new()
-    };
-    let table_bands = if is_header {
-        blocking_table_bands(hf, sp, ctx)
-    } else {
-        Vec::new()
+        Default::default()
     };
     for block in &hf.blocks {
         match block {
@@ -988,25 +1020,15 @@ pub(super) fn render_header_footer(
                     // Side borders as in the body: their inner edge `space`
                     // plus Word's 1.47 / 1.73pt outside the text.
                     let v_bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
-                    if let Some(b) = &bdr.left {
-                        let x = box_left - b.space_pt - super::LEFT_BORDER_GAP - b.width_pt / 2.0;
-                        stroke_segment(
-                            content,
-                            (x, box_top),
-                            (x, v_bottom),
-                            b.width_pt,
-                            Some(b.color),
-                        );
-                    }
-                    if let Some(b) = &bdr.right {
-                        let x = box_right + b.space_pt + super::RIGHT_BORDER_GAP + b.width_pt / 2.0;
-                        stroke_segment(
-                            content,
-                            (x, box_top),
-                            (x, v_bottom),
-                            b.width_pt,
-                            Some(b.color),
-                        );
+                    let (left_x, right_x) = super::side_border_outsets(bdr, true);
+                    for (b, x) in [
+                        (&bdr.left, box_left - left_x),
+                        (&bdr.right, box_right + right_x),
+                    ] {
+                        if let Some(b) = b {
+                            let (top, bottom) = ((x, box_top), (x, v_bottom));
+                            stroke_segment(content, top, bottom, b.width_pt, Some(b.color));
+                        }
                     }
                 };
                 // Paragraph shading under the text, out to the side borders'
@@ -1014,16 +1036,8 @@ pub(super) fn render_header_footer(
                 // address bar with white text drew as white on white).
                 let draw_para_shading = |content: &mut Content, box_bottom: f32| {
                     let Some(color) = para.shading else { return };
-                    let left = box_left
-                        - bdr
-                            .left
-                            .as_ref()
-                            .map_or(0.0, |b| b.space_pt + super::LEFT_BORDER_GAP);
-                    let right = box_right
-                        + bdr
-                            .right
-                            .as_ref()
-                            .map_or(0.0, |b| b.space_pt + super::RIGHT_BORDER_GAP);
+                    let (left_out, right_out) = super::side_border_outsets(bdr, false);
+                    let (left, right) = (box_left - left_out, box_right + right_out);
                     let bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
                     content.save_state();
                     super::color::fill_rgb(content, color);

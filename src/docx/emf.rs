@@ -156,7 +156,7 @@ pub(crate) fn emf_to_raster(data: &[u8]) -> Option<Vec<u8>> {
     for_each_raw_record(data, |rec_type, payload| {
         match rec_type {
             81 if bmp.is_none() => bmp = decode_stretchdibits(payload),
-            76 | 77 if bmp.is_none() => bmp = decode_blt_bitmap(payload),
+            76 | 77 if bmp.is_none() => bmp = decode_dib_at(payload, 76),
             t if paints_vector(t) => vector = true,
             _ => {}
         }
@@ -319,27 +319,14 @@ fn decode(rec_type: u32, payload: &[u8]) -> EmfRecord {
 /// (`offBitsSrc`/`cbBitsSrc`) are addressed from the record start, i.e. 8 bytes
 /// before the payload. Returns them wrapped as a BMP file.
 fn decode_stretchdibits(payload: &[u8]) -> Option<Vec<u8>> {
-    let u32_at = |off: usize| -> Option<usize> {
-        payload
-            .get(off..off + 4)
-            .map(|s| u32::from_le_bytes(s.try_into().unwrap()) as usize)
-    };
-    let part = |off: usize, len: usize| -> Option<&[u8]> {
-        let start = off.checked_sub(8)?;
-        payload.get(start..start.checked_add(len)?)
-    };
-    let bmi = part(u32_at(40)?, u32_at(44)?)?;
-    let bits = part(u32_at(48)?, u32_at(52)?)?;
-    if bmi.len() < 40 || bits.is_empty() {
-        return None;
-    }
-    Some(super::wmf::bmp_from_parts(bmi, bits))
+    decode_dib_at(payload, 40)
 }
 
-/// EMR_BITBLT / EMR_STRETCHBLT with a source bitmap: the same BITMAPINFO and
-/// bits fields as STRETCHDIBITS, after the source transform and colour
-/// (`offBmiSrc` at payload offset 76, [MS-EMF] 2.3.1.2 and 2.3.1.6).
-fn decode_blt_bitmap(payload: &[u8]) -> Option<Vec<u8>> {
+/// The offBmiSrc/cbBmiSrc/offBitsSrc/cbBitsSrc fields of a bitmap record,
+/// starting at payload offset `fields`: 40 for STRETCHDIBITS, 76 for
+/// EMR_BITBLT / EMR_STRETCHBLT, whose source transform and colour come first
+/// ([MS-EMF] 2.3.1.2 and 2.3.1.6).
+fn decode_dib_at(payload: &[u8], fields: usize) -> Option<Vec<u8>> {
     let u32_at = |off: usize| -> Option<usize> {
         payload
             .get(off..off + 4)
@@ -349,8 +336,8 @@ fn decode_blt_bitmap(payload: &[u8]) -> Option<Vec<u8>> {
         let start = off.checked_sub(8)?;
         payload.get(start..start.checked_add(len)?)
     };
-    let bmi = part(u32_at(76)?, u32_at(80)?)?;
-    let bits = part(u32_at(84)?, u32_at(88)?)?;
+    let bmi = part(u32_at(fields)?, u32_at(fields + 4)?)?;
+    let bits = part(u32_at(fields + 8)?, u32_at(fields + 12)?)?;
     if bmi.len() < 40 || bits.is_empty() {
         return None;
     }

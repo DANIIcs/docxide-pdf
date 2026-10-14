@@ -12,6 +12,8 @@ const BALLOON_AREA: f32 = 279.7;
 /// the balloon area's end.
 const PANE_LEFT_GAP: f32 = 9.1;
 const PANE_RIGHT_GAP: f32 = 13.3;
+/// The balloon area width Word's zoom rounding works with (`page_zoom`).
+const ZOOM_BALLOON_AREA: f32 = 279.15;
 
 /// Word's zoom `(scale, tx, ty)` for a page of a document with comments: the
 /// text column plus a 279.7pt balloon area fills the page width, so 12pt text
@@ -23,7 +25,8 @@ const PANE_RIGHT_GAP: f32 = 13.3;
 /// reproduces all 148 zooms measured on print exports (Letter and A4, 54-90pt
 /// right margins), where the unrounded 279.7 missed one in six.
 pub(super) fn page_zoom(page_width: f32, page_height: f32, margin_right: f32) -> (f32, f32, f32) {
-    let scale = (page_width / (page_width - margin_right + 279.15) * 300.0).round() / 300.0;
+    let scale =
+        (page_width / (page_width - margin_right + ZOOM_BALLOON_AREA) * 300.0).round() / 300.0;
     // The zoomed page's top: the centred position floored to the 1/300in
     // grid, then two units up on Letter paper and two down on A4 (121 print
     // references; the print path's paper margins, presumably).
@@ -48,8 +51,7 @@ const CONNECTOR_RGB: [u8; 3] = [209, 52, 56];
 /// 1/300in unit (dashed 3 on, 3 off), the balloon border two.
 const CONNECTOR_WIDTH: f32 = 0.24;
 const BALLOON_BORDER: f32 = 0.48;
-const LABEL_RGB: [u8; 3] = [0, 0, 0];
-const BODY_RGB: [u8; 3] = [0, 0, 0];
+const TEXT_RGB: [u8; 3] = [0, 0, 0];
 
 /// Unzoomed: a balloon's gaps to the pane's left and right edges, and its
 /// text's inset (case63's balloons span 423.8-599.5, text from 427.0).
@@ -190,7 +192,7 @@ pub(super) fn render_comment_pane(
                 let body_part = &line_text[label.len()..];
                 let label_bytes = label_entry.encode(label_only);
                 content.begin_text();
-                fill_rgb(content, LABEL_RGB);
+                fill_rgb(content, TEXT_RGB);
                 content.set_font(Name(label_entry.pdf_name.as_bytes()), fs);
                 content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
                 content.show(Str(&label_bytes));
@@ -199,7 +201,7 @@ pub(super) fn render_comment_pane(
                     let label_w = label_entry.word_width(label_only, fs, false);
                     let body_bytes = body_entry.encode(body_part);
                     content.begin_text();
-                    fill_rgb(content, BODY_RGB);
+                    fill_rgb(content, TEXT_RGB);
                     content.set_font(Name(body_entry.pdf_name.as_bytes()), fs);
                     content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x + label_w, text_y]);
                     content.show(Str(&body_bytes));
@@ -208,7 +210,7 @@ pub(super) fn render_comment_pane(
             } else {
                 let body_bytes = body_entry.encode(line_text);
                 content.begin_text();
-                fill_rgb(content, BODY_RGB);
+                fill_rgb(content, TEXT_RGB);
                 content.set_font(Name(body_entry.pdf_name.as_bytes()), fs);
                 content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
                 content.show(Str(&body_bytes));

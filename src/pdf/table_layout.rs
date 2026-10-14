@@ -366,6 +366,18 @@ pub(super) fn auto_fit_columns(
         return table.col_widths.clone();
     }
 
+    // A nested table sized in twips (tblW dxa) keeps its grid like a top-level
+    // one: a survey's 465pt nested table inside an auto-width host fills it
+    // in Word, where content-fitting made it half as wide.
+    if available_width.is_some()
+        && !table.auto_width
+        && table.width_pct.is_none()
+        && !table.fixed_layout
+        && !table.grid_inferred
+    {
+        return auto_fit_columns(table, fonts, None, None);
+    }
+
     let cm = &table.cell_margins;
     let min_widths = min_content_widths(table, fonts);
 
@@ -442,47 +454,6 @@ pub(super) fn auto_fit_columns(
             .all(|(minimum, preferred)| minimum <= preferred)
     {
         return table.col_widths.clone();
-    }
-
-    // An explicitly sized, single-row nested table resolves its column
-    // preferences from tcW. A saved grid may describe the pre-edit split;
-    // when both totals agree, keep the requested cell widths instead of
-    // shrinking empty registration fields to their current text.
-    if available_width.is_some()
-        && !table.auto_width
-        && table.width_pct.is_none()
-        && !table.fixed_layout
-        && !table.grid_inferred
-        && table.rows.len() == 1
-        && table.rows[0].cells.len() == ncols
-        && table.rows[0].grid_before == 0
-        && table.rows[0]
-            .cells
-            .iter()
-            .all(|cell| cell.grid_span == 1 && cell.width > 0.0)
-    {
-        let preferred: Vec<f32> = table.rows[0].cells.iter().map(|cell| cell.width).collect();
-        let total: f32 = preferred.iter().sum();
-        let grid_total: f32 = table.col_widths.iter().sum();
-        // Word keeps an explicit nested width even when it exceeds the host
-        // cell's text area; it must not fall back to natural-width compaction.
-        if (total - grid_total).abs() <= 0.5 {
-            // Reuse the fixed-width base, including min-content redistribution:
-            // a narrow marker cell (e.g. the number sign) may need to grow.
-            return auto_fit_columns(table, fonts, None, None);
-        }
-    }
-
-    // A nested table sized in twips (tblW dxa) keeps its grid like a top-level
-    // one: a survey's 465pt nested table inside an auto-width host fills it
-    // in Word, where content-fitting made it half as wide.
-    if available_width.is_some()
-        && !table.auto_width
-        && table.width_pct.is_none()
-        && !table.fixed_layout
-        && !table.grid_inferred
-    {
-        return auto_fit_columns(table, fonts, None, None);
     }
 
     if available_width.is_some() && !table.fixed_layout {

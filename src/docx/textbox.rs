@@ -25,6 +25,8 @@ struct VmlBoxStyle {
     margin_top: f32,
     h_relative: HRelativeFrom,
     v_relative: VRelativeFrom,
+    /// A negative z-index puts the shape behind the text.
+    behind_text: bool,
 }
 
 /// Parse a VML shape `style` attribute (semicolon-separated `key:val`) into box
@@ -37,6 +39,7 @@ fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
         margin_top: 0.0,
         h_relative: HRelativeFrom::Column,
         v_relative: VRelativeFrom::Paragraph,
+        behind_text: false,
     };
     for part in style_str.split(';') {
         if let Some((key, val)) = part.trim().split_once(':') {
@@ -46,6 +49,7 @@ fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
                 "height" => s.height = parse_pt(val).unwrap_or(0.0),
                 "margin-left" => s.margin_left = parse_pt(val).unwrap_or(0.0),
                 "margin-top" => s.margin_top = parse_pt(val).unwrap_or(0.0),
+                "z-index" => s.behind_text = val.parse::<i64>().is_ok_and(|z| z < 0),
                 "mso-position-horizontal-relative" => {
                     s.h_relative = match val {
                         "page" => HRelativeFrom::Page,
@@ -738,7 +742,8 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         "oval" => Some("ellipse"),
         _ => None,
     };
-    let preset = vml_shape_preset(shape).or(element_preset)?;
+    let spt_preset = vml_shape_preset(shape);
+    let preset = spt_preset.or(element_preset)?;
 
     // VML fills white by default; only a written fillcolor is drawn
     // (ponytail: the implicit white fill would cover text we place behind).
@@ -750,7 +755,7 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
     // A shape named only by its element draws the default black outline
     // only when the stroke is written out, like the fill.
     let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"))
-        && (vml_shape_preset(shape).is_some()
+        && (spt_preset.is_some()
             || shape.attribute("stroked").is_some()
             || shape.attribute("strokecolor").is_some());
     if !stroked && fill.is_none() {
@@ -765,14 +770,7 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         .attribute("strokecolor")
         .and_then(parse_vml_color)
         .unwrap_or([0, 0, 0]);
-    // A negative z-index in the style puts the shape behind the text.
-    let behind_doc = shape.attribute("style").unwrap_or("").split(';').any(|p| {
-        p.split_once(':').is_some_and(|(k, v)| {
-            k.trim() == "z-index" && v.trim().parse::<i64>().is_ok_and(|z| z < 0)
-        })
-    });
 
-    let style_str = shape.attribute("style").unwrap_or("");
     let VmlBoxStyle {
         width,
         height,
@@ -780,7 +778,8 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         margin_top,
         h_relative,
         v_relative,
-    } = parse_vml_box_style(style_str);
+        behind_text,
+    } = parse_vml_box_style(shape.attribute("style").unwrap_or(""));
     if width <= 0.0 || height <= 0.0 {
         return None;
     }
@@ -801,7 +800,7 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         stroke_color: stroked.then_some(stroke_color),
         stroke_width,
         fill,
-        behind_doc,
+        behind_doc: behind_text,
         no_text_wrap: true,
         ..Textbox::default()
     })
@@ -844,6 +843,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         margin_top,
         h_relative,
         v_relative,
+        ..
     } = parse_vml_box_style(style_str);
 
     // VML shapes are stroked by default (black, 0.75pt) unless stroked="f".

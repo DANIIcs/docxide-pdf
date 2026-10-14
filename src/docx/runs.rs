@@ -1063,7 +1063,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
 
     let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool, Vec<u32>)> = Vec::new();
     let mut active_comments: Vec<u32> = ctx
-        .comments_open_at
+        .comments
+        .open_at
         .get(&para_node.range().start)
         .cloned()
         .unwrap_or_default();
@@ -1071,7 +1072,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     // Word shows only comments the text references; a range without its
     // w:commentReference gets no tint and no balloon.
     for (.., ids) in &mut run_nodes {
-        ids.retain(|id| ctx.referenced_comments.contains(id));
+        ids.retain(|id| ctx.comments.shown.contains(id));
     }
     // A referenced comment whose range holds no text (empty, or missing)
     // anchors at its reference: after the run nodes that precede it.
@@ -1080,7 +1081,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
         .filter(|n| n.has_tag_name((WML_NS, "commentReference")))
         .filter_map(|n| {
             let id = n.attribute((WML_NS, "id"))?.parse::<u32>().ok()?;
-            if !ctx.textless_comments.contains(&id) {
+            if !ctx.comments.textless.contains(&id) {
                 return None;
             }
             let start = n.range().start;

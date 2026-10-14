@@ -141,18 +141,13 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
 
     // Word numbers lines only with a countBy of 1 or more: an lnNumType
     // without one (w:distance="0" alone) shows none (Word probe).
-    let line_numbering = wml(sect_node, "lnNumType")
-        .filter(|n| {
-            n.attribute((WML_NS, "countBy"))
-                .and_then(|v| v.parse::<u32>().ok())
-                .is_some_and(|c| c > 0)
-        })
-        .map(|n| LineNumbering {
-            count_by: n
-                .attribute((WML_NS, "countBy"))
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(1)
-                .max(1),
+    let line_numbering = wml(sect_node, "lnNumType").and_then(|n| {
+        let count_by = n
+            .attribute((WML_NS, "countBy"))
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|&c| c > 0)?;
+        Some(LineNumbering {
+            count_by,
             start: n
                 .attribute((WML_NS, "start"))
                 .and_then(|v| v.parse().ok())
@@ -169,7 +164,8 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
             // rPr is not applied yet.
             font_name: ctx.styles.defaults.font_name.clone(),
             font_size: ctx.styles.defaults.font_size,
-        });
+        })
+    });
 
     let vertical_align = wml_attr(sect_node, "vAlign")
         .map(|v| match v {
@@ -252,9 +248,7 @@ fn resolve_hf<R: Read + Seek>(
         rels: &part_rels,
         zip: ctx.zip,
         numbering: ctx.numbering,
-        referenced_comments: Default::default(),
-        textless_comments: Default::default(),
-        comments_open_at: Default::default(),
+        comments: Default::default(),
     };
     parse_header_footer_xml(&xml_text, &mut hf_ctx)
 }

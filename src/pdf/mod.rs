@@ -407,6 +407,9 @@ pub(super) struct RenderContext<'a> {
     /// Comment anchors of table-cell text, which the cell renderers reach
     /// through `ctx` only; the body table code moves them onto the page.
     pub(super) cell_comment_anchors: std::cell::RefCell<Vec<(u32, f32, f32, f32)>>,
+    /// Measured header/footer heights (`header_footer::header_height`), which
+    /// body pagination asks for per table row and page-top paragraph.
+    pub(super) hf_heights: std::cell::RefCell<HashMap<header_footer::HfHeightKey, f32>>,
 }
 
 impl RenderContext<'_> {
@@ -716,11 +719,17 @@ pub(super) struct ParaAnchor {
 impl ParaAnchor {
     /// `pending`: a floating table's one-shot override for its anchor
     /// paragraph; `line_top`: the first line's top, below the space before.
-    fn new(pending: Option<f32>, line_top: f32, own_before: f32, ceiling: Option<f32>) -> Self {
+    fn new(
+        pending: Option<f32>,
+        line_top: f32,
+        own_before: f32,
+        sp: &SectionProperties,
+        ctx: &RenderContext,
+    ) -> Self {
         Self {
             float: pending.unwrap_or(line_top + own_before),
             on_line: pending.unwrap_or(line_top),
-            ceiling,
+            ceiling: (ctx.compat_mode >= 15).then_some(sp.page_height - sp.margin_top),
         }
     }
 
@@ -2070,6 +2079,23 @@ fn smartart_alt(diagrams: &[crate::model::SmartArtDiagram]) -> Option<String> {
 const LEFT_BORDER_GAP: f32 = 1.47;
 const RIGHT_BORDER_GAP: f32 = 1.73;
 
+/// How far outside the text the left and right borders' inner edges sit
+/// (`space` plus the gap), or their stroke centres with `to_centre`.
+pub(super) fn side_border_outsets(
+    borders: &crate::model::ParagraphBorders,
+    to_centre: bool,
+) -> (f32, f32) {
+    let outset = |b: Option<&crate::model::ParagraphBorder>, gap: f32| {
+        b.map_or(0.0, |b| {
+            b.space_pt + gap + if to_centre { b.width_pt / 2.0 } else { 0.0 }
+        })
+    };
+    (
+        outset(borders.left.as_ref(), LEFT_BORDER_GAP),
+        outset(borders.right.as_ref(), RIGHT_BORDER_GAP),
+    )
+}
+
 /// Render a single paragraph block. Returns `true` if the block was skipped
 /// (the caller should `continue` the block loop).
 #[allow(clippy::too_many_arguments)]
@@ -2242,7 +2268,8 @@ fn render_paragraph_block(
         state.pb.pending_float_anchor,
         state.pb.anchor_slot_top(sp, ctx) - inter_gap,
         own_space_before(inter_gap, state.prev_space_after),
-        (ctx.compat_mode >= 15).then_some(sp.page_height - sp.margin_top),
+        sp,
+        ctx,
     );
 
     let (mut font_size, mut tallest_lhr, tallest_ar) =
@@ -3552,7 +3579,8 @@ fn render_paragraph_block(
         state.pb.pending_float_anchor.take(),
         state.pb.anchor_slot_top(sp, ctx),
         own_space_before(applied_inter_gap, state.prev_space_after),
-        (ctx.compat_mode >= 15).then_some(sp.page_height - sp.margin_top),
+        sp,
+        ctx,
     );
     let tb_col_x = |tb: &crate::model::Textbox| {
         if tb.on_line {
@@ -3628,18 +3656,7 @@ fn render_paragraph_block(
     if let Some(shd_color) = para.shading {
         // Up to the side borders' inner edges: stopping at their space left a
         // white seam inside english_town_council's blue section bars.
-        let shd_left_outset = para
-            .borders
-            .left
-            .as_ref()
-            .map(|b| b.space_pt + LEFT_BORDER_GAP)
-            .unwrap_or(0.0);
-        let shd_right_outset = para
-            .borders
-            .right
-            .as_ref()
-            .map(|b| b.space_pt + RIGHT_BORDER_GAP)
-            .unwrap_or(0.0);
+        let (shd_left_outset, shd_right_outset) = side_border_outsets(&para.borders, false);
         let shd_left = col_x - shd_left_outset;
         let shd_right = col_x + col_w + shd_right_outset;
         let shd_top = state.pb.slot_top
@@ -3987,16 +4004,7 @@ fn render_paragraph_block(
         // Word puts a side border's inner edge its space plus 1.47pt (left) or
         // 1.73pt (right) outside the text, whatever its width (online export
         // probes: sz 4/12/24 × space 0/4/12, with and without indents).
-        let bdr_left_outset = bdr
-            .left
-            .as_ref()
-            .map(|b| b.space_pt + LEFT_BORDER_GAP + b.width_pt / 2.0)
-            .unwrap_or(0.0);
-        let bdr_right_outset = bdr
-            .right
-            .as_ref()
-            .map(|b| b.space_pt + RIGHT_BORDER_GAP + b.width_pt / 2.0)
-            .unwrap_or(0.0);
+        let (bdr_left_outset, bdr_right_outset) = side_border_outsets(bdr, true);
         let box_left = col_x - bdr_left_outset;
         let box_right = col_x + col_w + bdr_right_outset;
 
@@ -4213,6 +4221,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 .map_or(0.0, |s| cell_grid_pitch(doc, &s.properties)),
         ),
         cell_comment_anchors: Default::default(),
+        hf_heights: Default::default(),
     };
 
     let bookmark_positions = compute_bookmark_positions(doc, &ctx);
