@@ -1,0 +1,1 @@
+Public synthetic Word controls for positive paragraph indents in AutoFit tables. Related cases: autofit-indent-first-line, autofit-indent-right-indent, autofit-indent-no-indent. Each has a Word-generated reference. They exercise conflicting saved grid/cell preferences and the heading/number marker text area; unrelated Word grid differences are not claimed fixed.
