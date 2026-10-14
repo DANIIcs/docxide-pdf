@@ -109,6 +109,10 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - An inline zone is one box. It is glued to text it touches without a space:
   pendulum's "cambiando la lunghezza 𝑙 del filo" moves "𝑙 del" to the next
   line together (nothing may break before "del").
+- A zone too long for its line breaks after a top-level binary or relation
+  operator, whatever `m:brkBin` says (with brkBin before or no mathPr alike:
+  "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …"; a broken minus isn't repeated). Probe
+  `mp6_break`: our breaks match Word's on all three lines.
 
 ## Open
 
@@ -117,6 +121,7 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   overbar sits 0.6pt (12pt) to 1.4pt (24pt) higher. Probe `mp3_rad_*`.
 - groupChr with the content as limit: Word's content sits 7pt under a ⏞
   (ours 1pt); a box-reaching-baseline clamp made the probe document worse.
-- Accents over tall bases, eqArr alignment points (`&`), `m:brkBin` line
-  breaking inside a zone: not yet measured.
+- Accents over tall bases, eqArr alignment points (`&`), display-math wrap
+  (`m:wrapIndent`): not yet measured. The parts of a broken inline zone keep
+  the whole zone's height.
 - `m:nor` text draws in the math font, upright; Word uses the run's font.

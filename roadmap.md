@@ -59,8 +59,8 @@ Open, in order:
 1. Radical placement over short contents (Word 0.6–1.4pt higher), display
    ∫ limit positions, groupChr brace placement, borderBox padding.
 2. eqArr alignment points (`&`) and per-row justification.
-3. `m:brkBin` breaks inside long inline zones; display math wrap
-   (`m:wrapIndent`).
+3. ~~Breaks inside long inline zones~~ done (after operators, as Word);
+   display math wrap (`m:wrapIndent`).
 4. `m:nor` runs in the run's own font.
 
 ## Floating table positioning

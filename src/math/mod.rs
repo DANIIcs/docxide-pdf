@@ -30,6 +30,9 @@ pub struct MathBox {
     /// The font's MathLeading at the zone's size: ink higher than the text's
     /// ascent less this gap raises the line (OpenType MATH, `MathLeading`).
     pub leading: f32,
+    /// Where an inline zone may break: after a top-level binary or relation
+    /// operator, as (end of the operator, start of what follows).
+    pub breaks: Vec<(f32, f32)>,
     /// The math font's own line box at the zone's size (`MathFont::line_metrics`):
     /// what a line of nothing but plain math is sized by.
     pub line_ascent: f32,
@@ -52,6 +55,47 @@ pub enum MathItem {
     Rule { x: f32, y: f32, w: f32, h: f32 },
 }
 
+impl MathBox {
+    /// The parts before `end` and from `start` (a break point): the first
+    /// keeps the items left of the break, the second the rest, moved to 0.
+    // ponytail: both parts keep the whole zone's ascent and descent; measure
+    // each part's items if a tall atom on one line stretches the other.
+    /// The zone broken at its last break that leaves at most `room` before
+    /// it: (that part, the rest), or None when no break does.
+    pub(crate) fn fit(&self, room: f32) -> Option<(MathBox, MathBox)> {
+        let brk = self.breaks.iter().rev().find(|b| b.0 <= room)?;
+        Some(self.split(*brk))
+    }
+
+    fn split(&self, (end, start): (f32, f32)) -> (MathBox, MathBox) {
+        let x = |it: &MathItem| match it {
+            MathItem::Glyph { x, .. } | MathItem::Rule { x, .. } => *x,
+        };
+        let (head, tail): (Vec<_>, Vec<_>) = self.items.iter().cloned().partition(|it| x(it) < end);
+        let part = |items: Vec<MathItem>, width: f32, breaks: Vec<(f32, f32)>| MathBox {
+            width,
+            items,
+            breaks,
+            ascent: self.ascent,
+            descent: self.descent,
+            leading: self.leading,
+            line_ascent: self.line_ascent,
+            line_descent: self.line_descent,
+        };
+        let tail = tail.into_iter().map(|it| shift(it, -start, 0.0)).collect();
+        let tail_breaks = self
+            .breaks
+            .iter()
+            .filter(|b| b.0 > end)
+            .map(|&(e, s)| (e - start, s - start))
+            .collect();
+        (
+            part(head, end, Vec::new()),
+            part(tail, self.width - start, tail_breaks),
+        )
+    }
+}
+
 /// Lay out one zone at `size` points.
 pub(crate) fn layout(
     root: &MathRow,
@@ -67,9 +111,13 @@ pub(crate) fn layout(
         display,
     };
     let style = if display { Style::D } else { Style::T };
-    let b = cx.row(root, St::new(style));
+    let st = St::new(style);
+    let (b, breaks) = cx.hbox_breaks(cx.atoms(root, st), st);
     let (line_ascent, line_descent) = font.line_metrics(size);
     MathBox {
+        // Word breaks inline math after an operator whatever m:brkBin says
+        // (that applies to display math): "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …".
+        breaks: if display { Vec::new() } else { breaks },
         width: b.w,
         ascent: b.asc,
         descent: b.desc,
@@ -307,6 +355,10 @@ impl<'a> Ctx<'a> {
     /// characters are atoms of the row, so a sign at a run's start can be
     /// binary.
     fn row(&self, row: &MathRow, st: St) -> B {
+        self.hbox(self.atoms(row, st), st)
+    }
+
+    fn atoms(&self, row: &MathRow, st: St) -> Vec<B> {
         let mut atoms: Vec<B> = Vec::new();
         for node in row {
             match node {
@@ -314,10 +366,16 @@ impl<'a> Ctx<'a> {
                 _ => atoms.push(self.node(node, st)),
             }
         }
-        self.hbox(atoms, st)
+        atoms
     }
 
-    fn hbox(&self, mut atoms: Vec<B>, st: St) -> B {
+    fn hbox(&self, atoms: Vec<B>, st: St) -> B {
+        self.hbox_breaks(atoms, st).0
+    }
+
+    /// `hbox`, and where the row may break: after each binary or relation
+    /// operator, as (end of the operator, start of what follows).
+    fn hbox_breaks(&self, mut atoms: Vec<B>, st: St) -> (B, Vec<(f32, f32)>) {
         // TeX rule: a binary operator with nothing to operate on is ordinary.
         for i in 0..atoms.len() {
             if atoms[i].first == Class::Bin {
@@ -337,25 +395,30 @@ impl<'a> Ctx<'a> {
             }
         }
         if atoms.len() == 1 {
-            return atoms.pop().unwrap();
+            return (atoms.pop().unwrap(), Vec::new());
         }
+        let mut breaks = Vec::new();
         let em = self.size(st);
         let mut out = atoms.first().map_or_else(B::empty, B::ends_of);
         let mut prev: Option<(Class, f32)> = None;
         for a in atoms {
             if let Some((last, ic)) = prev {
+                let end = out.w;
                 out.w += space(last, a.first, st) * em / 18.0;
                 // An italic glyph followed by an upright one keeps its
                 // italic correction.
                 if !a.first_italic {
                     out.w += ic;
                 }
+                if matches!(last, Class::Bin | Class::Rel) {
+                    breaks.push((end, out.w));
+                }
             }
             prev = Some((a.last, a.ic));
             out.put(a, out.w, 0.0);
         }
         (out.last, out.ic) = prev.unwrap_or((Class::Ord, 0.0));
-        out
+        (out, breaks)
     }
 
     /// A math run: one atom per character.

@@ -143,3 +143,26 @@ fn binary_and_relation_spacing() {
     assert_eq!(g[0].0, '\u{2212}');
     assert!((g[1].1 - adv('\u{2212}')).abs() < 0.01);
 }
+
+#[test]
+fn inline_zones_break_after_operators() {
+    // Word: "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …": a break after each top-level binary
+    // or relation operator, none in display math or inside a fraction.
+    let root = vec![
+        run("a+b="),
+        MathNode::Frac {
+            kind: crate::model::FracKind::Bar,
+            num: vec![run("x+y")],
+            den: vec![run("2")],
+        },
+    ];
+    let b = layout_at(root.clone(), false, 12.0);
+    assert_eq!(b.breaks.len(), 2, "{:?}", b.breaks);
+    assert!(layout_at(root, true, 12.0).breaks.is_empty());
+    let room = b.breaks[0].0;
+    let (head, tail) = b.fit(room).unwrap();
+    assert_eq!(glyphs(&head).len(), 2);
+    assert_eq!(glyphs(&tail).len(), 2 + 4);
+    assert!((head.width + tail.width - b.width).abs() < b.breaks[0].1 - b.breaks[0].0 + 0.01);
+    assert!(glyphs(&tail).iter().all(|g| g.1 >= -0.01));
+}

@@ -1859,13 +1859,44 @@ pub(super) fn build_paragraph_lines(
                 left_max(lines.len())
             };
             current_x = proposed_x;
+            // A zone too long for the line breaks after one of its operators,
+            // as many times as it takes; what is left places like a whole zone.
+            let mut mb = mb.clone();
+            let free = |lines: &[TextLine], x: f32| {
+                if lines.is_empty() {
+                    left_max(0) + first_line_hanging - x
+                } else {
+                    left_max(lines.len()) - x
+                }
+            };
+            if !in_right_region && right_region_for(lines.len()).is_none() {
+                while let Some((head, tail)) = Some(free(&lines, current_x) + 0.05)
+                    .filter(|&room| mb.width > room)
+                    .and_then(|room| mb.fit(room))
+                {
+                    if pending_space_w > 0.0 {
+                        mark_space_after(&mut current_chunks);
+                        pending_space_w = 0.0;
+                    }
+                    current_chunks.push(WordChunk::math(entry, run, &Arc::new(head), current_x));
+                    let line = finish_dual_line(
+                        &mut current_chunks,
+                        &mut in_right_region,
+                        &mut cur_right_info,
+                    );
+                    lines.push(line);
+                    (current_x, start) = (0.0, 0);
+                    mb = Arc::new(tail);
+                }
+            }
+            let mb = &mb;
             if start > 0
-                && proposed_x + mb.width > cur_max + 0.05
+                && current_x + mb.width > cur_max + 0.05
                 && !in_right_region
                 && right_region_for(lines.len()).is_none()
             {
                 let carried: Vec<WordChunk> = current_chunks.drain(start..).collect();
-                let dx = carried.first().map_or(proposed_x, |c| c.x_offset);
+                let dx = carried.first().map_or(current_x, |c| c.x_offset);
                 let line = finish_dual_line(
                     &mut current_chunks,
                     &mut in_right_region,
