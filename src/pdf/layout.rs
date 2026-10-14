@@ -2257,6 +2257,9 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
     let mut spaces = 0usize;
     let mut key_buf = String::new();
     for run in runs {
+        if run.is_line_break {
+            break;
+        }
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run, entry);
