@@ -1990,7 +1990,7 @@ fn compute_bookmark_positions(
                     });
                     let keeps_line = ctx.compat_mode >= 15
                         && next_continuous
-                        && matches!(blocks.get(bi.wrapping_sub(1)), Some(Block::Table(_)));
+                        && matches!(blocks.get(bi.wrapping_sub(1)), Some(Block::Table(t)) if t.position.is_none());
                     if para.is_section_break && bi != 0 && !keeps_line && is_text_empty(&para.runs)
                     {
                         let drop;
@@ -2210,7 +2210,8 @@ fn render_paragraph_block(
         .get(sect_idx + 1)
         .is_some_and(|next| next.properties.break_type == SectionBreakType::Continuous);
     // In modern compatibility mode, Word preserves the section mark's own
-    // paragraph line after a table. Legacy mode still collapses that line.
+    // paragraph line after an inline table. Floating tables do not reserve
+    // that extra line. Legacy mode still collapses it for both kinds.
     // Only before a continuous section: before a new page the line could only
     // push itself onto a blank page, which Word doesn't do (indigenous_innovation
     // ends a page with its signature table and starts Schedule A on the next).
@@ -2219,7 +2220,7 @@ fn render_paragraph_block(
             && next_continuous
             && matches!(
                 block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)),
-                Some(Block::Table(_))
+                Some(Block::Table(t)) if t.position.is_none()
             ));
     if para.is_section_break
         && !keeps_line
