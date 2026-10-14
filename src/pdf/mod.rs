@@ -1862,7 +1862,11 @@ fn empty_frame_table_bands(
         if p.is_section_break {
             break;
         }
-        if !is_empty_wrapping_frame(p, sp) {
+        let Some(fp) = p
+            .frame_props
+            .as_ref()
+            .filter(|_| is_empty_wrapping_frame(p, sp))
+        else {
             if p.runs.iter().any(|r| {
                 (!r.vanish && !r.text.trim().is_empty())
                     || r.is_tab
@@ -1887,8 +1891,7 @@ fn empty_frame_table_bands(
             }
             i += 1;
             continue;
-        }
-        let fp = p.frame_props.as_ref().unwrap();
+        };
         if fp.v_relative_from != VRelativeFrom::Margin
             || !matches!(&fp.v_position, VerticalPosition::Offset(y) if *y == 0.0)
             || fp.width <= 0.0
@@ -1933,8 +1936,7 @@ fn empty_frame_table_bands(
         // Conservatively count floating extents too. Never reserve a box on
         // this page if its introductory anchor could already be on the next.
         let mut prefix_h = height + prev_after;
-        let mut fits = true;
-        for b in &blocks[..start] {
+        let fits = blocks[..start].iter().all(|b| {
             match b {
                 Block::Table(t) => {
                     if t.rows
@@ -1950,8 +1952,7 @@ fn empty_frame_table_bands(
                                     .any(|r| r.footnote_id.is_some() || r.endnote_id.is_some())
                         })
                     {
-                        fits = false;
-                        break;
+                        return false;
                     }
                     let widths =
                         table_layout::auto_fit_columns(t, ctx.fonts, None, Some(sp.text_width()));
@@ -1974,12 +1975,9 @@ fn empty_frame_table_bands(
                     }
                 }
             }
-            if prefix_h > available_h {
-                fits = false;
-                break;
-            }
-        }
-        if fits && prefix_h <= available_h {
+            prefix_h <= available_h
+        }) && prefix_h <= available_h;
+        if fits {
             bands.push((top, bottom));
         }
     }
