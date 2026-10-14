@@ -188,6 +188,7 @@ pub(super) fn parse_numbering<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> N
     let mut style_link_target = HashMap::new();
     let mut start_overrides = HashMap::new();
     let mut level_overrides = HashMap::new();
+    let mut inherit_start: Vec<(String, String, u8)> = Vec::new();
 
     let root = xml.root_element();
 
@@ -238,7 +239,15 @@ pub(super) fn parse_numbering<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> N
                     }
                     // Full level redefinition (§17.9.5) — replaces the
                     // abstract level entirely.
-                    if let Some((ilvl, def)) = wml(ovr, "lvl").and_then(parse_level_def) {
+                    if let Some(lvl) = wml(ovr, "lvl")
+                        && let Some((ilvl, def)) = parse_level_def(lvl)
+                    {
+                        // Except a start it leaves out: Word numbers a run of
+                        // one-item lists overriding only numFmt/lvlText 2.,
+                        // 3., 4. from their abstract levels' starts.
+                        if wml(lvl, "start").is_none() {
+                            inherit_start.push((num_id.to_string(), abs_id.to_string(), ilvl));
+                        }
                         lvl_defs.insert(ilvl, def);
                     }
                 }
@@ -250,6 +259,21 @@ pub(super) fn parse_numbering<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> N
                 }
             }
             _ => {}
+        }
+    }
+
+    for (num_id, abs_id, ilvl) in inherit_start {
+        let start = abstract_nums
+            .get(&abs_id)
+            .and_then(|l| l.get(&ilvl))
+            .map(|d| d.start);
+        if let (Some(start), Some(def)) = (
+            start,
+            level_overrides
+                .get_mut(&num_id)
+                .and_then(|m| m.get_mut(&ilvl)),
+        ) {
+            def.start = start;
         }
     }
 
