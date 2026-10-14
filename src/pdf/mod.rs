@@ -1144,6 +1144,8 @@ pub(super) struct PageBuilder {
     /// margin, not at the margin (`is_at_page_top`).
     pub(super) page_top_y: f32,
     pub(super) is_first_page_of_section: bool,
+    /// A continuous section whose first ordinary paragraph has not flowed yet.
+    pending_section_first_page: Option<(usize, usize, f32)>,
     /// Section that owns the current page for header/footer purposes.
     /// For continuous section breaks, this stays as the section that started
     /// the page, not the section that continues mid-page.
@@ -1240,6 +1242,7 @@ impl PageBuilder {
             column_top_y: slot_top,
             page_top_y: slot_top,
             is_first_page_of_section: true,
+            pending_section_first_page: None,
             page_hf_section: 0,
             float_zone: None,
             float_table_extent: None,
@@ -1587,6 +1590,14 @@ impl PageBuilder {
     }
 
     /// Flush this page and open the next one of section `sp`.
+    fn take_pending_first_page(&mut self, sect_idx: usize) -> bool {
+        self.pending_section_first_page
+            .take()
+            .is_some_and(|(section, page, y)| {
+                section == sect_idx && page == self.page_count() && (self.slot_top - y).abs() < 0.01
+            })
+    }
+
     pub(super) fn begin_next_page(
         &mut self,
         sect_idx: usize,
@@ -1594,13 +1605,14 @@ impl PageBuilder {
         effective_margin_bottom: &mut f32,
         ctx: &RenderContext,
     ) {
+        let first_page = self.take_pending_first_page(sect_idx);
         self.flush_page(sect_idx);
         let page = self.page_count();
-        self.slot_top = effective_slot_top(sp, false, page, ctx);
+        self.slot_top = effective_slot_top(sp, first_page, page, ctx);
         self.column_top_y = self.slot_top;
         self.page_top_y = self.slot_top;
-        *effective_margin_bottom = compute_effective_margin_bottom(sp, false, page, ctx);
-        self.is_first_page_of_section = false;
+        *effective_margin_bottom = compute_effective_margin_bottom(sp, first_page, page, ctx);
+        self.is_first_page_of_section = first_page;
     }
 }
 
@@ -4337,6 +4349,24 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
 
         cur_sp = sp;
+        // If the first ordinary paragraph itself moves to the next sheet,
+        // that sheet is the continuous section's first page. Once it flows
+        // here, a later break gets the default variant as before. Tables,
+        // lifted frames and drawing paragraphs keep their existing handling.
+        state.pb.pending_section_first_page =
+            (matches!(sp.break_type, SectionBreakType::Continuous)
+                && sp.columns.as_ref().is_none_or(|c| c.columns.len() <= 1)
+                && state.pb.float_zone.is_none()
+                && section.blocks.first().is_some_and(|b| {
+                    matches!(b,
+                        Block::Paragraph(p) if p.frame_props.is_none()
+                            && p.image.is_none() && p.inline_chart.is_none()
+                            && p.floating_images.is_empty() && p.textboxes.is_empty()
+                            && p.smartart.is_empty() && p.connectors.is_empty()
+                            && p.runs.iter().all(|r| r.inline_image.is_none())
+                    )
+                }))
+            .then_some((sect_idx, state.pb.page_count(), state.pb.slot_top));
         let text_width = sp.text_width();
 
         // Column geometry: vec of (x_offset, width) for each column
@@ -5118,6 +5148,23 @@ mod tests {
         para.frame_props.as_mut().unwrap().height = 0.0;
         para.frame_props.as_mut().unwrap().text_below = true;
         assert!(!is_empty_wrapping_frame(para, &section.properties));
+    }
+
+    #[test]
+    fn continuous_first_page_is_pending_only_before_any_paragraph_flow() {
+        let mut page = PageBuilder::new(97.9);
+        page.pending_section_first_page = Some((2, 0, 97.9));
+        assert!(page.take_pending_first_page(2));
+        assert!(!page.take_pending_first_page(2));
+        page.pending_section_first_page = Some((2, 0, 97.9));
+        page.slot_top -= 16.0; // A first paragraph has flowed on this sheet.
+        assert!(!page.take_pending_first_page(2));
+        page.slot_top = 97.9;
+        page.pending_section_first_page = Some((2, 0, 97.9));
+        assert!(!page.take_pending_first_page(3));
+        page.pending_section_first_page = Some((2, 0, 97.9));
+        page.all_contents.push(Content::new());
+        assert!(!page.take_pending_first_page(2));
     }
 
     #[test]
