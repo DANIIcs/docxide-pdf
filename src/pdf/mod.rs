@@ -102,16 +102,26 @@ fn leading_para(block: &Block) -> Option<&Paragraph> {
 /// The frame Word lifts `block` out of the flow into: a page- or
 /// margin-anchored framePr (a table's is its first cell paragraph's) that
 /// keeps text off its sides, or one wholly beside the text area, which no
-/// text can wrap around (3ec631ca50's address block in the right margin).
+/// text can wrap around (3ec631ca50's address block in the right margin),
+/// or a paragraph's wrapping frame at an explicit offset
+/// (`paragraph_offset_frame`), which text then wraps around like a float.
 /// ponytail: text-anchored frames and wrap-around ones reaching into the
-/// text stay in the flow except wrapping paragraph frames with an explicit
-/// height and nonzero offset, which keep their own coordinates and exclusion.
+/// text stay in the flow; lift them when a fixture needs it.
 fn lifted_frame<'a>(block: &'a Block, sp: &SectionProperties) -> Option<&'a FrameProperties> {
     let fp = leading_para(block)?.frame_props.as_ref()?;
-    if fp.v_relative_from == VRelativeFrom::Paragraph && !matches!(block, Block::Paragraph(_)) {
+    if matches!(block, Block::Table(_)) && fp.v_relative_from == VRelativeFrom::Paragraph {
         return None;
     }
     frame_lifts(fp, sp).then_some(fp)
+}
+
+/// A wrapping paragraph-anchored frame with an explicit height and a nonzero
+/// offset: it keeps its own coordinates, and text wraps around it.
+fn paragraph_offset_frame(fp: &FrameProperties) -> bool {
+    !fp.text_below
+        && fp.v_relative_from == VRelativeFrom::Paragraph
+        && fp.height > 0.0
+        && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0)
 }
 
 fn frame_lifts(fp: &FrameProperties, sp: &SectionProperties) -> bool {
@@ -128,11 +138,11 @@ fn frame_lifts(fp: &FrameProperties, sp: &SectionProperties) -> bool {
         );
         fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
     };
-    (fp.v_relative_from != VRelativeFrom::Paragraph && (fp.text_below || beside_text()))
-        || (!fp.text_below
-            && fp.v_relative_from == VRelativeFrom::Paragraph
-            && fp.height > 0.0
-            && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0))
+    if fp.v_relative_from == VRelativeFrom::Paragraph {
+        paragraph_offset_frame(fp)
+    } else {
+        fp.text_below || beside_text()
+    }
 }
 
 /// The blocks from the start of `blocks` that share the frame `props`.
@@ -275,16 +285,14 @@ impl<'a> OpenFrame<'a> {
             }
             _ => props.height,
         };
-        let top = header_footer::anchored_frame_top(props, height, sp)
-            .or_else(|| match props.v_position {
-                VerticalPosition::Offset(y)
-                    if props.v_relative_from == VRelativeFrom::Paragraph =>
-                {
-                    Some(sp.page_height - state.pb.slot_top + y)
-                }
-                _ => None,
-            })
-            .expect("lifted frame has an absolute top or a paragraph offset");
+        let top = sp.page_height
+            - header_footer::resolve_tb_y_top(
+                props.v_relative_from,
+                &props.v_position,
+                height,
+                sp,
+                state.pb.slot_top,
+            );
         let flow = SavedFlow {
             slot_top: std::mem::replace(&mut state.pb.slot_top, sp.page_height - top),
             // A frame never breaks across pages: 3ec631ca50's bottom-aligned
@@ -314,12 +322,9 @@ impl<'a> OpenFrame<'a> {
         state.prev_space_after = flow.prev_space_after;
         state.current_col = flow.current_col;
         state.pb.float_zone = flow.float_zone;
-        if !self.props.text_below
-            && self.props.v_relative_from == VRelativeFrom::Paragraph
-            && state.pb.float_zone.is_none()
-        {
+        if paragraph_offset_frame(self.props) {
             let top = sp.page_height - self.top;
-            state.pb.float_zone = Some(FloatZone {
+            state.pb.float_zone.get_or_insert(FloatZone {
                 top_y: top + self.props.v_space,
                 bottom_y: top - self.props.height - self.props.v_space,
                 obj_left: self.geometry.0,
