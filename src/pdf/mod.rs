@@ -2112,9 +2112,26 @@ pub(super) fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> &'
     if style_name.is_some_and(|n| n.eq_ignore_ascii_case("title")) {
         return "H1";
     }
-    para.outline_level.map_or("P", |l| {
-        ["H1", "H2", "H3", "H4", "H5", "H6"][usize::from(l).min(5)]
-    })
+    match para.outline_level {
+        Some(l) => ["H1", "H2", "H3", "H4", "H5", "H6"][usize::from(l).min(5)],
+        None if sole_formula(para) => "Formula",
+        None => "P",
+    }
+}
+
+/// A paragraph holding one equation and nothing else (a display equation, or
+/// a zone alone on its line) is that Formula, read by its `/Alt` (set when
+/// the zone is drawn, see `LinkTagger`), not a P around it.
+pub(super) fn sole_formula(para: &Paragraph) -> bool {
+    para.image.is_none()
+        && para.runs.iter().filter(|r| r.math.is_some()).count() == 1
+        && para.runs.iter().all(|r| {
+            r.math.is_some()
+                || (r.text.trim().is_empty()
+                    && r.inline_image.is_none()
+                    && r.footnote_id.is_none()
+                    && r.endnote_id.is_none())
+        })
 }
 
 /// Word's SmartArt alt text: the diagrams' text, one line per node.

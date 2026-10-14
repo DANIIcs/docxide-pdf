@@ -191,7 +191,8 @@ content-level fixes (see `current_focus/A11Y.md`).
 **Done, round 6 (2026-10-04, `40c351ff`..`cec49b91`):** measured over the 240
 references now tagged (the re-exports added 67). Office Math is a Formula
 with a spoken `/Alt` from Word's own rules (`docx/math_speech.rs`; pendulum
-text 72 → 98%) · textboxes in table cells are `Sect > P` inside their TD/TH
+text 72 → 98%); a paragraph holding only an equation is the block-level Formula itself
+(case221 struct 83 → 95%) · textboxes in table cells are `Sect > P` inside their TD/TH
 (japanese_land text 86 → 100%) · header/footer links keep their annotations,
 and every annotation drawn in an artifact gets a Link holding only its OBJR
 (Word leaves them untagged) · OLE

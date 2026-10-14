@@ -686,6 +686,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) label_font_size: f32,
     /// For L/LI tagging inside the cell.
     pub(super) list_item: Option<crate::model::ListItem>,
+    /// Tagged as the Formula itself (`sole_formula`).
+    pub(super) sole_formula: bool,
     pub(super) label_color: Option<[u8; 3]>,
     pub(super) image_name: Option<String>,
     /// The picture's `docPr@descr` and decorative flag, for tagging.
@@ -709,6 +711,10 @@ pub(super) struct CellParagraphLayout {
 }
 
 impl CellParagraphLayout {
+    pub(super) fn tag_kind(&self) -> &'static str {
+        if self.sole_formula { "Formula" } else { "P" }
+    }
+
     /// (ascent, descent) that size this paragraph's picture lines.
     pub(super) fn picture_metrics(&self) -> (f32, f32) {
         (
@@ -1216,6 +1222,7 @@ pub(super) fn compute_row_layouts(
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
                                     list_label: para.list_label.clone(),
+                                    sole_formula: super::sole_formula(para),
                                     label_font_key: (!para.list_label.is_empty())
                                         .then(|| super::list_label::label_font_key(para))
                                         .flatten(),

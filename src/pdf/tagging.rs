@@ -185,13 +185,14 @@ impl TableTags {
         item: usize,
         list_item: Option<ListItem>,
         labelled: bool,
+        kind: &'static str,
     ) -> (Option<usize>, usize) {
         if let Some(&p) = self.paras.get(&(row, cell, item)) {
             return (None, p);
         }
         let c = self.cell(tags, row, cell, col_span);
         let lists = self.lists.entry((row, cell)).or_default();
-        let nodes = tags.para_nodes(lists, c, list_item, labelled, "P");
+        let nodes = tags.para_nodes(lists, c, list_item, labelled, kind);
         self.paras.insert((row, cell, item), nodes.1);
         nodes
     }
@@ -216,9 +217,12 @@ impl CellTagger<'_> {
         item: usize,
         list_item: Option<ListItem>,
         labelled: bool,
+        kind: &'static str,
     ) -> (Option<usize>, usize) {
         let at = (self.row, self.cell, self.col_span);
-        let nodes = self.table.para(self.tags, at, item, list_item, labelled);
+        let nodes = self
+            .table
+            .para(self.tags, at, item, list_item, labelled, kind);
         self.tags.begin(content, self.page, nodes.1);
         nodes
     }
@@ -282,7 +286,7 @@ impl CellTagger<'_> {
     /// A cell with nothing tagged inside still gets its element with an empty
     /// P, like Word, so every row has all its columns.
     pub(super) fn empty_para(mut self, content: &mut Content) {
-        self.begin(content, 0, None, false);
+        self.begin(content, 0, None, false, "P");
         Tags::end(content);
     }
 }
@@ -408,9 +412,14 @@ impl Tags {
         id
     }
 
-    /// A Formula under `parent`, read by its `/Alt` (PDF/UA 7.7-1).
+    /// A Formula under `parent`, read by its `/Alt` (PDF/UA 7.7-1); a
+    /// paragraph that is itself the Formula (`sole_formula`) takes the `/Alt`.
     pub(super) fn add_formula(&mut self, parent: usize, alt: &str) -> usize {
-        let id = self.add(parent, "Formula");
+        let id = if self.nodes[parent].kind == "Formula" {
+            parent
+        } else {
+            self.add(parent, "Formula")
+        };
         self.nodes[id].alt = Some(alt.to_string());
         id
     }

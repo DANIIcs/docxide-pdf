@@ -27,6 +27,10 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - `pdf/layout.rs`: a zone is one `WordChunk` (`math: Some(box)`), drawn glyph
   by glyph with `Tm` inside the Formula marked content; rules go with the
   line's decorations.
+- Tagging: a zone is a Formula read by its `/Alt`. A paragraph (body,
+  textbox or table cell) holding one zone and nothing else is that Formula,
+  block-level, not a P around it: the equation is the block, and the P only
+  added empty text around it (case221: three display equations).
 
 ## Rules
 

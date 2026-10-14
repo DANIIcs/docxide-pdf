@@ -485,6 +485,7 @@ fn render_cell_content(
                         item_idx,
                         para.list_item,
                         !para.list_label.is_empty(),
+                        para.tag_kind(),
                     )
                 });
                 let cell_para = cell_nodes.map(|(_, body)| body);
@@ -1100,9 +1101,10 @@ fn render_partial_cell_content(
             CellContentItem::Paragraph(para) => {
                 let sb = chunk_space_before(&items[pi], pi, start);
 
-                let cell_nodes = tagger
-                    .as_mut()
-                    .map(|t| t.begin(content, pi, para.list_item, !para.list_label.is_empty()));
+                let cell_nodes = tagger.as_mut().map(|t| {
+                    let labelled = !para.list_label.is_empty();
+                    t.begin(content, pi, para.list_item, labelled, para.tag_kind())
+                });
                 let cell_para = cell_nodes.map(|(_, body)| body);
                 if !para_has_visible_content(para) {
                     cursor_y -= sb + para_block_height(para);
@@ -1474,7 +1476,7 @@ fn render_vertical_cjk_cell(
         };
         let nodes = tagger
             .as_mut()
-            .map(|t| t.begin(content, item, para.list_item, false));
+            .map(|t| t.begin(content, item, para.list_item, false, para.tag_kind()));
         let mut link_tags = cell_link_tagger(&mut tagger, nodes.map(|(_, body)| body));
         for line in &para.lines {
             for chunk in &line.chunks {
