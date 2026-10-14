@@ -883,8 +883,6 @@ pub(super) struct RightRegion {
 
 #[derive(Default)]
 pub(super) struct TextLine {
-    /// An empty line retained by a wrapping tab; its consumed tabs size the line.
-    pub(super) leading_tab_wrap: bool,
     pub(super) chunks: Vec<WordChunk>,
     pub(super) total_width: f32,
     pub(super) ends_with_break: bool,
@@ -897,6 +895,8 @@ pub(super) struct TextLine {
     pub(super) break_lhr: Option<f32>,
     /// An empty line made by leading spaces wrapping an inline picture.
     pub(super) leading_space_wrap: bool,
+    /// An empty line retained by a wrapping tab; its consumed tabs size the line.
+    pub(super) leading_tab_wrap: bool,
     /// First chunk after the line's last tab: justification stretches only the
     /// gaps from here on (Word starts the text at the tab stop).
     pub(super) justify_from: usize,
@@ -2610,7 +2610,7 @@ pub(super) fn build_tabbed_line(
             }
             if let Some(tab_run) = tab_run_before {
                 let entry = seen_fonts
-                    .get(&crate::fonts::font_key(tab_run))
+                    .get(font_key_buf(tab_run, &mut key_buf))
                     .expect("font registered");
                 let fs = effective_font_size(tab_run, entry);
                 let lhr = entry.line_h_ratio;
