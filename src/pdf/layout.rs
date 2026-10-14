@@ -1817,7 +1817,11 @@ pub(super) fn build_paragraph_lines(
                 } else {
                     0.0
                 };
-            if current_chunks.is_empty() && !in_right_region && ww > line_room {
+            // A strip left of a wrapping float is no line: a word that fits
+            // the strip right of it moves there whole (Word puts "Extended"
+            // past a logo, not "Extend" before it).
+            let fits_right = right_region_for(lines.len()).is_some_and(|(_, rw, _)| ww <= rw);
+            if current_chunks.is_empty() && !in_right_region && ww > line_room && !fits_right {
                 let room = line_room - pending_space_w;
                 // Cut the letters as written, not the capitals drawn (ß → SS
                 // changes length), so each half keeps its own /ActualText.
