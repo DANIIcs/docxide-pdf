@@ -1273,7 +1273,19 @@ pub(super) fn compute_row_layouts(
                                         Block::Paragraph(p) => p.runs.iter().all(|r| r.text.trim().is_empty()
                                             && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
                                             && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty(),
-                                        Block::Table(t) => t.rows.len() == 1 && t.position.as_ref().is_some_and(|p| p.v_anchor == "text"),
+                                        Block::Table(t) => t.rows.len() == 1 && (
+                                            t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
+                                            || (nested_table.position.as_ref().is_some_and(|p| matches!(p.h_position, HorizontalPosition::Offset(v) if v == 0.0))
+                                                && t.position.is_none() && matches!(
+                                                cell.content.get(block_idx + 1),
+                                                Some(Block::Paragraph(p)) if p.runs.iter().all(|r|
+                                                    r.text.trim().is_empty() && !r.is_tab && !r.is_line_break
+                                                        && r.inline_image.is_none() && r.field_code.is_none())
+                                                    && p.image.is_none() && p.floating_images.is_empty()
+                                                    && p.textboxes.is_empty()
+                                                    && p.frame_props.is_none() && !p.paragraph_mark_vanish
+                                            ))
+                                        ),
                                     }))
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
