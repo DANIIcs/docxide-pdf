@@ -144,13 +144,7 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
 pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize>) -> f32 {
     p.lines[range]
         .iter()
-        .map(|l| {
-            super::layout::inline_line_advance(
-                l,
-                p.line_h,
-                (p.image_line_ascent, p.font_size * p.descender_ratio),
-            )
-        })
+        .map(|l| super::layout::inline_line_advance(l, p.line_h, p.picture_metrics()))
         .sum()
 }
 
@@ -702,6 +696,16 @@ pub(super) struct CellParagraphLayout {
     pub(super) has_connectors: bool,
 }
 
+impl CellParagraphLayout {
+    /// (ascent, descent) that size this paragraph's picture lines.
+    pub(super) fn picture_metrics(&self) -> (f32, f32) {
+        (
+            self.image_line_ascent,
+            self.font_size * self.descender_ratio,
+        )
+    }
+}
+
 // Synthetic Word controls switch between 18.75 pt and 18.70 pt of free
 // right strip; the transition is unchanged for 8–12 pt marks and no borders.
 const MIN_NESTED_FLOAT_STRIP: f32 = 18.75;
@@ -954,6 +958,13 @@ pub(super) fn compute_row_layouts(
                                     tallest_lhr.zip(tallest_ar)
                                         .map(|(lh, ar)| (lh - ar).max(0.0)).unwrap_or(0.2)
                                 };
+                                let exact_spacing =
+                                    matches!(effective_ls, crate::model::LineSpacing::Exact(_));
+                                let image_line_ascent = if exact_spacing {
+                                    super::layout::runs_max_image_h(runs).max(font_size * ascender_ratio)
+                                } else {
+                                    font_size * ascender_ratio
+                                };
                                 let font_substituted =
                                     metric_font.is_some_and(|e| e.is_substituted);
 
@@ -1003,22 +1014,8 @@ pub(super) fn compute_row_layouts(
                                     // line has no extra hanging width.
                                     let hanging = super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
                                     let has_tabs = runs.iter().any(|r| r.is_tab);
-                                    let inline_images: HashMap<usize, String> = runs
-                                        .iter()
-                                        .enumerate()
-                                        .filter_map(|(ri, run)| {
-                                            let img = run.inline_image.as_ref()?;
-                                            Some((ri, ctx.table_cell_image_names.get(&img.key())?.clone()))
-                                        })
-                                        .collect();
-                                    let inline_effects: HashMap<usize, super::images::EffectXObjs> = runs
-                                        .iter()
-                                        .enumerate()
-                                        .filter_map(|(ri, run)| {
-                                            let img = run.inline_image.as_ref()?;
-                                            Some((ri, ctx.effect_table_names.get(&img.key())?.clone()))
-                                        })
-                                        .collect();
+                                    let inline_images = super::layout::run_image_map(runs, ctx.table_cell_image_names);
+                                    let inline_effects = super::layout::run_image_map(runs, ctx.effect_table_names);
                                     let mut lines = if has_tabs {
                                         build_tabbed_line(
                                             runs,
@@ -1080,12 +1077,10 @@ pub(super) fn compute_row_layouts(
                                         lines.pop();
                                         break_mark_hidden = true;
                                     }
-                                    let image_ascent = if matches!(effective_ls, crate::model::LineSpacing::Exact(_)) {
-                                        super::layout::runs_max_image_h(runs).max(font_size * ascender_ratio)
-                                    } else {
-                                        font_size * ascender_ratio
-                                    };
-                                    total_h += lines.iter().map(|l| super::layout::inline_line_advance(l, line_h, (image_ascent, font_size * descender_ratio))).sum::<f32>();
+                                    total_h += lines
+                                        .iter()
+                                        .map(|l| super::layout::inline_line_advance(l, line_h, (image_line_ascent, font_size * descender_ratio)))
+                                        .sum::<f32>();
                                     lines
                                 } else {
                                     if para.paragraph_mark_vanish {
@@ -1202,12 +1197,8 @@ pub(super) fn compute_row_layouts(
                                         |a| a / font_size,
                                     ),
                                     descender_ratio,
-                                    image_line_ascent: if matches!(effective_ls, crate::model::LineSpacing::Exact(_)) {
-                                        super::layout::runs_max_image_h(runs).max(font_size * ascender_ratio)
-                                    } else {
-                                        font_size * ascender_ratio
-                                    },
-                                    clip_inline_pictures: matches!(effective_ls, crate::model::LineSpacing::Exact(_)),
+                                    image_line_ascent,
+                                    clip_inline_pictures: exact_spacing,
                                     font_substituted,
                                     alignment: para.alignment,
                                     space_before,
@@ -1267,26 +1258,27 @@ pub(super) fn compute_row_layouts(
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h = nested_layouts.iter().map(|rl| rl.height).sum::<f32>();
+                                let blank = |p: &crate::model::Paragraph| {
+                                    p.runs.iter().all(|r| r.text.trim().is_empty()
+                                        && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
+                                        && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty()
+                                };
                                 let mut floating_offset = nested_table.position.as_ref()
                                     .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && matches!(cell.v_align, crate::model::CellVAlign::Top))
-                                    .filter(|_| cell.content[block_idx + 1..].iter().all(|b| match b {
-                                        Block::Paragraph(p) => p.runs.iter().all(|r| r.text.trim().is_empty()
-                                            && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
-                                            && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty(),
-                                        Block::Table(t) => t.rows.len() == 1 && (
-                                            t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
-                                            || (nested_table.position.as_ref().is_some_and(|p| matches!(p.h_position, HorizontalPosition::Offset(v) if v == 0.0))
-                                                && t.position.is_none() && matches!(
-                                                cell.content.get(block_idx + 1),
-                                                Some(Block::Paragraph(p)) if p.runs.iter().all(|r|
-                                                    r.text.trim().is_empty() && !r.is_tab && !r.is_line_break
-                                                        && r.inline_image.is_none() && r.field_code.is_none())
-                                                    && p.image.is_none() && p.floating_images.is_empty()
-                                                    && p.textboxes.is_empty()
-                                                    && p.frame_props.is_none() && !p.paragraph_mark_vanish
-                                            ))
-                                        ),
-                                    }))
+                                    .filter(|pos| {
+                                        let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
+                                        let next_is_blank = matches!(
+                                            cell.content.get(block_idx + 1),
+                                            Some(Block::Paragraph(p)) if blank(p) && p.frame_props.is_none() && !p.paragraph_mark_vanish
+                                        );
+                                        cell.content[block_idx + 1..].iter().all(|b| match b {
+                                            Block::Paragraph(p) => blank(p),
+                                            Block::Table(t) => t.rows.len() == 1 && (
+                                                t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
+                                                || (at_left_edge && t.position.is_none() && next_is_blank)
+                                            ),
+                                        })
+                                    })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
                                     .map(|pos| if block_idx == 0 { pos.v_offset_pt.max(0.0) } else { pos.v_offset_pt });

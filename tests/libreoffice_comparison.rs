@@ -71,7 +71,7 @@ fn libreoffice_comparison() {
 }
 
 fn score_fixture(fixture_dir: &std::path::Path, soffice: &std::path::Path) -> Option<Row> {
-    let name = common::display_name(fixture_dir);
+    let name = common::case_key(fixture_dir);
     let reference_pdf = fixture_dir.join("reference.pdf");
     if !reference_pdf.exists() {
         return None;

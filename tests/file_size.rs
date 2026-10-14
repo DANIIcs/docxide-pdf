@@ -15,7 +15,7 @@ struct SizeResult {
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<SizeResult> {
-    let name = common::display_name(fixture_dir);
+    let name = common::case_key(fixture_dir);
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     if !input_docx.exists() || !reference_pdf.exists() {

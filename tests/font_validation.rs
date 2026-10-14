@@ -533,7 +533,7 @@ struct FixtureResult {
 const FALLBACK_FONTS: &[&str] = &["Helvetica"];
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<FixtureResult> {
-    let name = common::display_name(fixture_dir);
+    let name = common::case_key(fixture_dir);
     let input_docx = fixture_dir.join("input.docx");
     if !input_docx.exists() {
         return None;

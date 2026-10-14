@@ -336,7 +336,7 @@ fn print_change(
 }
 
 /// Copy generated PNGs to acknowledged/ for each accepted case, enabling delta view.
-/// Case names are display_name format ("group/case"), resolve to output dirs by scanning.
+/// Case names are case_key format ("group/case"), resolve to output dirs by scanning.
 fn snapshot_accepted_cases(root: &Path, accepted_names: &[String]) {
     if accepted_names.is_empty() {
         return;

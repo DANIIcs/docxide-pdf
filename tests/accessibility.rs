@@ -53,7 +53,7 @@ fn analyze_fixture(fixture: &Path, gen_name: &str) -> Option<Result<Scored, Stri
     if !fixture.join("input.docx").exists() || !reference.exists() {
         return None;
     }
-    let name = common::display_name(fixture);
+    let name = common::case_key(fixture);
     let out = common::output_dir(fixture);
     fs::create_dir_all(&out).ok();
     let fail = |e: String| Some(Err(format!("{name}: {e}")));

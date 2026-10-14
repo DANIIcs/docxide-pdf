@@ -199,12 +199,11 @@ fn normalize_name(s: &str) -> String {
 }
 
 fn baseline_key(name: &str) -> String {
-    let (group, case_name) = if let Some(idx) = name.find('/') {
-        (&name[..idx], &name[idx + 1..])
+    if name.contains('/') {
+        name.to_string()
     } else {
-        ("cases", name)
-    };
-    format!("{}/{}", group, case_name)
+        format!("cases/{name}")
+    }
 }
 
 fn load_baselines(output_dir: &Path) -> HashMap<String, BaselineScores> {

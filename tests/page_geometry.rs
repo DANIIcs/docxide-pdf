@@ -40,7 +40,7 @@ fn page_geometry_comparison() {
     let mut mismatches = Vec::new();
 
     for fixture in &fixtures {
-        let name = common::display_name(fixture);
+        let name = common::case_key(fixture);
         let input = fixture.join("input.docx");
         let reference = fixture.join("reference.pdf");
 

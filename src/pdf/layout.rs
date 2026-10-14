@@ -21,6 +21,18 @@ pub(super) static EMPTY_INLINE_IMAGES: LazyLock<HashMap<usize, String>> =
 pub(super) static EMPTY_EFFECTS: LazyLock<HashMap<usize, EffectXObjs>> =
     LazyLock::new(HashMap::new);
 
+/// Run index → registered value (XObject name, effects) for each run holding
+/// an inline picture that `names` knows.
+pub(super) fn run_image_map<V: Clone>(
+    runs: &[Run],
+    names: &HashMap<usize, V>,
+) -> HashMap<usize, V> {
+    runs.iter()
+        .enumerate()
+        .filter_map(|(ri, run)| Some((ri, names.get(&run.inline_image.as_ref()?.key())?.clone())))
+        .collect()
+}
+
 /// How many gaps a stretched line's slack spreads across when the slack goes
 /// between *characters* (applied as PDF `Tc`) rather than between word gaps.
 /// `None` means the line falls back to word-gap justification.
@@ -1736,7 +1748,7 @@ pub(super) fn build_paragraph_lines(
                     );
                     if let Some(space_run) = leading_space_run {
                         let entry = seen_fonts
-                            .get(&crate::fonts::font_key(space_run))
+                            .get(font_key_buf(space_run, &mut key_buf))
                             .expect("font registered");
                         line.break_font_size = Some(effective_font_size(space_run, entry));
                         line.break_lhr = entry.line_h_ratio;
@@ -4177,25 +4189,27 @@ pub(super) fn grid_baseline_offset(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn leading_space_wrap_uses_space_font_pitch() {
         let mut lines = vec![
-            super::TextLine {
+            TextLine {
                 leading_space_wrap: true,
                 break_font_size: Some(7.5),
                 break_lhr: Some(1.2),
                 ..Default::default()
             },
-            super::TextLine {
+            TextLine {
                 break_font_size: Some(7.5),
                 break_lhr: Some(1.2),
                 ..Default::default()
             },
         ];
-        super::size_lines_by_own_runs(
+        size_lines_by_own_runs(
             &mut lines,
-            &std::collections::HashMap::new(),
-            crate::model::LineSpacing::Auto(1.0),
+            &HashMap::new(),
+            LineSpacing::Auto(1.0),
             14.0,
             10.0,
         );
@@ -4205,8 +4219,6 @@ mod tests {
             "ordinary empty lines keep paragraph pitch"
         );
     }
-
-    use super::*;
 
     fn plain_layout(squeeze_spaces: bool) -> CjkLayout {
         CjkLayout {

@@ -273,7 +273,7 @@ def main() -> None:
     hash_to_name: dict[str, str] = {}
     for h, _ in candidates:
         name = names.get(h)
-        if not name or name in used_names:
+        if not name:
             log.warning("No valid name for %s (got %r), skipping", h[:16], name)
             continue
         # Sanitize: ensure it's valid snake_case

@@ -72,7 +72,7 @@ pub fn output_dir(fixture: &Path) -> PathBuf {
 
 /// group/case: the key for baselines, hashes and score tables. The full case
 /// name, since cases sharing a prefix must not share a key.
-pub fn display_name(fixture: &Path) -> String {
+pub fn case_key(fixture: &Path) -> String {
     let case = fixture.file_name().unwrap().to_string_lossy();
     format!("{}/{}", group_name(fixture), case)
 }

@@ -192,7 +192,7 @@ struct FixturePages {
 }
 
 fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
-    let name = common::display_name(fixture_dir);
+    let name = common::case_key(fixture_dir);
     let reference_pdf = fixture_dir.join("reference.pdf");
     let output_base = common::output_dir(fixture_dir);
     let reference_screenshots = output_base.join("reference");

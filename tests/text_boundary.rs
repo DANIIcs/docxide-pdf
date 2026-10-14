@@ -11,7 +11,7 @@ struct CaseResult {
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
-    let name = common::display_name(fixture_dir);
+    let name = common::case_key(fixture_dir);
     let reference_pdf = fixture_dir.join("reference.pdf");
     if !reference_pdf.exists() {
         println!("  [SKIP] {name}: no reference.pdf");

@@ -36,7 +36,7 @@ fn conversion_speed() {
         std::fs::create_dir_all(&out_dir).ok();
         let output_pdf = out_dir.join("speed_test.pdf");
 
-        let name = common::display_name(fixture);
+        let name = common::case_key(fixture);
         let previous_ms = baselines.get(&name).and_then(|b| b.convert_ms);
 
         let t0 = Instant::now();

@@ -1170,21 +1170,10 @@ pub(super) fn render_header_footer(
                                                 + img.layout_extra_height
                                                 + tp.space_after;
                                         }
-                                        let inline_imgs: HashMap<usize, String> =
-                                            if tp.runs.iter().any(|r| r.inline_image.is_some()) {
-                                                tp.runs
-                                                    .iter()
-                                                    .enumerate()
-                                                    .filter_map(|(ri, run)| {
-                                                        let img = run.inline_image.as_ref()?;
-                                                        ctx.textbox_image_names
-                                                            .get(&img.key())
-                                                            .map(|name| (ri, name.clone()))
-                                                    })
-                                                    .collect()
-                                            } else {
-                                                HashMap::new()
-                                            };
+                                        let inline_imgs = super::layout::run_image_map(
+                                            &tp.runs,
+                                            ctx.textbox_image_names,
+                                        );
                                         let tb_lines = build_lines(
                                             &tp.runs,
                                             ctx,
@@ -1270,21 +1259,8 @@ pub(super) fn render_header_footer(
                                     continue;
                                 }
 
-                                let inline_imgs: HashMap<usize, String> =
-                                    if tp.runs.iter().any(|r| r.inline_image.is_some()) {
-                                        tp.runs
-                                            .iter()
-                                            .enumerate()
-                                            .filter_map(|(ri, run)| {
-                                                let img = run.inline_image.as_ref()?;
-                                                ctx.textbox_image_names
-                                                    .get(&img.key())
-                                                    .map(|name| (ri, name.clone()))
-                                            })
-                                            .collect()
-                                    } else {
-                                        HashMap::new()
-                                    };
+                                let inline_imgs =
+                                    super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
                                 let tb_lines = build_lines(
                                     &tp.runs,
                                     ctx,

@@ -580,14 +580,9 @@ fn render_cell_content(
                     para.text_hanging
                 };
 
-                let picture_clip = clip_fixed_cell_pictures(
-                    content,
-                    para,
-                    cell_x,
-                    col_w,
-                    cursor_y,
-                    para_block_height(para),
-                );
+                let block_h = para_block_height(para);
+                let picture_clip =
+                    clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, block_h);
                 render_paragraph_lines(
                     content,
                     &para.lines,
@@ -596,10 +591,7 @@ fn render_cell_content(
                     text_w,
                     baseline_y,
                     para.line_h,
-                    (
-                        para.image_line_ascent,
-                        para.font_size * para.descender_ratio,
-                    ),
+                    para.picture_metrics(),
                     para.lines.len(),
                     0,
                     links,
@@ -617,7 +609,7 @@ fn render_cell_content(
                 content.restore_state();
                 end_cell_tag(content, &tagger);
 
-                cursor_y -= super::table_layout::para_block_height(para);
+                cursor_y -= block_h;
 
                 if let Some(src) = source_para {
                     render_cell_floating_shapes(
@@ -1170,14 +1162,9 @@ fn render_partial_cell_content(
                 };
 
                 let l1 = l1.unwrap_or(para.lines.len());
-                let picture_clip = clip_fixed_cell_pictures(
-                    content,
-                    para,
-                    cell_x,
-                    col_w,
-                    cursor_y,
-                    super::table_layout::cell_lines_h(para, l0..l1),
-                );
+                let lines_h = super::table_layout::cell_lines_h(para, l0..l1);
+                let picture_clip =
+                    clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, lines_h);
                 render_paragraph_lines(
                     content,
                     &para.lines[l0..l1],
@@ -1186,10 +1173,7 @@ fn render_partial_cell_content(
                     text_w,
                     baseline_y,
                     para.line_h,
-                    (
-                        para.image_line_ascent,
-                        para.font_size * para.descender_ratio,
-                    ),
+                    para.picture_metrics(),
                     para.lines.len(),
                     l0,
                     links,
@@ -1209,7 +1193,7 @@ fn render_partial_cell_content(
                 cursor_y -= if para.lines.is_empty() {
                     para_block_height(para)
                 } else {
-                    super::table_layout::cell_lines_h(para, l0..l1)
+                    lines_h
                 };
             }
             CellContentItem::NestedTable {
