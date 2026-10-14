@@ -1988,9 +1988,11 @@ fn compute_bookmark_positions(
                     let next_continuous = doc.sections.get(si + 1).is_some_and(|next| {
                         next.properties.break_type == SectionBreakType::Continuous
                     });
-                    let keeps_line = ctx.compat_mode >= 15
-                        && next_continuous
-                        && matches!(blocks.get(bi.wrapping_sub(1)), Some(Block::Table(t)) if t.position.is_none());
+                    let keeps_line = keeps_section_mark_line(
+                        ctx.compat_mode,
+                        next_continuous,
+                        bi.checked_sub(1).and_then(|i| blocks.get(i)),
+                    );
                     if para.is_section_break && bi != 0 && !keeps_line && is_text_empty(&para.runs)
                     {
                         let drop;
@@ -2150,6 +2152,14 @@ pub(super) fn side_border_outsets(
     )
 }
 
+/// An empty section mark keeps its line after an inline table (the rule is
+/// explained in `render_paragraph_block`); bookmark positions follow it too.
+fn keeps_section_mark_line(compat_mode: u32, next_continuous: bool, prev: Option<&Block>) -> bool {
+    compat_mode >= 15
+        && next_continuous
+        && matches!(prev, Some(Block::Table(t)) if t.position.is_none())
+}
+
 /// Render a single paragraph block. Returns `true` if the block was skipped
 /// (the caller should `continue` the block loop).
 #[allow(clippy::too_many_arguments)]
@@ -2216,12 +2226,11 @@ fn render_paragraph_block(
     // push itself onto a blank page, which Word doesn't do (indigenous_innovation
     // ends a page with its signature table and starts Schedule A on the next).
     let keeps_line = block_idx == 0
-        || (ctx.compat_mode >= 15
-            && next_continuous
-            && matches!(
-                block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)),
-                Some(Block::Table(t)) if t.position.is_none()
-            ));
+        || keeps_section_mark_line(
+            ctx.compat_mode,
+            next_continuous,
+            block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)),
+        );
     if para.is_section_break
         && !keeps_line
         && is_text_empty(&para.runs)
