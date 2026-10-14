@@ -1,8 +1,8 @@
 //! Office Math (OMML) read aloud, for the `/Alt` of the Formula a math zone is
 //! tagged as (PDF/UA 7.7-1): Word's export speaks `T=2π√(l/g)` as "cap T
 //! equals 2 pi root 2 of l over g". The rules follow what Word writes.
-// ponytail: the structures and symbols the corpus uses; matrices, accents and
-// equation arrays are read as their contents in order
+// ponytail: the structures and symbols the corpus uses; matrices and accents
+// are read as their contents in order
 
 use super::{MATH_NS, find_children, math_bool, math_child, math_run_text, math_val};
 
@@ -80,6 +80,17 @@ fn speak_into(node: roxmltree::Node, out: &mut Vec<String>) {
                 out.push("of".into());
                 part("e", out);
             }
+            // One equation after another, with a pause between them.
+            "eqArr" => {
+                for (i, e) in find_children(c, "e", MATH_NS).enumerate() {
+                    if i > 0
+                        && let Some(last) = out.last_mut()
+                    {
+                        last.push(',');
+                    }
+                    speak_into(e, out);
+                }
+            }
             name if name.ends_with("Pr") => {}
             _ => speak_into(c, out),
         }
@@ -122,7 +133,8 @@ fn speak_run(r: roxmltree::Node, out: &mut Vec<String>) {
         if !number.is_empty() {
             out.push(std::mem::take(&mut number));
         }
-        if ch.is_whitespace() {
+        // `&` only marks an alignment point.
+        if ch.is_whitespace() || ch == '&' {
             continue;
         }
         let (word, prefix) = if let Some(w) = symbol_word(ch) {
@@ -235,6 +247,16 @@ mod tests {
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
         speak(doc.root_element())
+    }
+
+    #[test]
+    fn equation_array_rows_pause_and_skip_alignment_marks() {
+        assert_eq!(
+            spoken(
+                "<m:eqArr><m:e><m:r><m:t>x&amp;=1</m:t></m:r></m:e><m:e><m:r><m:t>y&amp;=2</m:t></m:r></m:e></m:eqArr>"
+            ),
+            "x equals 1, y equals 2"
+        );
     }
 
     // Expected strings are Word's own /Alt in pendulum_mechanics_oscillation_lab.
