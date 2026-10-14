@@ -2362,30 +2362,31 @@ fn render_paragraph_block(
         ctx.fonts,
     );
 
+    let follows_floating_table = block_idx
+        .checked_sub(1)
+        .and_then(|i| section_blocks.get(i))
+        .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()));
     // A single leading clearing break keeps its empty anchor line beside the
     // immediately preceding floating table, but its visible text resumes below.
     // Clearing only after painting the paragraph misplaces that first text line.
-    let leading_table_clear = para.clears_floats
-        && para.runs.first().is_some_and(|r| r.is_line_break)
-        && para.runs.iter().filter(|r| r.is_line_break).count() == 1
+    let leading_table_clear = if para.clears_floats
+        && follows_floating_table
+        && matches!(para.runs.as_slice(), [first, rest @ ..]
+            if first.is_line_break && !rest.iter().any(|r| r.is_line_break))
         && para
             .runs
             .iter()
             .any(|r| !r.text.trim().is_empty() || r.inline_image.is_some())
-        && block_idx
-            .checked_sub(1)
-            .and_then(|i| section_blocks.get(i))
-            .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()))
-        && state
+        && let Some(zone) = state
             .pb
             .float_zone
-            .as_ref()
-            .is_some_and(|zone| zone.from_table && state.pb.slot_top > zone.bottom_y);
-    if leading_table_clear {
-        let bottom = state.pb.float_zone.as_ref().unwrap().bottom_y;
-        state.pb.slot_top = bottom + inter_gap;
-        state.pb.float_zone = None;
-    }
+            .take_if(|zone| zone.from_table && state.pb.slot_top > zone.bottom_y)
+    {
+        state.pb.slot_top = zone.bottom_y + inter_gap;
+        true
+    } else {
+        false
+    };
 
     let (col_x, col_w) = col_geometry[state.current_col];
     let mut para_text_x = col_x + para.indent_left;
@@ -2819,31 +2820,22 @@ fn render_paragraph_block(
             },
         )
     };
-    if leading_table_clear
-        && lines.len() > 1
-        && lines[0].ends_with_break
-        && lines[0].chunks.is_empty()
-    {
-        lines.remove(0);
-    }
     // A clearing break that opens the anchor paragraph of the floating table
     // above it sits beside that table's top; only what follows the break comes
     // below the table (indigenous_innovation's defined terms: one line, not two).
     // The zone is gone once the table broke across pages or left no strip
     // (case129's full-width table: both lines below it), so ask the table's
     // own extent.
-    if para.clears_floats
-        && block_idx
-            .checked_sub(1)
-            .and_then(|i| section_blocks.get(i))
-            .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()))
-        && state.pb.float_table_extent.as_ref().is_some_and(|t| {
-            side_strip(
-                (t.left, t.right),
-                (t.left_from_text, t.right_from_text),
-                (col_x, col_w),
-            ) >= MIN_EMPTY_STRIP
-        })
+    if (leading_table_clear
+        || para.clears_floats
+            && follows_floating_table
+            && state.pb.float_table_extent.as_ref().is_some_and(|t| {
+                side_strip(
+                    (t.left, t.right),
+                    (t.left_from_text, t.right_from_text),
+                    (col_x, col_w),
+                ) >= MIN_EMPTY_STRIP
+            }))
         && lines.len() > 1
         && lines[0].ends_with_break
         && lines[0].chunks.is_empty()
