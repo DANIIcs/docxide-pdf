@@ -90,6 +90,39 @@ pub(crate) struct FontEntry {
     pub(crate) face_index: u32,
 }
 
+#[cfg(test)]
+impl FontEntry {
+    /// A face with no metrics and every glyph 500 units wide, for unit tests.
+    pub(crate) fn stub() -> Self {
+        FontEntry {
+            pdf_name: "F1".to_string(),
+            font_ref: pdf_writer::Ref::new(1),
+            widths_1000: vec![500.0; 224],
+            line_h_ratio: None,
+            ascender_ratio: None,
+            grid_line_ratio: None,
+            plain_line_h_ratio: None,
+            grid_baseline_shift: None,
+            superscript_ratio: None,
+            subscript_ratio: None,
+            underline: None,
+            strikeout: None,
+            east_asian: false,
+            plain_ascender_ratio: None,
+            char_to_gid: None,
+            char_widths_1000: None,
+            kern_pairs: None,
+            synthetic_bold: false,
+            synthetic_italic: false,
+            is_substituted: false,
+            missing_cjk_chars: Default::default(),
+            drew_notdef: Default::default(),
+            font_path: None,
+            face_index: 0,
+        }
+    }
+}
+
 impl FontEntry {
     /// Width of a single character in 1000-units. Uses the per-char cache (covers
     /// all Unicode chars seen in the document), falls back to the WinAnsi table.

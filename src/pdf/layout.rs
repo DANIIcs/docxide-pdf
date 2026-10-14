@@ -4243,7 +4243,7 @@ mod tests {
 
     #[test]
     fn justify_counts_word_spaces_not_run_joins() {
-        let entry = stub_font_entry();
+        let entry = FontEntry::stub();
         let chunk = |text: &str, x: f32, w: f32| {
             let mut c = WordChunk::tab_underline(&entry, 12.0, None, false, None, x, w);
             c.text = text.to_string();
@@ -4262,7 +4262,7 @@ mod tests {
 
     #[test]
     fn compress_punctuation_trims_marks_evenly_and_shifts_followers() {
-        let entry = stub_font_entry();
+        let entry = FontEntry::stub();
         let chunk = |text: &str, x: f32| {
             let mut c = WordChunk::tab_underline(&entry, 16.0, None, false, None, x, 32.0);
             c.text = text.to_string();
@@ -4408,7 +4408,7 @@ mod tests {
     #[test]
     fn word_split_over_runs_wraps_as_a_whole() {
         let mut fonts = HashMap::new();
-        fonts.insert("Arial".to_string(), stub_font_entry());
+        fonts.insert("Arial".to_string(), FontEntry::stub());
         let text_run = |text: &str| Run {
             text: text.to_string(),
             ..make_run(10.0, VertAlign::Baseline, false)
@@ -4438,7 +4438,7 @@ mod tests {
     #[test]
     fn overwide_word_after_text_breaks_at_the_new_lines_margin() {
         let mut fonts = HashMap::new();
-        fonts.insert("Arial".to_string(), stub_font_entry());
+        fonts.insert("Arial".to_string(), FontEntry::stub());
         let runs = [Run {
             text: "aa bbbbbbbbbb".to_string(),
             ..make_run(10.0, VertAlign::Baseline, false)
@@ -4472,7 +4472,7 @@ mod tests {
             "Arial".to_string(),
             FontEntry {
                 grid_line_ratio: Some(1.06),
-                ..stub_font_entry()
+                ..FontEntry::stub()
             },
         );
         let runs = [Run {
@@ -4500,7 +4500,7 @@ mod tests {
             "Arial".to_string(),
             FontEntry {
                 grid_baseline_shift: Some(0.3594),
-                ..stub_font_entry()
+                ..FontEntry::stub()
             },
         );
         let text_run = |text: &str, font_size: f32| Run {
@@ -4519,7 +4519,7 @@ mod tests {
     #[test]
     fn segment_width_counts_each_space_once_across_runs() {
         let mut fonts = HashMap::new();
-        fonts.insert("Arial".to_string(), stub_font_entry());
+        fonts.insert("Arial".to_string(), FontEntry::stub());
         let width = |texts: &[&str]| {
             let runs: Vec<Run> = texts
                 .iter()
@@ -4543,39 +4543,10 @@ mod tests {
     }
 
     /// Standard-14-style entry with every WinAnsi glyph 500/1000 wide.
-    fn stub_font_entry() -> FontEntry {
-        FontEntry {
-            pdf_name: "F1".to_string(),
-            font_ref: pdf_writer::Ref::new(1),
-            widths_1000: vec![500.0; 224],
-            line_h_ratio: None,
-            ascender_ratio: None,
-            grid_line_ratio: None,
-            plain_line_h_ratio: None,
-            grid_baseline_shift: None,
-            superscript_ratio: None,
-            subscript_ratio: None,
-            underline: None,
-            strikeout: None,
-            east_asian: false,
-            plain_ascender_ratio: None,
-            char_to_gid: None,
-            char_widths_1000: None,
-            kern_pairs: None,
-            synthetic_bold: false,
-            synthetic_italic: false,
-            is_substituted: false,
-            missing_cjk_chars: Default::default(),
-            drew_notdef: Default::default(),
-            font_path: None,
-            face_index: 0,
-        }
-    }
-
     #[test]
     fn list_text_tabs_past_label_and_first_line_indent() {
         let mut fonts = HashMap::new();
-        fonts.insert("Arial".into(), stub_font_entry());
+        fonts.insert("Arial".into(), FontEntry::stub());
         let mut para = crate::model::Paragraph {
             runs: vec![make_run(10.0, VertAlign::Baseline, false)],
             list_label: "1.".into(),
@@ -4621,7 +4592,7 @@ mod tests {
         };
         let runs = [tab, text_run("   ", 10.0), text_run("x", 9.0)];
         let mut fonts = HashMap::new();
-        fonts.insert("Arial".to_string(), stub_font_entry());
+        fonts.insert("Arial".to_string(), FontEntry::stub());
         let stops = [TabStop {
             position: 100.0,
             alignment: TabAlignment::Left,
@@ -4670,7 +4641,7 @@ mod tests {
         };
         let runs = [tab, text];
         let mut fonts = HashMap::new();
-        fonts.insert("Arial".to_string(), stub_font_entry());
+        fonts.insert("Arial".to_string(), FontEntry::stub());
         let stops = [TabStop {
             position: 10.0,
             alignment: TabAlignment::Left,
@@ -4702,13 +4673,13 @@ mod tests {
     #[test]
     fn test_effective_font_size_baseline() {
         let run = make_run(12.0, VertAlign::Baseline, false);
-        assert_eq!(effective_font_size(&run, &stub_font_entry()), 12.0);
+        assert_eq!(effective_font_size(&run, &FontEntry::stub()), 12.0);
     }
 
     #[test]
     fn test_effective_font_size_superscript() {
         // Aptos (OS/2 0.600) 12pt superscripts are 7pt in Word, Times (0.650) 8pt.
-        let mut entry = stub_font_entry();
+        let mut entry = FontEntry::stub();
         entry.superscript_ratio = Some(0.6);
         let run = make_run(12.0, VertAlign::Superscript, false);
         assert_eq!(effective_font_size(&run, &entry), 7.0);
@@ -4719,7 +4690,7 @@ mod tests {
     #[test]
     fn test_effective_font_size_subscript() {
         // 9.5pt at 0.650 is 6.175, Word draws 6.0.
-        let mut entry = stub_font_entry();
+        let mut entry = FontEntry::stub();
         entry.subscript_ratio = Some(0.65);
         let run = make_run(9.5, VertAlign::Subscript, false);
         assert_eq!(effective_font_size(&run, &entry), 6.0);
@@ -4729,7 +4700,7 @@ mod tests {
     fn test_effective_font_size_ignores_small_caps() {
         // smallCaps sizing is per-segment, not per-run — effective_font_size returns base size
         let run = make_run(12.0, VertAlign::Baseline, true);
-        assert_eq!(effective_font_size(&run, &stub_font_entry()), 12.0);
+        assert_eq!(effective_font_size(&run, &FontEntry::stub()), 12.0);
     }
 
     #[test]
@@ -4773,7 +4744,7 @@ mod tests {
 
     #[test]
     fn caps_and_small_caps_keep_their_source_letters() {
-        let entry = stub_font_entry();
+        let entry = FontEntry::stub();
         let chunks_for = |run: &Run, word: &str, original: Option<&str>| {
             let mut chunks = Vec::new();
             push_word_chunks(

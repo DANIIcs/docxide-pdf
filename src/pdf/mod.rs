@@ -5277,29 +5277,11 @@ mod tests {
     fn font(lhr: f32, ar: f32) -> FontEntry {
         FontEntry {
             pdf_name: "F".to_string(),
-            font_ref: pdf_writer::Ref::new(1),
-            widths_1000: vec![500.0; 224],
             line_h_ratio: Some(lhr),
             ascender_ratio: Some(ar),
-            grid_line_ratio: None,
             plain_line_h_ratio: Some(lhr),
-            grid_baseline_shift: None,
-            superscript_ratio: None,
-            subscript_ratio: None,
-            underline: None,
-            strikeout: None,
-            east_asian: false,
             plain_ascender_ratio: Some(ar),
-            char_to_gid: None,
-            char_widths_1000: None,
-            kern_pairs: None,
-            synthetic_bold: false,
-            synthetic_italic: false,
-            is_substituted: false,
-            missing_cjk_chars: Default::default(),
-            drew_notdef: Default::default(),
-            font_path: None,
-            face_index: 0,
+            ..FontEntry::stub()
         }
     }
 
