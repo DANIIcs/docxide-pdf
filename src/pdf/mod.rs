@@ -104,9 +104,13 @@ fn leading_para(block: &Block) -> Option<&Paragraph> {
 /// keeps text off its sides, or one wholly beside the text area, which no
 /// text can wrap around (3ec631ca50's address block in the right margin).
 /// ponytail: text-anchored frames and wrap-around ones reaching into the
-/// text stay in the flow; lift them when a fixture needs it.
+/// text stay in the flow except wrapping paragraph frames with an explicit
+/// height and nonzero offset, which keep their own coordinates and exclusion.
 fn lifted_frame<'a>(block: &'a Block, sp: &SectionProperties) -> Option<&'a FrameProperties> {
     let fp = leading_para(block)?.frame_props.as_ref()?;
+    if fp.v_relative_from == VRelativeFrom::Paragraph && !matches!(block, Block::Paragraph(_)) {
+        return None;
+    }
     frame_lifts(fp, sp).then_some(fp)
 }
 
@@ -124,7 +128,11 @@ fn frame_lifts(fp: &FrameProperties, sp: &SectionProperties) -> bool {
         );
         fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
     };
-    fp.v_relative_from != VRelativeFrom::Paragraph && (fp.text_below || beside_text())
+    (fp.v_relative_from != VRelativeFrom::Paragraph && (fp.text_below || beside_text()))
+        || (!fp.text_below
+            && fp.v_relative_from == VRelativeFrom::Paragraph
+            && fp.height > 0.0
+            && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0))
 }
 
 /// The blocks from the start of `blocks` that share the frame `props`.
@@ -268,7 +276,15 @@ impl<'a> OpenFrame<'a> {
             _ => props.height,
         };
         let top = header_footer::anchored_frame_top(props, height, sp)
-            .expect("lifted frames are page- or margin-anchored");
+            .or_else(|| match props.v_position {
+                VerticalPosition::Offset(y)
+                    if props.v_relative_from == VRelativeFrom::Paragraph =>
+                {
+                    Some(sp.page_height - state.pb.slot_top + y)
+                }
+                _ => None,
+            })
+            .expect("lifted frame has an absolute top or a paragraph offset");
         let flow = SavedFlow {
             slot_top: std::mem::replace(&mut state.pb.slot_top, sp.page_height - top),
             // A frame never breaks across pages: 3ec631ca50's bottom-aligned
@@ -298,6 +314,24 @@ impl<'a> OpenFrame<'a> {
         state.prev_space_after = flow.prev_space_after;
         state.current_col = flow.current_col;
         state.pb.float_zone = flow.float_zone;
+        if !self.props.text_below
+            && self.props.v_relative_from == VRelativeFrom::Paragraph
+            && state.pb.float_zone.is_none()
+        {
+            let top = sp.page_height - self.top;
+            state.pb.float_zone = Some(FloatZone {
+                top_y: top + self.props.v_space,
+                bottom_y: top - self.props.height - self.props.v_space,
+                obj_left: self.geometry.0,
+                obj_right: self.geometry.0 + self.geometry.1,
+                left_from_text: self.props.h_space,
+                right_from_text: self.props.h_space,
+                polygon_pts: None,
+                wrap_text: WrapText::BothSides,
+                para_relative: false,
+                from_table: false,
+            });
+        }
     }
 }
 
