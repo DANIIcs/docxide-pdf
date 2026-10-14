@@ -41,7 +41,7 @@ pub enum MathNode {
     Delim {
         open: Option<char>,
         close: Option<char>,
-        sep: char,
+        sep: Option<char>,
         grow: bool,
         items: Vec<MathRow>,
     },

@@ -3,7 +3,7 @@ use crate::model::{Paragraph, TabAlignment, TabStop};
 use super::images::compute_drawing_info;
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
 use super::runs::{parse_runs, push_textbox};
-use super::styles::{ParagraphStyle, StyleDefaults, half_points, parse_alignment};
+use super::styles::{ParagraphStyle, StyleDefaults, half_points};
 use super::textbox::collect_textboxes_from_paragraph;
 use super::{
     ParseContext, WML_NS, extract_indents, parse_frame_props, parse_paragraph_borders,
@@ -72,11 +72,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let style_color = para_style.and_then(|s| s.color);
 
-    let alignment = ppr
-        .and_then(|ppr| wml_attr(ppr, "jc"))
-        .map(parse_alignment)
-        .or_else(|| super::runs::display_math_alignment(node))
-        .or_else(|| para_style.and_then(|s| s.alignment))
+    let alignment = super::runs::paragraph_alignment(node, ppr, para_style)
         .unwrap_or(ctx.styles.defaults.alignment);
 
     let contextual_spacing = contextual_spacing(ppr, para_style);

@@ -64,6 +64,7 @@ pub(crate) fn layout(
         font,
         settings,
         base: size,
+        display,
     };
     let style = if display { Style::D } else { Style::T };
     let b = cx.row(root, St::new(style));
@@ -126,11 +127,14 @@ impl St {
     fn sub(self) -> Self {
         self.sup().cramp()
     }
-    /// Numerator style; the denominator is its cramped form.
-    fn num(self) -> Self {
+    /// Numerator style; the denominator is its cramped form. In display
+    /// math Word never shrinks a fraction's parts (a nested a/b/c keeps 12pt
+    /// letters at 12pt, text-style shifts); inline, they drop a script level.
+    fn num(self, display_zone: bool) -> Self {
         Self {
             style: match self.style {
                 Style::D => Style::T,
+                Style::T if display_zone => Style::T,
                 Style::T => Style::S,
                 _ => Style::SS,
             },
@@ -155,6 +159,9 @@ enum Class {
     Open,
     Close,
     Punct,
+    /// A space typed in a math run: it is the spacing, nothing is added
+    /// beside it (Word's ", " zone is a comma and a 0.22em space).
+    Space,
 }
 
 /// A box being built: like `MathBox`, plus what spacing needs to know of
@@ -171,6 +178,8 @@ struct B {
     first_italic: bool,
     /// One glyph only (scripts attach to its italic correction).
     single_glyph: Option<u16>,
+    /// The tallest delimiter inside: an enclosing one grows past it.
+    fence: f32,
 }
 
 impl B {
@@ -185,6 +194,7 @@ impl B {
             ic: 0.0,
             first_italic: false,
             single_glyph: None,
+            fence: 0.0,
         }
     }
 
@@ -211,6 +221,7 @@ impl B {
         self.w = self.w.max(dx + other.w);
         self.asc = self.asc.max(other.asc + dy);
         self.desc = self.desc.max(other.desc - dy);
+        self.fence = self.fence.max(other.fence);
         self.items
             .extend(other.items.into_iter().map(|it| shift(it, dx, dy)));
     }
@@ -237,6 +248,8 @@ struct Ctx<'a> {
     font: &'a MathFont<'a>,
     settings: &'a MathSettings,
     base: f32,
+    /// A display zone (`m:oMathPara`).
+    display: bool,
 }
 
 /// Floor to the half point, as Word sizes its script levels.
@@ -364,10 +377,10 @@ impl<'a> Ctx<'a> {
                     b.first_italic = true;
                     b.ic = self.font.italic_correction(gid, size);
                 }
-                let class = if run.normal {
-                    Class::Ord
-                } else {
-                    class_of(drawn)
+                let class = match drawn {
+                    ' ' => Class::Space,
+                    _ if run.normal => Class::Ord,
+                    c => class_of(c),
                 };
                 b.first = class;
                 b.last = class;
@@ -478,8 +491,9 @@ impl<'a> Ctx<'a> {
             let atoms = vec![self.row(num, st), slash, self.row(den, st)];
             return self.hbox(atoms, st).ord();
         }
-        let n = self.row(num, st.num());
-        let d = self.row(den, st.num().cramp());
+        let parts = st.num(self.display && !self.settings.small_frac);
+        let n = self.row(num, parts);
+        let d = self.row(den, parts.cramp());
         if kind == FracKind::Skewed {
             return self.skewed(n, d, st);
         }
@@ -575,9 +589,12 @@ impl<'a> Ctx<'a> {
         if !pre {
             let (bw, ic) = (base.w, base.ic);
             // The superscript clears the base's italic correction.
-            return self.attach(base, sub_b, sup_b, bw, bw + ic, st);
+            let drop = base.single_glyph.is_none();
+            return self.attach(base, sub_b, sup_b, (bw, bw + ic), drop, st);
         }
-        let (sub_shift, sup_shift) = self.script_shifts(&base, sub_b.as_ref(), sup_b.as_ref(), st);
+        let drop = base.single_glyph.is_none();
+        let (sub_shift, sup_shift) =
+            self.script_shifts(&base, sub_b.as_ref(), sup_b.as_ref(), drop, st);
         let sw = sub_b.as_ref().map_or(0.0, |s| s.w);
         let pw = sup_b.as_ref().map_or(0.0, |s| s.w);
         let scripts_w = sw.max(pw);
@@ -593,9 +610,18 @@ impl<'a> Ctx<'a> {
     }
 
     /// `base` with a subscript at `sub_x` and a superscript at `sup_x`, then
-    /// SpaceAfterScript.
-    fn attach(&self, base: B, sub: Option<B>, sup: Option<B>, sub_x: f32, sup_x: f32, st: St) -> B {
-        let (sub_shift, sup_shift) = self.script_shifts(&base, sub.as_ref(), sup.as_ref(), st);
+    /// SpaceAfterScript; `drop`: see `script_shifts`.
+    fn attach(
+        &self,
+        base: B,
+        sub: Option<B>,
+        sup: Option<B>,
+        (sub_x, sup_x): (f32, f32),
+        drop: bool,
+        st: St,
+    ) -> B {
+        let (sub_shift, sup_shift) =
+            self.script_shifts(&base, sub.as_ref(), sup.as_ref(), drop, st);
         let mut b = B::ends_of(&base);
         b.put(base, 0.0, 0.0);
         if let Some(s) = sub {
@@ -608,13 +634,21 @@ impl<'a> Ctx<'a> {
         b
     }
 
-    /// Script shifts (sub down, sup up), the OpenType MATH rules.
-    fn script_shifts(&self, base: &B, sub: Option<&B>, sup: Option<&B>, st: St) -> (f32, f32) {
-        // A lone glyph's scripts don't drop with its ink (TeX's rule 18a).
-        let (b_asc, b_desc) = if base.single_glyph.is_some() {
-            (0.0, 0.0)
-        } else {
+    /// Script shifts (sub down, sup up), the OpenType MATH rules. With
+    /// `drop` the scripts also hang from the base's ink (a box's, or a display
+    /// operator's); a lone glyph's don't (TeX's rule 18a).
+    fn script_shifts(
+        &self,
+        base: &B,
+        sub: Option<&B>,
+        sup: Option<&B>,
+        drop: bool,
+        st: St,
+    ) -> (f32, f32) {
+        let (b_asc, b_desc) = if drop {
             (base.asc, base.desc)
+        } else {
+            (0.0, 0.0)
         };
         let mut sub_shift = sub.map_or(0.0, |s| {
             self.k(st, Constants::subscript_shift_down)
@@ -719,11 +753,11 @@ impl<'a> Ctx<'a> {
         let op_ic = op
             .single_glyph
             .map_or(0.0, |g| self.font.italic_correction(g, size));
-        // Large operators are centred on the math axis.
-        let mut centred = B {
-            single_glyph: op.single_glyph,
-            ..B::empty()
-        };
+        // Large operators are centred on the math axis. A display operator's
+        // limits drop from its ink like a box's scripts (Word's display ∫ at
+        // 12pt: 13.7pt up, 11.3pt down); inline ones sit like a letter's
+        // (inline ∑: 4.8 up, 2.8 down).
+        let mut centred = B::empty();
         let dy = self.k(st, Constants::axis_height) - (op.asc - op.desc) / 2.0;
         centred.put(op, 0.0, dy);
         let is_integral = matches!(
@@ -744,7 +778,7 @@ impl<'a> Ctx<'a> {
             // The italic correction moves the lower limit left of the upper
             // one (OpenType MATH, large operators).
             let w = centred.w;
-            self.attach(centred, lo, hi, w - op_ic, w, st)
+            self.attach(centred, lo, hi, (w - op_ic, w), st.display(), st)
         } else {
             centred
         };
@@ -785,7 +819,7 @@ impl<'a> Ctx<'a> {
         &self,
         open: Option<char>,
         close: Option<char>,
-        sep: char,
+        sep: Option<char>,
         grow: bool,
         items: &[MathRow],
         st: St,
@@ -796,10 +830,18 @@ impl<'a> Ctx<'a> {
         let (asc, desc) = bodies
             .iter()
             .fold((0.0f32, 0.0f32), |(a, d), b| (a.max(b.asc), d.max(b.desc)));
-        // Delimiters cover the content symmetrically about the axis, unless
-        // m:grow is off; even at base size they sit centred on it.
+        // Delimiters cover the content symmetrically about the axis (TeX's
+        // δ) less a 3/8 em shortfall, and grow past any delimiter inside them;
+        // even at base size they sit centred on the axis. m:grow off keeps the
+        // base glyph. Fitted on 36 Word probes at 12pt (inline and display
+        // x, y, b², x+y, fractions, nested fractions and delimiters): all but
+        // the radicals (`current_focus/office-math.md`) agree for a shortfall
+        // in [4.47, 4.58) pt.
+        let inner = bodies.iter().map(|b| b.fence).fold(0.0f32, f32::max);
         let target = if grow {
-            2.0 * (asc - axis).max(desc + axis)
+            let cover = 2.0 * (asc - axis).max(desc + axis) - size * 3.0 / 8.0;
+            // A hair over the inner delimiter takes the next variant.
+            cover.max(inner + 0.01)
         } else {
             0.0
         };
@@ -809,6 +851,7 @@ impl<'a> Ctx<'a> {
             let mut b = B {
                 first: class,
                 last: class,
+                fence: g.asc + g.desc,
                 ..B::empty()
             };
             b.put(g, 0.0, dy);
@@ -819,7 +862,7 @@ impl<'a> Ctx<'a> {
         let n = bodies.len();
         for (i, body) in bodies.into_iter().enumerate() {
             parts.push(body.ord());
-            if i + 1 < n {
+            if let Some(sep) = sep.filter(|_| i + 1 < n) {
                 parts.push(fence(sep, Class::Punct));
             }
         }
@@ -908,16 +951,18 @@ impl<'a> Ctx<'a> {
         }
         let col_gap = if matrix { size } else { 0.0 };
         let total_w = col_w.iter().sum::<f32>() + col_gap * ncols.saturating_sub(1) as f32;
-        // Baselines from the first row's (y = 0) down; `top` is that row's ascent.
-        let (mut y, mut top) = (0.0f32, None);
-        let mut placed: Vec<(B, f32, f32)> = Vec::new();
+        // Rows step like lines of the math font (a math line apart for plain
+        // contents: Word 14.16pt at 12pt), taller ink pushing them apart; the
+        // grid is measured and centred on the axis by its ink.
+        let mut rows_b = B::empty();
+        let (mut y, mut prev_desc) = (0.0f32, None::<f32>);
         for r in rows {
-            let asc = r.iter().map(|c| c.asc).fold(line_asc, f32::max);
-            let desc = r.iter().map(|c| c.desc).fold(line_desc, f32::max);
-            if top.is_some() {
-                y -= asc;
+            let asc = r.iter().map(|c| c.asc).fold(0.0, f32::max);
+            let desc = r.iter().map(|c| c.desc).fold(0.0, f32::max);
+            if let Some(pd) = prev_desc {
+                y -= pd.max(line_desc) + asc.max(line_asc);
             }
-            top.get_or_insert(asc);
+            prev_desc = Some(desc);
             let mut x = 0.0;
             for (i, c) in r.into_iter().enumerate() {
                 let cx = if matrix {
@@ -925,19 +970,13 @@ impl<'a> Ctx<'a> {
                 } else {
                     (total_w - c.w) / 2.0
                 };
-                placed.push((c, cx, y));
+                rows_b.put(c, cx, y);
                 x += col_w[i] + col_gap;
             }
-            y -= desc;
         }
-        let top = top.unwrap_or(0.0);
-        let dy = self.k(st, Constants::axis_height) - (top + y) / 2.0;
+        let dy = self.k(st, Constants::axis_height) - (rows_b.asc - rows_b.desc) / 2.0;
         let mut b = B::empty();
-        for (c, x, cy) in placed {
-            b.put(c, x, cy + dy);
-        }
-        b.asc = b.asc.max(top + dy);
-        b.desc = b.desc.max(-(y + dy));
+        b.put(rows_b, 0.0, dy);
         b.w = total_w;
         b
     }
@@ -995,6 +1034,7 @@ fn space(left: Class, right: Class, st: St) -> f32 {
     use Class::*;
     let script = st.script_level() > 0;
     let (n, script_too) = match (left, right) {
+        (Space, _) | (_, Space) => (0.0, true),
         (Ord, Op) | (Op, Ord) | (Op, Op) | (Close, Op) => (3.0, true),
         (Ord, Bin) | (Bin, Ord) | (Bin, Op) | (Bin, Open) | (Op, Bin) | (Close, Bin) => {
             (4.0, false)

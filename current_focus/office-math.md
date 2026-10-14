@@ -57,16 +57,34 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   No padding: the bar is exactly as wide as the wider part.
 - Scripts: superscript at advance + italic correction, subscript at the
   advance; MATH shift rules.
+- In display math a fraction never shrinks its parts: a nested a/b/c keeps
+  12pt letters at 12pt (text-style shifts inside). Inline, the parts drop a
+  script level (pendulum's π/2 at 11.5 of 16pt).
 - `m:d` delimiters are centred on the math axis even at base size (Word draws
-  `(x)` 0.5pt up at 12pt), stretched to cover the content when `m:grow` is on
-  (default).
+  `(x)` 0.5pt up at 12pt). With `m:grow` on (default) they take the first
+  variant at least δ − 3/8 em tall, δ = TeX's axis-symmetric cover height
+  2·max(asc − axis, desc + axis), and always one size past a delimiter inside
+  them: 34 of 36 probes (`mp5_delim`: x, y, b², x+y, inline and display
+  fractions, nested fractions and delimiters) agree for a shortfall in
+  [4.47, 4.58) pt at 12pt; the two misses are radicals (see Open). A
+  `m:sepChr` without a value draws no separator.
+- A typed space in a math run is the spacing: nothing is added beside it
+  (the zone ", " is comma + 0.22em space).
 - Display n-ary operators take the first variant at least 1.5 ×
   DisplayOperatorMinHeight: all 20 operators probed take their 1.91–2.15em
   variant, never the ∫ family's 1.35em one (the bar lies in (1.35, 1.91] em).
   Inline operators keep the base glyph and put limits beside it whatever
   `limLoc` says.
-- Matrices: columns an em apart, rows a math line (Cambria Math hhea box)
-  apart, centred on the axis.
+- Matrices: columns an em apart; rows step like math-font lines (14.16pt at
+  12pt for plain rows), taller ink pushing them apart; the grid is measured
+  and centred on the axis by its ink (heading-to-row distances match Word to
+  0.05pt). Display cells keep display style (a cell's a/b shifts 9.12/7.92).
+- Display operators' limits drop from the operator's ink like a box's
+  scripts (display ∫: 13.7pt up, 11.3pt down at 12pt); inline operators'
+  limits sit like a letter's (inline ∑: 4.8 up, 2.8 down).
+- A display-math paragraph takes its own `m:oMathParaPr/m:jc` (centred by
+  default) over the paragraph's `w:jc`: Word centres a `w:jc="both"` cell's
+  equation.
 
 ### Line heights
 - A line holding math is sized as if the zone were text in the math font's

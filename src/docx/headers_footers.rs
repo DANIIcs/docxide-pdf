@@ -7,21 +7,11 @@ use super::numbering::{ListCounters, NumberingInfo};
 use super::parse_table_node;
 use super::relationships::parse_part_relationships;
 use super::runs::parse_runs;
-use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
+use super::styles::{StylesInfo, ThemeFonts};
 use super::{
     ParseContext, WML_NS, collect_block_nodes, extract_indents, parse_paragraph_spacing, wml,
     wml_attr,
 };
-
-fn resolve_alignment(
-    ppr: Option<roxmltree::Node>,
-    para_style: Option<&ParagraphStyle>,
-) -> Alignment {
-    ppr.and_then(|ppr| wml_attr(ppr, "jc"))
-        .map(parse_alignment)
-        .or_else(|| para_style.and_then(|s| s.alignment))
-        .unwrap_or(Alignment::Left)
-}
 
 pub(super) fn parse_header_footer_xml<R: Read + Seek>(
     xml_content: &str,
@@ -207,7 +197,8 @@ fn parse_notes_simple<R: Read + Seek>(
                         .get(&fn_ctx.styles.default_paragraph_style_id)
                 });
 
-            let alignment = resolve_alignment(ppr, para_style);
+            let alignment =
+                super::runs::paragraph_alignment(p, ppr, para_style).unwrap_or(Alignment::Left);
             let parsed = parse_runs(p, fn_ctx);
             let (sp_before, sp_after, ls) =
                 parse_paragraph_spacing(ppr, para_style, &fn_ctx.styles.defaults);

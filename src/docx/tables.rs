@@ -8,7 +8,7 @@ use crate::model::{
 
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
 use super::runs::parse_runs;
-use super::styles::{TableBordersDef, TableStyleDef, parse_alignment, parse_table_borders_def};
+use super::styles::{TableBordersDef, TableStyleDef, parse_table_borders_def};
 use super::{
     ParseContext, WML_NS, collect_block_nodes, parse_cell_border, parse_cell_border_left,
     parse_cell_border_right, parse_hex_color, parse_on_off, parse_paragraph_spacing, twips_attr,
@@ -760,11 +760,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         .and_then(|ppr| wml_attr(ppr, "pStyle"))
                         .unwrap_or(&ctx.styles.default_paragraph_style_id);
                     let para_style = ctx.styles.paragraph_styles.get(para_style_id);
-                    let alignment = ppr
-                        .and_then(|ppr| wml_attr(ppr, "jc"))
-                        .map(parse_alignment)
-                        .or_else(|| super::runs::display_math_alignment(p))
-                        .or_else(|| para_style.and_then(|s| s.alignment))
+                    let alignment = super::runs::paragraph_alignment(p, ppr, para_style)
                         .unwrap_or(Alignment::Left);
                     let (sp_before, sp_after, ls) =
                         parse_paragraph_spacing(ppr, para_style, &ctx.styles.defaults);

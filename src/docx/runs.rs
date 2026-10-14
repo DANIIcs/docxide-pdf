@@ -916,13 +916,27 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
     result
 }
 
-/// Default alignment for a paragraph that contains a display-math block
-/// (`m:oMathPara`). OOXML centers display math by default (`m:oMathParaPr/m:jc`,
-/// default `centerGroup`), which is why e.g. table-header equation cells appear
-/// centered even with no paragraph `w:jc`. Returns `None` for paragraphs with no
-/// `m:oMathPara` (inline `m:oMath` flows with the surrounding text and is not
-/// treated as display math).
-pub(super) fn display_math_alignment(para: roxmltree::Node) -> Option<crate::model::Alignment> {
+/// A paragraph's alignment, when it sets one: its display math's own, else
+/// `w:jc`, else its style's.
+pub(super) fn paragraph_alignment(
+    para: roxmltree::Node,
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> Option<crate::model::Alignment> {
+    display_math_alignment(para)
+        .or_else(|| {
+            ppr.and_then(|ppr| wml_attr(ppr, "jc"))
+                .map(super::styles::parse_alignment)
+        })
+        .or_else(|| para_style.and_then(|s| s.alignment))
+}
+
+/// The alignment of a paragraph holding display math (`m:oMathPara`): its
+/// own `m:oMathParaPr/m:jc`, centred by default (`centerGroup`), whatever the
+/// paragraph's `w:jc` says. A math paragraph has its own justification (ISO
+/// 29500 Annex L); Word centres a `w:jc="both"` cell's equation. `None` for
+/// paragraphs without one.
+fn display_math_alignment(para: roxmltree::Node) -> Option<crate::model::Alignment> {
     use crate::model::Alignment;
     let omp = para
         .children()

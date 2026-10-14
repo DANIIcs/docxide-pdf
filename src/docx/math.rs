@@ -84,7 +84,7 @@ impl MathParser<'_> {
             "d" => one(MathNode::Delim {
                 open: chr(n, "dPr", "begChr", '('),
                 close: chr(n, "dPr", "endChr", ')'),
-                sep: chr(n, "dPr", "sepChr", '|').unwrap_or('|'),
+                sep: chr(n, "dPr", "sepChr", '|'),
                 // m:grow is on unless turned off (§22.1.2.43).
                 grow: math_bool(n, "dPr", "grow").unwrap_or(true),
                 items: n
@@ -262,7 +262,7 @@ mod tests {
         };
         assert_eq!(
             (*open, *close, *sep, *grow, items.len()),
-            (Some('['), None, '|', true, 2)
+            (Some('['), None, Some('|'), true, 2)
         );
     }
 
