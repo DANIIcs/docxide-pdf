@@ -530,6 +530,9 @@ pub(super) fn parse_connector_from_wsp(
     let (display_w, display_h) = extent_dimensions(anchor);
 
     let mut conn = parse_connector_shape_node(wsp, theme)?;
+    conn.behind_doc = anchor
+        .attribute("behindDoc")
+        .is_some_and(|v| v == "1" || v == "true");
     conn.h_position = h_position;
     conn.h_relative_from = h_relative_from;
     conn.v_position = v_position;
@@ -623,6 +626,7 @@ pub(super) fn parse_connector_shape_node(
         .unwrap_or_default();
 
     Some(ConnectorShape {
+        behind_doc: false,
         h_position: HorizontalPosition::Offset(0.0),
         h_relative_from: HRelativeFrom::Column,
         v_position: VerticalPosition::Offset(0.0),
@@ -961,4 +965,34 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
         }
     }
     textboxes
+}
+
+#[cfg(test)]
+mod connector_layer_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn anchored_connector_preserves_behind_document_layer() {
+        let theme = ThemeFonts {
+            major: "Arial".into(),
+            minor: "Arial".into(),
+            major_east_asia: String::new(),
+            minor_east_asia: String::new(),
+            major_cs: String::new(),
+            minor_cs: String::new(),
+            colors: HashMap::new(),
+            fill_styles: Vec::new(),
+            line_widths: Vec::new(),
+        };
+        for (attr, expected) in [("", false), ("0", false), ("1", true), ("true", true)] {
+            let xml = format!(
+                r#"<wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" behindDoc="{attr}" relativeHeight="42"><wp:extent cx="914400" cy="0"/><wps:wsp><wps:spPr><a:prstGeom prst="straightConnector1"/></wps:spPr></wps:wsp></wp:anchor>"#
+            );
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            let connector = parse_connector_from_wsp(doc.root_element(), &theme).unwrap();
+            assert_eq!(connector.behind_doc, expected);
+            assert_eq!(connector.z_index, 42);
+        }
+    }
 }

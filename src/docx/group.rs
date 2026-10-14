@@ -269,6 +269,7 @@ fn emit_wsp<R: Read + Seek>(
             conn.h_relative_from = base.h_rel;
             conn.v_position = VerticalPosition::Offset(base.y + cy);
             conn.v_relative_from = base.v_rel;
+            conn.behind_doc = base.behind_doc;
             conn.z_index = base.z_index;
             out.push(RunDrawingResult::Connector(conn));
         }

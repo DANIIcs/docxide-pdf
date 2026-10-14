@@ -977,20 +977,27 @@ pub(super) fn render_header_footer(
                 let slot_top = cursor_y;
                 cursor_y -= top_border_band(para) + float_text_push(para, text_width);
 
-                // DrawingML lines live in connectors rather than pictures or
-                // textboxes. Empty header/footer paragraphs still carry their
-                // paragraph-relative anchors.
-                for connector in &para.connectors {
-                    let (x, y) = super::positioning::connector_top_left(
-                        connector,
-                        sp,
-                        sp.margin_left,
-                        text_width,
-                        text_width,
-                        slot_top,
-                    );
-                    super::positioning::render_connector(connector, content, x, y);
-                }
+                // Foreground anchored lines must cover an inline picture's white
+                // background. Behind-document lines retain their earlier paint pass.
+                let defer_connectors =
+                    para.image.is_some() || para.runs.iter().any(|run| run.inline_image.is_some());
+                let draw_connectors = |content: &mut Content, foreground: bool| {
+                    for connector in &para.connectors {
+                        if defer_connectors && !connector.behind_doc != foreground {
+                            continue;
+                        }
+                        let (x, y) = super::positioning::connector_top_left(
+                            connector,
+                            sp,
+                            sp.margin_left,
+                            text_width,
+                            text_width,
+                            slot_top,
+                        );
+                        super::positioning::render_connector(connector, content, x, y);
+                    }
+                };
+                draw_connectors(content, false);
 
                 // Paragraph borders span the laid-out height, so each exit below
                 // draws them once it knows it (ut_koer: a header staff image
@@ -1390,6 +1397,9 @@ pub(super) fn render_header_footer(
                             );
                         }
                     }
+                    if defer_connectors {
+                        draw_connectors(content, true);
+                    }
                     draw_para_borders(content, cursor_y - line_h);
                     cursor_y -= line_h + bottom_border_band(para);
                     prev_space_after = para.space_after;
@@ -1436,6 +1446,9 @@ pub(super) fn render_header_footer(
                             let needed = (cursor_y - tb_bottom_y).max(0.0);
                             advance = advance.max(needed);
                         }
+                    }
+                    if defer_connectors {
+                        draw_connectors(content, true);
                     }
                     draw_para_borders(content, cursor_y - line_h);
                     cursor_y -= advance;
@@ -1665,6 +1678,9 @@ pub(super) fn render_header_footer(
                     0.0
                 };
                 let para_h = lines_height(&lines, line_h, metrics) - trailing_descent;
+                if defer_connectors {
+                    draw_connectors(content, true);
+                }
                 draw_para_borders(content, cursor_y - para_h);
                 cursor_y -= para_h + bottom_border_band(para);
                 prev_space_after = para.space_after;
