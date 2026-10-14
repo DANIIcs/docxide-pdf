@@ -4445,6 +4445,32 @@ mod tests {
         assert!((offset - 23.75).abs() < 0.01, "{offset}");
     }
 
+    #[test]
+    fn segment_width_counts_each_space_once_across_runs() {
+        let mut fonts = HashMap::new();
+        fonts.insert("Arial".to_string(), stub_font_entry());
+        let width = |texts: &[&str]| {
+            let runs: Vec<Run> = texts
+                .iter()
+                .map(|t| Run {
+                    text: t.to_string(),
+                    ..make_run(10.0, VertAlign::Baseline, false)
+                })
+                .collect();
+            let refs: Vec<&Run> = runs.iter().collect();
+            segment_width(&refs, &fonts)
+        };
+        // Every glyph is 5pt: "a b" is three of them however the runs split.
+        assert_eq!(width(&["a b"]), 15.0);
+        assert_eq!(width(&["a ", "b"]), 15.0);
+        assert_eq!(width(&["a", " b"]), 15.0);
+        assert_eq!(width(&["a", " ", "b"]), 15.0);
+        assert_eq!(width(&["a ", " b"]), 20.0);
+        assert_eq!(width(&["a", "b"]), 10.0);
+        // Leading and trailing spaces are not the segment's.
+        assert_eq!(width(&["  a", "b  "]), 10.0);
+    }
+
     /// Standard-14-style entry with every WinAnsi glyph 500/1000 wide.
     fn stub_font_entry() -> FontEntry {
         FontEntry {
