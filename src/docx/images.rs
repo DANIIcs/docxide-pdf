@@ -75,7 +75,9 @@ fn pct_width_of_margin(anchor: roxmltree::Node) -> Option<f32> {
 /// `wp:anchor` z-order: (behindDoc, relativeHeight).
 pub(super) fn anchor_z_order(anchor: roxmltree::Node) -> (bool, u32) {
     (
-        anchor.attribute("behindDoc") == Some("1"),
+        anchor
+            .attribute("behindDoc")
+            .is_some_and(super::parse_on_off),
         anchor
             .attribute("relativeHeight")
             .and_then(|v| v.parse::<u32>().ok())

@@ -978,12 +978,13 @@ pub(super) fn render_header_footer(
                 cursor_y -= top_border_band(para) + float_text_push(para, text_width);
 
                 // Foreground anchored lines must cover an inline picture's white
-                // background. Behind-document lines retain their earlier paint pass.
+                // background, so they wait for the late pass; behind-document
+                // lines (and all lines when there is no picture) paint early.
                 let defer_connectors =
-                    para.image.is_some() || para.runs.iter().any(|run| run.inline_image.is_some());
-                let draw_connectors = |content: &mut Content, foreground: bool| {
+                    has_para_image || para.runs.iter().any(|run| run.inline_image.is_some());
+                let draw_connectors = |content: &mut Content, late_pass: bool| {
                     for connector in &para.connectors {
-                        if defer_connectors && !connector.behind_doc != foreground {
+                        if (defer_connectors && !connector.behind_doc) != late_pass {
                             continue;
                         }
                         let (x, y) = super::positioning::connector_top_left(
@@ -1397,9 +1398,7 @@ pub(super) fn render_header_footer(
                             );
                         }
                     }
-                    if defer_connectors {
-                        draw_connectors(content, true);
-                    }
+                    draw_connectors(content, true);
                     draw_para_borders(content, cursor_y - line_h);
                     cursor_y -= line_h + bottom_border_band(para);
                     prev_space_after = para.space_after;
@@ -1447,9 +1446,7 @@ pub(super) fn render_header_footer(
                             advance = advance.max(needed);
                         }
                     }
-                    if defer_connectors {
-                        draw_connectors(content, true);
-                    }
+                    draw_connectors(content, true);
                     draw_para_borders(content, cursor_y - line_h);
                     cursor_y -= advance;
                     prev_space_after = para.space_after;
@@ -1678,9 +1675,7 @@ pub(super) fn render_header_footer(
                     0.0
                 };
                 let para_h = lines_height(&lines, line_h, metrics) - trailing_descent;
-                if defer_connectors {
-                    draw_connectors(content, true);
-                }
+                draw_connectors(content, true);
                 draw_para_borders(content, cursor_y - para_h);
                 cursor_y -= para_h + bottom_border_band(para);
                 prev_space_after = para.space_after;

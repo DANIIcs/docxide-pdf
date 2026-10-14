@@ -95,6 +95,7 @@ pub(super) enum ThemeFillStyle {
     },
 }
 
+#[derive(Default)]
 pub(super) struct ThemeFonts {
     pub(super) major: String,
     pub(super) minor: String,
