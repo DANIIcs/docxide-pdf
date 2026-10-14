@@ -4330,9 +4330,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 }
                 SectionBreakType::Continuous => {
                     if state.pb.is_at_page_top(cur_sp)
-                        && !doc.sections[sect_idx - 1].blocks.iter().any(|block| {
-                            matches!(block, Block::Paragraph(p) if p.frame_props.is_some())
-                        })
+                        && !doc.sections[sect_idx - 1].blocks.iter().any(
+                            |block| matches!(block, Block::Paragraph(p) if p.frame_props.is_some()),
+                        )
                     {
                         // No content on this page belongs to the preceding
                         // section. The continuous section therefore owns this
@@ -4647,7 +4647,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         // there (the break paragraph's mark line).
                         let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                         let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        state.pb.slot_top = fz.bottom_y - resolve_line_h(ls, fs, lhr) * (1 + extra_breaks) as f32;
+                        state.pb.slot_top =
+                            fz.bottom_y - resolve_line_h(ls, fs, lhr) * (1 + extra_breaks) as f32;
                     }
                     state.pb.float_zone = None;
                 }

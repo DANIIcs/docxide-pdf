@@ -4179,20 +4179,31 @@ pub(super) fn grid_baseline_offset(
 mod tests {
     #[test]
     fn leading_space_wrap_uses_space_font_pitch() {
-        let mut lines = vec![super::TextLine {
-            leading_space_wrap: true,
-            break_font_size: Some(7.5),
-            break_lhr: Some(1.2),
-            ..Default::default()
-        }, super::TextLine {
-            break_font_size: Some(7.5),
-            break_lhr: Some(1.2),
-            ..Default::default()
-        }];
-        super::size_lines_by_own_runs(&mut lines, &std::collections::HashMap::new(),
-            crate::model::LineSpacing::Auto(1.0), 14.0, 10.0);
+        let mut lines = vec![
+            super::TextLine {
+                leading_space_wrap: true,
+                break_font_size: Some(7.5),
+                break_lhr: Some(1.2),
+                ..Default::default()
+            },
+            super::TextLine {
+                break_font_size: Some(7.5),
+                break_lhr: Some(1.2),
+                ..Default::default()
+            },
+        ];
+        super::size_lines_by_own_runs(
+            &mut lines,
+            &std::collections::HashMap::new(),
+            crate::model::LineSpacing::Auto(1.0),
+            14.0,
+            10.0,
+        );
         assert!((lines[0].pitch.unwrap() - 9.0).abs() < 0.001);
-        assert!(lines[1].pitch.is_none(), "ordinary empty lines keep paragraph pitch");
+        assert!(
+            lines[1].pitch.is_none(),
+            "ordinary empty lines keep paragraph pitch"
+        );
     }
 
     use super::*;
