@@ -16,6 +16,17 @@ pub(super) fn align_offset(alignment: Alignment, slack: f32) -> f32 {
     }
 }
 
+/// A standalone inline picture occupies the paragraph's first text line.
+pub(super) fn inline_picture_x(para: &Paragraph, col_x: f32, col_w: f32, width: f32) -> f32 {
+    let first = para.indent_first_line - para.indent_hanging;
+    let left = para.indent_left + first;
+    col_x + left
+        + align_offset(
+            para.alignment,
+            (col_w - left - para.indent_right - width).max(0.0),
+        )
+}
+
 /// Draw a VML horizontal rule (o:hr) on the line whose box ends at
 /// `line_bottom`, in a column starting at `col_x`, `col_w` wide. The width
 /// percentage and alignment apply inside the paragraph's indents (slovak's

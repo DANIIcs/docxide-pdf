@@ -3722,7 +3722,7 @@ fn render_paragraph_block(
                 baseline - (img.layout_extra_height - img.layout_extra_top)
             };
             let y_bottom = state.pb.slot_top - bottom_depth;
-            let x = col_x + align_offset(para.alignment, (col_w - img.display_width).max(0.0));
+            let x = helpers::inline_picture_x(para, col_x, col_w, img.display_width);
             let img_fx = effect_names.get(&state.global_block_idx);
             if let Some(ref shadow) = img.shadow {
                 color::draw_image_shadow(
