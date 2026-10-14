@@ -48,7 +48,9 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - An italic glyph followed by an upright one keeps its italic correction
   (𝑇 then `=`: 4.44 + 0.35 = 4.79, Word 4.75).
 - A function name is an operator: thin space before an ordinary argument,
-  none before a delimiter (`sin x`, `sin(x)`).
+  none before a delimiter (`sin x`, `sin(x)`). A unary sign before a function
+  keeps that thin space: Word's "−sin θ" has 2.04pt after the minus (zone
+  start 1.79), as do "=−sin", "(−sin", "−log" and "−∑" (probe `mp8_fn`).
 - After a script: SpaceAfterScript.
 
 ### Structures
