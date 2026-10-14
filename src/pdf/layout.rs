@@ -1494,7 +1494,7 @@ pub(super) fn build_lines(
             ctx.default_tab_stop,
             opts.tab_exclusions,
             ctx.compat_mode,
-            cjk.squeeze_spaces,
+            cjk,
         )
     } else {
         build_paragraph_lines(
@@ -2290,7 +2290,7 @@ pub(super) fn build_tabbed_line(
     default_tab_stop: f32,
     tab_exclusions: &[(f32, f32)],
     compat_mode: u32,
-    squeeze_spaces: bool,
+    cjk: CjkLayout,
 ) -> Vec<TextLine> {
     // Split runs into segments at tab markers, tracking original run indices.
     // The fourth tuple element is the `<w:tab/>` run itself (when present) so the
@@ -2340,8 +2340,6 @@ pub(super) fn build_tabbed_line(
     // Underline state of the run that emitted the pending whitespace, so an
     // underline bridges spaces inside an underlined run (see build_paragraph_lines).
     let mut pending_space_underline = false;
-    // Whether the pending spaces came from a `w:rtl` run (`WordChunk::gap_rtl`).
-    let mut space_rtl = false;
     let mut pending_space_double = false;
     let mut pending_space_color: Option<[u8; 3]> = None;
     let mut pending_space_border: Option<ParagraphBorder> = None;
@@ -2619,7 +2617,6 @@ pub(super) fn build_tabbed_line(
                 pending_space_w += space_count as f32
                     * word_space_width(run, entry, eff_fs, source, &mut prev_char);
                 if space_count > 0 {
-                    space_rtl = run.rtl;
                     pending_space_underline = run.underline;
                     pending_space_double = run.double_underline;
                     pending_space_color = run.color;
@@ -2663,7 +2660,7 @@ pub(super) fn build_tabbed_line(
                 // spaces after the last tab, as untabbed lines do
                 // (`SPACE_SQUEEZE`); ukrainian_municipal's "1.<tab>Надати …"
                 // line ends in "опалення" with its spaces at 93%.
-                if overflows && squeeze_spaces && cur_line_max >= line_reach {
+                if overflows && cjk.squeeze_spaces && cur_line_max >= line_reach {
                     let after_tab = all_chunks.get(justify_from..).unwrap_or(&[]);
                     let spaces = after_tab.last().map_or(0.0, |last| {
                         line_space_width(after_tab)
@@ -2697,7 +2694,7 @@ pub(super) fn build_tabbed_line(
                     y_off,
                     current_x,
                     ww,
-                    space_rtl,
+                    false,
                 );
                 current_x += ww;
             }
@@ -2710,7 +2707,6 @@ pub(super) fn build_tabbed_line(
             if trailing_spaces > 0 {
                 pending_space_w += trailing_spaces as f32
                     * word_space_width(run, entry, eff_fs, "", &mut prev_char);
-                space_rtl = run.rtl;
                 pending_space_underline = run.underline;
                 pending_space_double = run.double_underline;
                 pending_space_color = run.color;
@@ -2755,6 +2751,9 @@ pub(super) fn build_tabbed_line(
         });
     }
 
+    for line in result_lines.iter_mut() {
+        line.rtl_paragraph = cjk.bidi;
+    }
     result_lines
 }
 
@@ -2793,12 +2792,66 @@ fn show_kerned(content: &mut Content, entry: &FontEntry, text: &str, boundary_sp
     items.show(Str(&entry.encode(&run)));
 }
 
+/// Draws `glyphs` (text, x, advance) in the order given, each at its own x
+/// from the pen's start, with TJ moves between them. Moves and advances
+/// scale alike with Tz, so all of this is in thousandths of the font size.
+/// Whole thousandths keep the numbers short; the pen follows the rounded
+/// moves, so the error never adds up. `trailing` is shown last, unplaced.
+fn show_placed(
+    content: &mut Content,
+    entry: &FontEntry,
+    glyphs: &[(&str, f32, f32)],
+    trailing: Option<&str>,
+) {
+    let mut tj = content.show_positioned();
+    let mut items = tj.items();
+    let mut pen = 0.0f32;
+    for &(text, x, advance) in glyphs {
+        // TJ subtracts: moving right is a negative adjustment.
+        let adjust = (pen - x).round();
+        if adjust != 0.0 {
+            items.adjust(adjust);
+        }
+        items.show(Str(&entry.encode(text)));
+        pen += advance - adjust;
+    }
+    if let Some(t) = trailing {
+        items.show(Str(&entry.encode(t)));
+    }
+}
+
+/// `text` split into characters, each with its advance in thousandths;
+/// `marks_attach` keeps combining marks with the letter before them.
+fn glyph_clusters<'a>(
+    entry: &FontEntry,
+    text: &'a str,
+    extra: f32,
+    marks_attach: bool,
+) -> Vec<(&'a str, f32)> {
+    let mut out: Vec<(&'a str, f32)> = Vec::new();
+    let mut start = 0;
+    for (i, ch) in text.char_indices() {
+        let w = entry.char_width_1000(ch) + extra;
+        let end = i + ch.len_utf8();
+        match out.last_mut() {
+            Some((s, aw)) if marks_attach && super::bidi::class(ch) == super::bidi::Class::NSM => {
+                *s = &text[start..end];
+                *aw += w;
+            }
+            _ => {
+                start = i;
+                out.push((&text[i..end], w));
+            }
+        }
+    }
+    out
+}
+
 /// A right-to-left chunk's glyphs in logical order, each placed left of the
 /// one before (the pen starts at the chunk's left edge), so text extraction
 /// and tags read the word as written. A letter's combining marks follow it
 /// with no move: they hang back over it from its end, as in left-to-right
-/// text. TJ moves and advances scale alike with Tz, so all of this is in
-/// thousandths of the font size.
+/// text.
 fn show_rtl(
     content: &mut Content,
     entry: &FontEntry,
@@ -2807,65 +2860,35 @@ fn show_rtl(
     char_spacing: f32,
     boundary_space: bool,
 ) {
-    let mut clusters: Vec<String> = Vec::new();
-    for ch in text.chars() {
-        match clusters.last_mut() {
-            Some(c) if super::bidi::class(ch) == super::bidi::Class::NSM => c.push(ch),
-            _ => clusters.push(ch.to_string()),
-        }
-    }
     let tc = char_spacing * 1000.0 / font_size.max(0.01);
-    let advance = |s: &str| {
-        s.chars()
-            .map(|c| entry.char_width_1000(c) + tc)
-            .sum::<f32>()
-    };
-    let total: f32 = clusters.iter().map(|c| advance(c)).sum();
-    let mut tj = content.show_positioned();
-    let mut items = tj.items();
-    let (mut pen, mut right) = (0.0f32, total);
-    for cluster in &clusters {
-        let w = advance(cluster);
-        right -= w;
-        // TJ subtracts: moving right is a negative adjustment. Whole
-        // thousandths keep the numbers short; the pen follows the rounded
-        // moves, so the error never adds up.
-        let adjust = (pen - right).round();
-        if adjust != 0.0 {
-            items.adjust(adjust);
-        }
-        items.show(Str(&entry.encode(cluster)));
-        pen += w - adjust;
-    }
-    if boundary_space {
-        items.show(Str(&entry.encode(" ")));
-    }
+    let clusters = glyph_clusters(entry, text, tc, true);
+    let mut right: f32 = clusters.iter().map(|&(_, w)| w).sum();
+    let placed: Vec<(&str, f32, f32)> = clusters
+        .into_iter()
+        .map(|(s, w)| {
+            right -= w;
+            (s, right, w)
+        })
+        .collect();
+    show_placed(content, entry, &placed, boundary_space.then_some(" "));
 }
 
 /// `text`'s glyphs in logical order, each at the place its right-to-left
 /// layout (bidi, paragraph level 1) gives it, the pen starting at the left
 /// end: a list label that reads "3." draws ".3".
 pub(super) fn show_visual(content: &mut Content, entry: &FontEntry, text: &str) {
-    let chars: Vec<char> = text.chars().collect();
-    let cls: Vec<_> = chars.iter().map(|&c| super::bidi::class(c)).collect();
+    let glyphs = glyph_clusters(entry, text, 0.0, false);
+    let cls: Vec<_> = text.chars().map(super::bidi::class).collect();
     let (levels, cluster) = super::bidi::resolve(&cls, &vec![1; cls.len()], 1);
-    let mut x = vec![0.0f32; chars.len()];
+    let mut x = vec![0.0f32; glyphs.len()];
     let mut left = 0.0;
     for i in super::bidi::visual_order(&levels, &cluster) {
         x[i] = left;
-        left += entry.char_width_1000(chars[i]);
+        left += glyphs[i].1;
     }
-    let mut tj = content.show_positioned();
-    let mut items = tj.items();
-    let mut pen = 0.0f32;
-    for (i, &ch) in chars.iter().enumerate() {
-        let adjust = (pen - x[i]).round();
-        if adjust != 0.0 {
-            items.adjust(adjust);
-        }
-        items.show(Str(&entry.encode(&ch.to_string())));
-        pen += entry.char_width_1000(ch) - adjust;
-    }
+    let placed: Vec<(&str, f32, f32)> =
+        glyphs.iter().zip(x).map(|(&(s, w), x)| (s, x, w)).collect();
+    show_placed(content, entry, &placed, None);
 }
 
 pub(super) fn encode_text_for_pdf(
@@ -3336,12 +3359,8 @@ pub(super) fn render_paragraph_lines(
 
             // Logical order, so the content stream (and the tags) read the
             // text as written even where bidi stored the chunks visually.
-            let draw_order: Vec<usize> = if line.draw_order.is_empty() {
-                (0..line.chunks.len()).collect()
-            } else {
-                line.draw_order.clone()
-            };
-            for chunk_idx in draw_order {
+            for k in 0..line.chunks.len() {
+                let chunk_idx = line.draw_order.get(k).copied().unwrap_or(k);
                 let chunk = &line.chunks[chunk_idx];
                 if chunk.inline_image_name.is_some() || chunk.checkbox.is_some() {
                     continue;
@@ -4056,6 +4075,16 @@ pub(super) fn grid_baseline_offset(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn plain_layout(squeeze_spaces: bool) -> CjkLayout {
+        CjkLayout {
+            auto_space: false,
+            compress_punct: false,
+            squeeze_spaces,
+            expand_shift_return: true,
+            bidi: false,
+        }
+    }
     use crate::model::VertAlign;
 
     #[test]
@@ -4240,13 +4269,7 @@ mod tests {
             ..make_run(10.0, VertAlign::Baseline, false)
         };
         let runs = [text_run("aaaa bbb"), text_run("ccc")];
-        let cjk = CjkLayout {
-            auto_space: false,
-            compress_punct: false,
-            squeeze_spaces: false,
-            expand_shift_return: true,
-            bidi: false,
-        };
+        let cjk = plain_layout(false);
         let lines = build_paragraph_lines(
             &runs,
             &fonts,
@@ -4275,13 +4298,7 @@ mod tests {
             text: "aa bbbbbbbbbb".to_string(),
             ..make_run(10.0, VertAlign::Baseline, false)
         }];
-        let cjk = CjkLayout {
-            auto_space: false,
-            compress_punct: false,
-            squeeze_spaces: false,
-            expand_shift_return: true,
-            bidi: false,
-        };
+        let cjk = plain_layout(false);
         let lines = build_paragraph_lines(
             &runs,
             &fonts,
@@ -4452,7 +4469,7 @@ mod tests {
             36.0,
             &[],
             15,
-            false,
+            plain_layout(false),
         );
         assert_eq!(lines.len(), 1);
         let word = lines[0]
@@ -4502,7 +4519,7 @@ mod tests {
                 36.0,
                 &[],
                 15,
-                squeeze,
+                plain_layout(squeeze),
             )
         };
         let squeezed = lines(true);

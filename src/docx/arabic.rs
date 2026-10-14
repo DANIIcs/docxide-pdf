@@ -124,16 +124,24 @@ fn forms(ch: char) -> Option<&'static [u16; 4]> {
         .map(|i| &FORMS[i].1)
 }
 
-fn joining(ch: char) -> Joining {
-    match ch {
-        '\u{0640}' | '\u{200D}' => Joining::Causing,
+/// An Arabic combining mark (harakat, Quranic marks): transparent to joining,
+/// a non-spacing mark to bidi.
+pub(crate) fn is_arabic_mark(ch: char) -> bool {
+    matches!(ch,
         '\u{0610}'..='\u{061A}'
         | '\u{064B}'..='\u{065F}'
         | '\u{0670}'
         | '\u{06D6}'..='\u{06DC}'
         | '\u{06DF}'..='\u{06E4}'
         | '\u{06E7}'..='\u{06E8}'
-        | '\u{06EA}'..='\u{06ED}' => Joining::Transparent,
+        | '\u{06EA}'..='\u{06ED}'
+    )
+}
+
+fn joining(ch: char) -> Joining {
+    match ch {
+        '\u{0640}' | '\u{200D}' => Joining::Causing,
+        c if is_arabic_mark(c) => Joining::Transparent,
         _ => match forms(ch) {
             Some(f) if f[2] != 0 => Joining::Dual,
             Some(f) if f[1] != 0 => Joining::Right,
@@ -154,7 +162,7 @@ pub(crate) fn shape(text: &str) -> String {
         while j >= 0 && (j as usize) < chars.len() && kinds[j as usize] == Joining::Transparent {
             j += step;
         }
-        (j >= 0 && (j as usize) < chars.len()).then(|| j as usize)
+        (j >= 0 && (j as usize) < chars.len()).then_some(j as usize)
     };
     let mut out = String::with_capacity(text.len());
     let mut i = 0;

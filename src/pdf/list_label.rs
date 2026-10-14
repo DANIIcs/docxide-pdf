@@ -61,14 +61,14 @@ pub(super) fn encode_label(entry: &FontEntry, label: &str) -> Option<Vec<u8>> {
 fn label_for_paragraph<'a>(
     para: &Paragraph,
     seen_fonts: &'a HashMap<String, FontEntry>,
-) -> (&'a str, Vec<u8>) {
+) -> Option<(&'a FontEntry, Vec<u8>)> {
     let key = label_font_key(para);
     let entry = key.as_deref().and_then(|k| seen_fonts.get(k));
 
     if let Some(entry) = entry
         && let Some(bytes) = encode_label(entry, &para.list_label)
     {
-        return (entry.pdf_name.as_str(), bytes);
+        return Some((entry, bytes));
     }
 
     // Either the labeled font is missing, or it produced only .notdef
@@ -80,10 +80,10 @@ fn label_for_paragraph<'a>(
         && let Some(body_entry) = seen_fonts.get(&font_key(run))
     {
         let bytes = encode_label(body_entry, &mapped).unwrap_or_else(|| body_entry.encode(&mapped));
-        return (body_entry.pdf_name.as_str(), bytes);
+        return Some((body_entry, bytes));
     }
 
-    ("", vec![])
+    None
 }
 
 /// `encode_as_gids` writes the .notdef glyph (gid 0) for any char missing
@@ -104,20 +104,18 @@ pub(super) fn render_list_label(
     if para.list_label.is_empty() {
         return;
     }
-    let (label_font_name, label_bytes) = label_for_paragraph(para, fonts);
+    let (entry, label_bytes) = label_for_paragraph(para, fonts).unzip();
+    let label_bytes = label_bytes.unwrap_or_default();
+    let label_font_name = entry.map_or("", |e| e.pdf_name.as_str());
     let label_color = para.list_label_color;
     if let Some(c) = label_color {
         fill_rgb(content, c);
     }
     let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
-    let rtl_entry = para
-        .bidi
-        .then(|| fonts.values().find(|e| e.pdf_name == label_font_name))
-        .flatten();
     content
         .begin_text()
         .set_font(Name(label_font_name.as_bytes()), label_fs);
-    if let Some(entry) = rtl_entry {
+    if let Some(entry) = entry.filter(|_| para.bidi) {
         // Laid out right to left ("3." draws ".3"), read in logical order.
         content.next_line(label_x, baseline_y);
         super::layout::show_visual(content, entry, &para.list_label);
@@ -173,9 +171,8 @@ pub(super) fn text_hanging(
             -para.indent_first_line
         };
     }
-    let start = start_indent(para);
-    let label_x = start - para.indent_hanging + para.indent_first_line;
-    let end = label_x + label_shift(para, fonts) + label_width(para, fonts);
+    let start = para.start_indent();
+    let end = label_offset(para) + label_shift(para, fonts) + label_width(para, fonts);
     // suff nothing/space: no tab, the text follows the label directly
     // (chinese_costume's cell items "（1）演示…").
     match para.list_label_suff {
@@ -201,27 +198,25 @@ pub(super) fn text_hanging(
     start - next
 }
 
-/// The indent on the paragraph's start side: the left one, or the right one
-/// in a right-to-left paragraph (its indents are stored mirrored).
-fn start_indent(para: &Paragraph) -> f32 {
-    if para.bidi {
-        para.indent_right
-    } else {
-        para.indent_left
-    }
+/// How far the label sits in from the paragraph's start edge.
+fn label_offset(para: &Paragraph) -> f32 {
+    para.start_indent() - para.indent_hanging + para.indent_first_line
 }
 
-/// Where a right-to-left paragraph's label starts: its right edge sits at
-/// the start indent less the hanging indent, measured from the right
-/// (Word probe: "3." of a 360/360 list ends at the right margin, text 18pt
-/// in).
-// ponytail: lvlJc and floats beside the paragraph ignored for these labels
-pub(super) fn bidi_label_x(
+/// Where the label starts in a box from `box_x`, `box_w` wide. In a
+/// right-to-left paragraph its right edge sits `label_offset` in from the
+/// right (Word probe: "3." of a 360/360 list ends at the right margin, text
+/// 18pt in).
+// ponytail: lvlJc ignored for right-to-left labels
+pub(super) fn label_x(
     para: &Paragraph,
-    col_x: f32,
-    col_w: f32,
+    box_x: f32,
+    box_w: f32,
     fonts: &HashMap<String, FontEntry>,
 ) -> f32 {
-    let from_right = start_indent(para) - para.indent_hanging + para.indent_first_line;
-    col_x + col_w - from_right - label_width(para, fonts)
+    if para.bidi {
+        box_x + box_w - label_offset(para) - label_width(para, fonts)
+    } else {
+        box_x + label_offset(para)
+    }
 }

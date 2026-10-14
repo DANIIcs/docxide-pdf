@@ -30,6 +30,8 @@ use crate::fonts::FontEntry;
 
 use super::layout::{TextLine, WordChunk};
 
+// UAX #9's own class names.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Class {
     L,
@@ -67,13 +69,6 @@ pub(super) fn class(ch: char) -> Class {
         | '\u{05C1}'..='\u{05C2}'
         | '\u{05C4}'..='\u{05C5}'
         | '\u{05C7}'
-        | '\u{0610}'..='\u{061A}'
-        | '\u{064B}'..='\u{065F}'
-        | '\u{0670}'
-        | '\u{06D6}'..='\u{06DC}'
-        | '\u{06DF}'..='\u{06E4}'
-        | '\u{06E7}'..='\u{06E8}'
-        | '\u{06EA}'..='\u{06ED}'
         | '\u{0711}'
         | '\u{0730}'..='\u{074A}'
         | '\u{07A6}'..='\u{07B0}'
@@ -81,6 +76,7 @@ pub(super) fn class(ch: char) -> Class {
         | '\u{08D3}'..='\u{08E1}'
         | '\u{08E3}'..='\u{08FF}'
         | '\u{FB1E}' => NSM,
+        c if crate::docx::arabic::is_arabic_mark(c) => NSM,
         '\u{0600}'..='\u{0605}'
         | '\u{0660}'..='\u{0669}'
         | '\u{066B}'
@@ -197,10 +193,9 @@ pub(super) fn resolve(cls: &[Class], emb: &[u8], base: u8) -> (Vec<u8>, Vec<bool
                 let j = (i..m).find(|&j| !matches!(t[j], ON | WS)).unwrap_or(m);
                 let prev = if i == 0 { Some(sos) } else { strong(t[i - 1]) };
                 let next = if j == m { Some(eos) } else { strong(t[j]) };
-                let to = if prev == next && prev.is_some() {
-                    prev.unwrap()
-                } else {
-                    dir(e)
+                let to = match (prev, next) {
+                    (Some(p), Some(n)) if p == n => p,
+                    _ => dir(e),
                 };
                 // Word: in a plain run, the neutrals between right-to-left
                 // letters form a left-to-right cluster from their first
@@ -208,7 +203,7 @@ pub(super) fn resolve(cls: &[Class], emb: &[u8], base: u8) -> (Vec<u8>, Vec<bool
                 let mut in_cluster = false;
                 for k in i..j {
                     let orig = cls[start + k];
-                    if e % 2 == 0 && to == R {
+                    if e.is_multiple_of(2) && to == R {
                         in_cluster |= matches!(orig, ON | CS | ET);
                         cluster[start + k] = in_cluster && orig != ES;
                     }
@@ -270,87 +265,93 @@ pub(super) fn visual_order(levels: &[u8], cluster: &[bool]) -> Vec<usize> {
 }
 
 /// One character of a paragraph window: its class, run embedding, and
-/// where it came from on its line (`None` for the space between chunks).
+/// where it came from on its line (`None` for the space between chunks,
+/// which carries its width).
 struct Unit {
     cls: Class,
     emb: u8,
     chunk: Option<(usize, usize)>,
+    gap: f32,
 }
 
 /// The characters of `line`'s chunks with a whitespace unit for every gap
-/// between them.
-fn line_units(line: &TextLine, rtl_of: &dyn Fn(&WordChunk) -> bool, base: u8) -> Vec<Unit> {
+/// between them, and one for the space the line wrapped at.
+fn line_units(line: &TextLine, base: u8) -> Vec<Unit> {
     let emb = |rtl: bool| match (rtl, base % 2 == 1) {
         (true, _) => base | 1,
         (false, false) => base,
         (false, true) => base + 1,
     };
+    let space = |rtl: bool, gap: f32| Unit {
+        cls: Class::WS,
+        emb: emb(rtl),
+        chunk: None,
+        gap,
+    };
     let mut units = Vec::new();
     let mut prev_end: Option<f32> = None;
     for (ci, c) in line.chunks.iter().enumerate() {
-        let e = emb(rtl_of(c));
-        if prev_end.is_some_and(|end| c.x_offset > end + 0.01) {
+        let e = emb(c.rtl);
+        if let Some(end) = prev_end
+            && c.x_offset > end + 0.01
+        {
             // The space keeps the embedding of the run it was typed in.
-            units.push(Unit {
-                cls: Class::WS,
-                emb: emb(c.gap_rtl),
-                chunk: None,
-            });
+            units.push(space(c.gap_rtl, c.x_offset - end));
         }
+        let chunk_unit = |cls, k| Unit {
+            cls,
+            emb: e,
+            chunk: Some((ci, k)),
+            gap: 0.0,
+        };
         if c.text.is_empty() {
             // A picture or check box: an object replacement character.
-            units.push(Unit {
-                cls: Class::ON,
-                emb: e,
-                chunk: Some((ci, 0)),
-            });
+            units.push(chunk_unit(Class::ON, 0));
         }
-        for (k, ch) in c.text.chars().enumerate() {
-            units.push(Unit {
-                cls: class(ch),
-                emb: e,
-                chunk: Some((ci, k)),
-            });
-        }
+        units.extend(
+            c.text
+                .chars()
+                .enumerate()
+                .map(|(k, ch)| chunk_unit(class(ch), k)),
+        );
         prev_end = Some(c.x_offset + c.width);
     }
     if line.trailing_space > 0.0 {
-        units.push(Unit {
-            cls: Class::WS,
-            emb: emb(line.trailing_space_rtl),
-            chunk: None,
-        });
+        units.push(space(line.trailing_space_rtl, line.trailing_space));
     }
     units
 }
 
-fn is_rtl_text(c: Class) -> bool {
-    matches!(c, Class::R | Class::AL | Class::AN)
+/// Whether any chunk of `lines` needs bidi ordering. UTF-8 lead bytes from
+/// 0xD6 up start U+0590 and above, so Latin text never reaches `class`.
+fn has_rtl(lines: &[TextLine]) -> bool {
+    lines.iter().flat_map(|l| &l.chunks).any(|c| {
+        c.rtl
+            || (c.text.bytes().any(|b| b >= 0xD6)
+                && c.text
+                    .chars()
+                    .any(|ch| matches!(class(ch), Class::R | Class::AL | Class::AN)))
+    })
 }
 
 /// Reorder `lines` (one paragraph, logical order) for display: see the
-/// module docs. `rtl_runs` tells whether a chunk came from a `w:rtl` run;
-/// `bidi` is the paragraph's `w:bidi`.
+/// module docs. `bidi` is the paragraph's `w:bidi`.
 pub(super) fn reorder_lines(
     lines: &mut [TextLine],
     bidi: bool,
     fonts: &HashMap<String, FontEntry>,
 ) {
-    let base = u8::from(bidi);
-    let rtl_of = |c: &WordChunk| c.rtl;
-    let any_rtl = lines.iter().any(|l| {
-        l.chunks
-            .iter()
-            .any(|c| c.rtl || c.text.chars().any(|ch| is_rtl_text(class(ch))))
-    });
-    if !any_rtl {
+    if !has_rtl(lines) {
         return;
     }
-    let per_line: Vec<Vec<Unit>> = lines.iter().map(|l| line_units(l, &rtl_of, base)).collect();
+    let base = u8::from(bidi);
+    let by_pdf_name: HashMap<&str, &FontEntry> =
+        fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
+    let per_line: Vec<Vec<Unit>> = lines.iter().map(|l| line_units(l, base)).collect();
     for li in 0..lines.len() {
-        // ponytail: tab and two-region lines keep logical order; their
-        // pieces are placed by tab stops and float gaps, not by flow
-        if lines[li].justify_from > 0 || lines[li].right_region.is_some() {
+        // ponytail: two-region lines keep logical order; their halves are
+        // placed around a float, not by flow (tabbed lines never get here)
+        if lines[li].right_region.is_some() {
             continue;
         }
         // The line, then the rest of its paragraph (or manual-break segment)
@@ -386,7 +387,7 @@ pub(super) fn reorder_lines(
             &levels,
             &cluster,
             ltr_island,
-            fonts,
+            &by_pdf_name,
         );
     }
 }
@@ -407,57 +408,38 @@ fn reorder_line(
     levels: &[u8],
     cluster: &[bool],
     keep_left_wrap_space: bool,
-    fonts: &HashMap<String, FontEntry>,
+    fonts: &HashMap<&str, &FontEntry>,
 ) {
     if levels.iter().all(|&l| l == 0) {
         return;
     }
     // Group units into pieces, splitting chunks where the level changes.
     let mut pieces: Vec<Piece> = Vec::new();
-    let mut gap_starts = Vec::new();
     for (k, u) in units.iter().enumerate() {
+        let (level, cluster) = (levels[k], cluster[k]);
         match u.chunk {
-            None => {
-                gap_starts.push(pieces.len());
-                pieces.push(Piece {
-                    chunk: None,
-                    chars: 0..0,
-                    level: levels[k],
-                    cluster: cluster[k],
-                    gap: 0.0,
-                });
+            Some((ci, ch))
+                if pieces.last().is_some_and(|p| {
+                    p.chunk == Some(ci) && p.level == level && p.cluster == cluster
+                }) =>
+            {
+                pieces.last_mut().unwrap().chars.end = ch + 1;
             }
-            Some((ci, ch)) => {
-                if let Some(p) = pieces.last_mut()
-                    && p.chunk == Some(ci)
-                    && p.level == levels[k]
-                    && p.cluster == cluster[k]
-                {
-                    p.chars.end = ch + 1;
-                } else {
-                    pieces.push(Piece {
-                        chunk: Some(ci),
-                        chars: ch..ch + 1,
-                        level: levels[k],
-                        cluster: cluster[k],
-                        gap: 0.0,
-                    });
-                }
-            }
+            Some((ci, ch)) => pieces.push(Piece {
+                chunk: Some(ci),
+                chars: ch..ch + 1,
+                level,
+                cluster,
+                gap: 0.0,
+            }),
+            None => pieces.push(Piece {
+                chunk: None,
+                chars: 0..0,
+                level,
+                cluster,
+                gap: u.gap,
+            }),
         }
-    }
-    // Gap widths, from the logical offsets; the last gap of a wrapped line
-    // is the space it wrapped at.
-    for &gi in &gap_starts {
-        let prev = pieces[..gi].iter().rev().find_map(|p| p.chunk);
-        let next = pieces[gi + 1..].iter().find_map(|p| p.chunk);
-        pieces[gi].gap = match (prev, next) {
-            (Some(a), Some(b)) => {
-                let (a, b) = (&line.chunks[a], &line.chunks[b]);
-                (b.x_offset - (a.x_offset + a.width)).max(0.0)
-            }
-            _ => line.trailing_space,
-        };
     }
     let piece_levels: Vec<u8> = pieces.iter().map(|p| p.level).collect();
     let piece_cluster: Vec<bool> = pieces.iter().map(|p| p.cluster).collect();
@@ -478,9 +460,16 @@ fn reorder_line(
         order.pop();
     }
 
-    // New chunks in visual order; `logical` keys them for the draw order.
-    let old = std::mem::take(&mut line.chunks);
-    let char_counts: Vec<usize> = old.iter().map(|c| c.text.chars().count()).collect();
+    // New chunks in visual order, keyed by their logical place for the draw
+    // order. A chunk not split is moved, not copied.
+    let mut old: Vec<Option<WordChunk>> = std::mem::take(&mut line.chunks)
+        .into_iter()
+        .map(Some)
+        .collect();
+    let char_counts: Vec<usize> = old
+        .iter()
+        .map(|c| c.as_ref().map_or(0, |c| c.text.chars().count()))
+        .collect();
     let mut placed: Vec<((usize, usize), WordChunk)> = Vec::new();
     let mut x = 0.0f32;
     for &pi in &order {
@@ -489,28 +478,25 @@ fn reorder_line(
             x += p.gap;
             continue;
         };
-        let src = &old[ci];
         let whole = p.chars.start == 0 && p.chars.end >= char_counts[ci];
-        let mut chunk = if whole {
-            src.clone()
-        } else {
-            split_chunk(src, p.chars.clone(), fonts)
+        let mut chunk = match &old[ci] {
+            Some(src) if !whole => {
+                let mut piece = split_chunk(src, p.chars.clone(), fonts);
+                piece.space_after &= p.chars.end >= char_counts[ci];
+                piece
+            }
+            _ => old[ci].take().expect("a whole chunk is placed once"),
         };
-        if !whole && p.chars.end < char_counts[ci] {
-            chunk.space_after = false;
-        }
         chunk.x_offset = x;
         if p.level % 2 == 1 {
             chunk.rtl_glyphs = true;
-            if chunk.rtl {
-                let shown: String = chunk.text.chars().map(mirrored).collect();
-                // Extraction reads the brackets as written, as in Word's PDF.
-                if shown != chunk.text {
-                    let source = std::mem::replace(&mut chunk.text, shown);
-                    chunk
-                        .actual_text
-                        .get_or_insert_with(|| crate::docx::arabic::unshape(&source));
-                }
+            // Extraction reads mirrored brackets as written, as in Word's PDF.
+            if chunk.rtl && chunk.text.chars().any(|c| mirrored(c) != c) {
+                let shown = chunk.text.chars().map(mirrored).collect();
+                let source = std::mem::replace(&mut chunk.text, shown);
+                chunk
+                    .actual_text
+                    .get_or_insert_with(|| crate::docx::arabic::unshape(&source));
             }
         }
         x += chunk.width;
@@ -534,7 +520,7 @@ fn reorder_line(
 fn split_chunk(
     chunk: &WordChunk,
     range: std::ops::Range<usize>,
-    fonts: &HashMap<String, FontEntry>,
+    fonts: &HashMap<&str, &FontEntry>,
 ) -> WordChunk {
     let text: String = chunk
         .text
@@ -542,8 +528,7 @@ fn split_chunk(
         .skip(range.start)
         .take(range.len())
         .collect();
-    let entry = fonts.values().find(|e| e.pdf_name == chunk.pdf_font);
-    let measure = |s: &str| match entry {
+    let measure = |s: &str| match fonts.get(chunk.pdf_font.as_str()) {
         Some(e) => {
             e.word_width(s, chunk.font_size, chunk.kern) * chunk.text_scale / 100.0
                 + chunk.char_spacing * s.chars().count() as f32
@@ -551,15 +536,16 @@ fn split_chunk(
         None => s.chars().count() as f32,
     };
     let total = measure(&chunk.text);
-    let mut piece = chunk.clone();
-    piece.width = if total > 0.0 {
-        chunk.width * measure(&text) / total
-    } else {
-        0.0
-    };
-    piece.actual_text = None;
-    piece.text = text;
-    piece
+    WordChunk {
+        width: if total > 0.0 {
+            chunk.width * measure(&text) / total
+        } else {
+            0.0
+        },
+        actual_text: None,
+        text,
+        ..chunk.clone()
+    }
 }
 
 #[cfg(test)]

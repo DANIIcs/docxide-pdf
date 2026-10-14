@@ -430,12 +430,11 @@ impl RenderContext<'_> {
     /// East Asian switches for `build_paragraph_lines`: the paragraph's autospace
     /// choice plus the document-wide punctuation compression.
     fn cjk(&self, auto_space: bool, para: &crate::model::Paragraph) -> CjkLayout {
-        let alignment = para.alignment;
         CjkLayout {
             auto_space,
             compress_punct: self.compress_punctuation,
             squeeze_spaces: self.compat_mode >= 15
-                && matches!(alignment, crate::model::Alignment::Justify),
+                && matches!(para.alignment, crate::model::Alignment::Justify),
             expand_shift_return: !self.do_not_expand_shift_return,
             bidi: para.bidi,
         }
@@ -2224,10 +2223,7 @@ fn render_paragraph_block(
     let (col_x, col_w) = col_geometry[state.current_col];
     let mut para_text_x = col_x + para.indent_left;
     let mut para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
-    let mut label_x = col_x + para.indent_left - para.indent_hanging + para.indent_first_line;
-    if para.bidi {
-        label_x = list_label::bidi_label_x(para, col_x, col_w, ctx.fonts);
-    }
+    let mut label_x = list_label::label_x(para, col_x, col_w, ctx.fonts);
 
     // When inside a floating object zone, narrow the paragraph to
     // fit beside the object rather than overlapping it.
@@ -3441,10 +3437,7 @@ fn render_paragraph_block(
     let (col_x, col_w) = col_geometry[state.current_col];
     para_text_x = col_x + para.indent_left;
     para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
-    label_x = col_x + para.indent_left - para.indent_hanging + para.indent_first_line;
-    if para.bidi {
-        label_x = list_label::bidi_label_x(para, col_x, col_w, ctx.fonts);
-    }
+    label_x = list_label::label_x(para, col_x, col_w, ctx.fonts);
 
     // Re-apply float zone adjustment after potential column change
     let first_line_top = state.pb.slot_top - inter_gap;

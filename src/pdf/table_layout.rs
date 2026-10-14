@@ -1006,7 +1006,7 @@ pub(super) fn compute_row_layouts(
                                             ctx.default_tab_stop,
                                             &[],
                                             ctx.compat_mode,
-                                            ctx.cjk(false, para).squeeze_spaces,
+                                            ctx.cjk(false, para),
                                         )
                                     } else {
                                         build_paragraph_lines(

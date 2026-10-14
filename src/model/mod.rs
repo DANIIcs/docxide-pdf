@@ -517,6 +517,19 @@ pub struct Paragraph {
     pub bidi: bool,
 }
 
+impl Paragraph {
+    /// The indent on the paragraph's start side: the left one, or the right
+    /// one in a right-to-left paragraph, whose indents are stored mirrored
+    /// (firstLine and hanging stay start-side amounts).
+    pub fn start_indent(&self) -> f32 {
+        if self.bidi {
+            self.indent_right
+        } else {
+            self.indent_left
+        }
+    }
+}
+
 pub struct HorizontalRule {
     pub height_pt: f32,
     pub fill_color: [u8; 3],

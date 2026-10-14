@@ -387,24 +387,28 @@ impl ParagraphRunDefaults {
             .cs_font
             .or_else(|| char_style.and_then(|cs| cs.cs_font.clone()))
             .or_else(|| self.cs_font.clone());
-        let bold = own.bold.or_else(|| cs(|c| c.bold)).unwrap_or(self.bold);
-        let italic = own
-            .italic
-            .or_else(|| cs(|c| c.italic))
-            .unwrap_or(self.italic);
-        let mut font_name = own
-            .font_name
-            .or(char_style_font_name)
-            .unwrap_or_else(|| self.font_name.clone());
-        let (mut font_size, mut bold, mut italic) = (font_size, bold, italic);
-        if complex.applies() {
-            // Arial as in `split_run_by_script` for a document naming no cs font.
-            font_name = cs_font_name.clone().unwrap_or_else(|| "Arial".into());
-            // ponytail: no szCs anywhere keeps sz; Word may use its own 10pt default
-            font_size = complex.size.unwrap_or(font_size);
-            bold = complex.bold.unwrap_or(false);
-            italic = complex.italic.unwrap_or(false);
-        }
+        let (font_name, font_size, bold, italic) = if complex.applies() {
+            (
+                cs_font_name
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_CS_FONT.into()),
+                // ponytail: no szCs anywhere keeps sz; Word may use its own 10pt default
+                complex.size.unwrap_or(font_size),
+                complex.bold.unwrap_or(false),
+                complex.italic.unwrap_or(false),
+            )
+        } else {
+            (
+                own.font_name
+                    .or(char_style_font_name)
+                    .unwrap_or_else(|| self.font_name.clone()),
+                font_size,
+                own.bold.or_else(|| cs(|c| c.bold)).unwrap_or(self.bold),
+                own.italic
+                    .or_else(|| cs(|c| c.italic))
+                    .unwrap_or(self.italic),
+            )
+        };
 
         Run {
             font_size,
@@ -600,6 +604,9 @@ fn ensure_nonempty_paragraph(
     });
 }
 
+/// The cs font of a document that names none (see `split_run_by_script`).
+const DEFAULT_CS_FONT: &str = "Arial";
+
 fn split_run_by_script(run: Run) -> Vec<Run> {
     let ea_font = run
         .east_asia_font_name
@@ -611,7 +618,10 @@ fn split_run_by_script(run: Run) -> Vec<Run> {
     }
     // Word draws complex-script letters in the cs font, in Arial when the
     // document names none (arabic_rice_benefits_article has no styles part).
-    let cs_font = run.cs_font_name.clone().unwrap_or_else(|| "Arial".into());
+    let cs_font = run
+        .cs_font_name
+        .clone()
+        .unwrap_or_else(|| DEFAULT_CS_FONT.into());
     // None: the run's own font.
     let script_font = |ch: char| {
         if is_complex_script_char(ch) {
@@ -635,16 +645,17 @@ fn split_run_by_script(run: Run) -> Vec<Run> {
 
     let mut result = Vec::new();
     let mut segment_start = 0;
-    let mut current: Option<&String> = None;
+    let mut current = None;
+    let mut after_cs = false;
     for (i, ch) in run.text.char_indices() {
         // Whitespace inherits an East Asian context. Between complex-script
         // letters it keeps the run's font: arabic_rice's Arabic words step by
         // Aptos's 2.44pt space, not Arial's 3.33pt (its lines stay Arial-tall,
         // as whitespace never sizes a line).
-        let after_cs = matches!(current, Some(f) if std::ptr::eq(f, &cs_font));
         let font = if ch.is_whitespace() && i > 0 && !after_cs {
             current
         } else {
+            after_cs = is_complex_script_char(ch);
             script_font(ch)
         };
         if i > 0 && font != current {
