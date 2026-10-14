@@ -57,8 +57,11 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - TeX's table with thin 3/18, medium 4/18, thick 5/18 em: `a+b` 2.67pt each
   side of + at 12pt, `=` 3.33pt. A binary sign at the start, after an
   operator, relation, opening or punctuation is unary (no space).
-- An italic glyph followed by an upright one keeps its italic correction
-  (𝑇 then `=`: 4.44 + 0.35 = 4.79, Word 4.75).
+- An italic glyph keeps its italic correction before an upright atom (𝑇
+  then `=`: 4.44 + 0.35 = 4.79, Word 4.75; 𝑥+, 𝑏), 𝜋√, 𝑥𝑦²) unless that atom
+  is an ordinary character: 𝑎1, 𝑏c (m:sty p) and 𝑣 followed by m:nor text
+  set tight (probes `mp_spacing`, `mp17_wrap`, `mp14_nor`; a long display
+  equation's terms come out 0.6pt narrower each).
 - A function name is an operator: thin space before an ordinary argument,
   none before a delimiter (`sin x`, `sin(x)`). A unary sign before a function
   keeps that thin space: Word's "−sin θ" has 2.04pt after the minus (zone

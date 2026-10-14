@@ -284,6 +284,8 @@ struct B {
     first_italic: bool,
     /// One glyph only (scripts attach to its italic correction).
     single_glyph: Option<u16>,
+    /// A character of a run (or an m:nor run's text), not a structure.
+    character: bool,
     /// The tallest delimiter inside: an enclosing one grows past it.
     fence: f32,
 }
@@ -300,6 +302,7 @@ impl B {
             ic: 0.0,
             first_italic: false,
             single_glyph: None,
+            character: false,
             fence: 0.0,
         }
     }
@@ -465,9 +468,11 @@ impl<'a> Ctx<'a> {
             let mut x = w;
             if let Some(p) = i.checked_sub(1).map(|p| &atoms[p]) {
                 x += space(p.last, a.first, st) * em / 18.0;
-                // An italic glyph followed by an upright one keeps its
-                // italic correction.
-                if !a.first_italic {
+                // An italic glyph keeps its italic correction before an
+                // upright atom unless that is an ordinary character: 𝑎1, 𝑏c
+                // and 𝑣 if set tight, 𝑥+, 𝑏), 𝜋√ and 𝑥𝑦² apart (probes
+                // `mp_spacing`, `mp17_wrap`, `mp14_nor`, case221).
+                if !a.first_italic && !(a.character && a.first == Class::Ord) {
                     x += p.ic;
                 }
             }
@@ -503,6 +508,7 @@ impl<'a> Ctx<'a> {
                         size,
                         color: run.color,
                     }],
+                    character: true,
                     ..B::empty()
                 }];
             }
@@ -529,6 +535,7 @@ impl<'a> Ctx<'a> {
                 };
                 b.first = class;
                 b.last = class;
+                b.character = true;
                 b
             })
             .collect()
