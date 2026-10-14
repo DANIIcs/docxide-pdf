@@ -1380,7 +1380,7 @@
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.8333,
+    "a11y_struct": 0.9524,
     "a11y_text": 0.563
   },
   "cases/case23": {
@@ -4001,7 +4001,7 @@
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.9496,
+    "a11y_struct": 0.9638,
     "a11y_text": 0.9569
   },
   "scraped/physical_education_curriculum_map": {
