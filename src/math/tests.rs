@@ -145,6 +145,31 @@ fn radical_surd_drop_and_display_gap() {
 }
 
 #[test]
+fn group_chr_limit_and_side() {
+    // Word at 12pt (probes mp9_gc/mp10_gc): a pos="top" ⏟ draws as ⏞ on the
+    // baseline with its script-size content 7.0pt below; a pos="bot" ⏞ with
+    // m:vertJc="bot" draws as ⏟ with the content 9.5pt above.
+    let gc = |chr: char, top: bool, vert_top: bool| {
+        let root = vec![MathNode::GroupChr {
+            chr,
+            top,
+            vert_top,
+            body: vec![run("a+b+c")],
+        }];
+        let g = glyphs(&layout_at(root, false, 12.0));
+        let brace = g.iter().find(|g| g.3 == 12.0).unwrap().0;
+        let content = g.iter().find(|g| g.0 == '\u{1D44E}').unwrap();
+        (brace, content.2, content.3)
+    };
+    let (brace, y, size) = gc('⏟', true, true);
+    assert_eq!((brace, size), ('⏞', 8.5));
+    assert!((y + 7.0).abs() < 0.15, "limit below {y}");
+    let (brace, y, _) = gc('⏞', false, false);
+    assert_eq!(brace, '⏟');
+    assert!((y - 9.5).abs() < 0.15, "limit above {y}");
+}
+
+#[test]
 fn display_fraction_shifts() {
     // a/b on its own line at 12pt: numerator 9.05 up, denominator 7.95 down.
     let root = vec![MathNode::Frac {

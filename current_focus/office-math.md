@@ -103,9 +103,16 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - Group characters (`m:groupChr`): a brace or arrow keeps its designed place
   (a ⏟ hangs below the baseline) unless the content comes within the
   stretch-stack gap: x+y+z's descenders push the brace 1.44pt down, a+b+c's
-  leave it. With `m:vertJc` on the character's side (default top, so any
-  pos="top" brace without vertJc) the content shrinks to a script-size limit
-  of the character.
+  leave it. With `m:vertJc` on the character's side (top when absent, so any
+  pos="top" brace without vertJc; bot when present without a value) the
+  content shrinks to a script-size limit of the character: the character
+  keeps its designed place and the limit sits a stretch stack's shift away
+  (6.91pt down, 9.38 up at 12pt, whatever the character and content),
+  further only to clear the character's ink by the stretch-stack gap (an a/b
+  under an arrow: 8.18 down, 10.82 up). A bracket pair draws the form its
+  side calls for (a ⏞ asked to go below is a ⏟; also ⏜⏝ and ⎴⎵), and an
+  `m:chr` without a value draws none. Probes `mp9_gc` (3 characters × pos ×
+  vertJc × 2 bodies, 12 and 24pt: all within 0.27pt) and `mp10_gc`.
 - `m:borderBox`: an overbar's gap and rule all round (border 1.94pt off 12pt
   content, 0.72pt rule).
 - A display-math paragraph takes its own `m:oMathParaPr/m:jc` (centred by
@@ -138,8 +145,6 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   0.3–0.6pt lower than the half-surplus rule at every size from 10 to 72pt
   (an absolute offset, not a fraction of the em; the drop limit shows the
   same). Not found in the MATH constants; snapping is ±0.25pt.
-- groupChr with the content as limit: Word's content sits 7pt under a ⏞
-  (ours 1pt); a box-reaching-baseline clamp made the probe document worse.
 - Accents over tall bases, eqArr alignment points (`&`), display-math wrap
   (`m:wrapIndent`): not yet measured. The parts of a broken inline zone keep
   the whole zone's height.

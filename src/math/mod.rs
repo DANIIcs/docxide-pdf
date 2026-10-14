@@ -1014,28 +1014,54 @@ impl<'a> Ctx<'a> {
     /// push the brace 1.44pt down, a+b+c's leave it. With `on_chr` (m:vertJc
     /// on the character's side) the character carries the baseline and the
     /// content is its script-size limit: Word sets a pos="top" brace's content
-    /// at script size beneath it, m:vertJc defaulting to top.
+    /// at script size beneath it, m:vertJc defaulting to top. That limit sits
+    /// a stretch stack's shift away (6.91pt down, 9.38 up at 12pt, whatever
+    /// the character), further only to clear the character's ink by the
+    /// stretch-stack gap (an a/b under an arrow). A bracket pair takes the
+    /// form its side calls for: a ⏞ asked to go below draws as ⏟ (probes
+    /// `mp9_gc`, `mp10_gc`).
     fn group_chr(&self, chr: char, top: bool, on_chr: bool, body: &MathRow, st: St) -> B {
+        let chr = match (chr, top) {
+            ('⏟', true) => '⏞',
+            ('⏞', false) => '⏟',
+            ('⏝', true) => '⏜',
+            ('⏜', false) => '⏝',
+            ('⎵', true) => '⎴',
+            ('⎴', false) => '⎵',
+            _ => chr,
+        };
         let base = self.row(body, if on_chr { st.sup() } else { st });
         let brace = self.stretch(chr, base.w, self.size(st), false);
-        if on_chr {
-            let (lo, hi) = if top {
-                (Some(base), None)
+        // How far the character sits above (+) or below (-) its content:
+        // the stretch-stack gap from the ink, at least the stretch-stack
+        // shift when the content is the character's limit.
+        let k = |c| self.k(st, c);
+        let up = if top {
+            let floor = if on_chr {
+                k(Constants::stretch_stack_bottom_shift_down)
             } else {
-                (None, Some(base))
+                0.0
             };
-            return self.limits(brace, lo, hi, st);
-        }
-        let dy = if top {
-            (base.asc + self.k(st, Constants::stretch_stack_gap_below_min) + brace.desc).max(0.0)
+            (base.asc + k(Constants::stretch_stack_gap_below_min) + brace.desc).max(floor)
         } else {
-            (-(base.desc + self.k(st, Constants::stretch_stack_gap_above_min) + brace.asc)).min(0.0)
+            let floor = if on_chr {
+                k(Constants::stretch_stack_top_shift_up)
+            } else {
+                0.0
+            };
+            -(base.desc + k(Constants::stretch_stack_gap_above_min) + brace.asc).max(floor)
         };
-        let w = base.w.max(brace.w);
-        let (bx, cx) = ((w - base.w) / 2.0, (w - brace.w) / 2.0);
-        let mut b = B::ends_of(&base);
-        b.put(base, bx, 0.0);
-        b.put(brace, cx, dy);
+        // The baseline stays with the character in limit mode, else the content.
+        let (fixed, moved, dy) = if on_chr {
+            (brace, base, -up)
+        } else {
+            (base, brace, up)
+        };
+        let w = fixed.w.max(moved.w);
+        let mut b = B::ends_of(&fixed);
+        let (fx, mx) = ((w - fixed.w) / 2.0, (w - moved.w) / 2.0);
+        b.put(fixed, fx, 0.0);
+        b.put(moved, mx, dy);
         b
     }
 

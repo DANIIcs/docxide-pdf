@@ -57,8 +57,8 @@ half-point script sizes and `ssty` alternates; glyphs embedded by id; math
 line heights (hhea box + MathLeading stretch); zones glued to touching text.
 Open, in order:
 1. ~~Radical placement~~ done (surd drop limit, display gap, variant by
-   coverage); display ∫ limit positions, groupChr brace placement, borderBox
-   padding.
+   coverage); ~~groupChr placement~~ done (limit shifts, bracket side, empty
+   chr/vertJc); display ∫ limit positions, borderBox padding.
 2. eqArr alignment points (`&`) and per-row justification.
 3. ~~Breaks inside long inline zones~~ done (after operators, as Word);
    display math wrap (`m:wrapIndent`).
