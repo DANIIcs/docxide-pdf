@@ -276,7 +276,9 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                         let inset = if table.fixed_layout {
                             h_pad + para.indent_left.min(0.0) + para.indent_right.min(0.0)
                         } else {
-                            h_pad + para.indent_left + para.indent_right
+                            h_pad
+                                + para.indent_left
+                                + para.indent_right
                                 + para.indent_first_line.max(0.0)
                         };
                         let required = (ww + inset).max(h_pad);
@@ -492,10 +494,21 @@ pub(super) fn auto_fit_columns(
             .iter()
             .all(|&w| w > 0.0 && (w - uniform_cell_preferences[0]).abs() < 0.01)
         && uniform_cell_preferences[0] * ncols as f32 > total;
-    let keep_saved_grid = table.auto_width
-        && !table.fixed_layout
-        && ((!grid_uniform && has_nested_table)
-            || (saved_grid_asymmetric && stale_uniform_preferences));
+    // An explicit table width can also carry a content-derived saved grid.
+    // A tcW that no longer fits its cell's text is a stale preference, not
+    // evidence that the saved nested-table host column should be rescaled.
+    let stale_content_preference = table.rows.iter().any(|row| {
+        row.grid_cells().any(|(col, span, cell)| {
+            span == 1
+                && cell.width > 0.0
+                && min_widths
+                    .get(col)
+                    .is_some_and(|minimum| *minimum > cell.width + 0.01)
+        })
+    });
+    let keep_saved_grid = !table.fixed_layout
+        && ((!grid_uniform && has_nested_table && (table.auto_width || stale_content_preference))
+            || (table.auto_width && saved_grid_asymmetric && stale_uniform_preferences));
     if !keep_saved_grid {
         for row in &table.rows {
             for (grid_col, span, cell) in row.grid_cells() {
