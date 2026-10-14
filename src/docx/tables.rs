@@ -776,6 +776,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                     let style_num = para_style.and_then(|s| s.num_id.as_deref());
                     let style_ilvl = para_style.and_then(|s| s.num_ilvl);
+                    let mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
                     let numbering = parse_list_info(
                         num_pr,
                         style_num,
@@ -784,7 +785,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         &ctx.styles.paragraph_styles,
                         ctx.numbering,
                         cell_lists,
-                        Some(&super::runs::paragraph_mark_run(ppr, para_style, ctx)),
+                        Some(&mark),
                     );
                     let (indent_left, indent_right, indent_hanging, indent_first_line) =
                         super::paragraph::resolve_indents(
@@ -831,7 +832,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         }
                     }
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
-                    let mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
                     cell_blocks.push(Block::Paragraph(Paragraph {
                         runs,
                         alignment,
@@ -870,7 +870,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             .or_else(|| para_style.and_then(|s| s.keep_next))
                             .unwrap_or(false),
                         paragraph_mark_font_size: Some(mark.font_size),
-                        paragraph_mark_font_name: Some(mark.font_name.clone()),
+                        paragraph_mark_font_name: Some(mark.font_name),
                         paragraph_mark_position: super::paragraph::paragraph_mark_position(
                             ppr.and_then(|ppr| wml(ppr, "rPr")),
                             para_style,
