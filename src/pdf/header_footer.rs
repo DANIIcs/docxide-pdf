@@ -164,6 +164,69 @@ fn blocking_frame_bands(hf: &HeaderFooter, sp: &SectionProperties) -> Vec<(f32, 
         .collect()
 }
 
+fn blocking_table_bands(
+    hf: &HeaderFooter,
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+) -> Vec<(f32, f32)> {
+    hf.blocks
+        .iter()
+        .filter_map(|b| match b {
+            Block::Table(t) => blocking_table_band(t, sp, ctx),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Where a header paragraph starts (down from the page top, before its
+/// space before) once blocking floating tables have pushed it: the whole
+/// paragraph, its space before and its first line or picture, moves below
+/// (Word probes: 20pt before lands 20pt under the table, a 59pt logo below a
+/// table that starts 13pt down still moves).
+fn below_blocking_tables(top: f32, gap: f32, para: &Paragraph, line_h: f32, bands: &[(f32, f32)]) -> f32 {
+    below_blocking_frames(top, gap + line_h.max(runs_max_image_h(&para.runs)), bands)
+}
+
+/// A page- or margin-anchored floating table that leaves no room beside it
+/// across the text column: the header lines after it start below its rows'
+/// content. Word probes on a letterhead table over a logo paragraph: the
+/// logo drops by the row's text lines (one line 12.65, three lines 37.95),
+/// moves with tblpY, ignores the cells' space after, and stays at the
+/// header top when the table is narrow or lower than the logo.
+fn blocking_table_band(
+    table: &crate::model::Table,
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+) -> Option<(f32, f32)> {
+    let pos = table.position.as_ref()?;
+    if pos.v_anchor == "text" {
+        return None;
+    }
+    let text_width = sp.text_width();
+    let fp = super::FloatingTablePos::resolve(table, pos, sp, sp.margin_left, text_width, 0.0, ctx);
+    let width: f32 = table.col_widths.iter().sum();
+    // ponytail: "no room" = covers the column; measure the side gaps if a
+    // partly covering header table turns up.
+    if fp.x - fp.left_from_text > sp.margin_left + 1.0
+        || fp.x + width + fp.right_from_text < sp.margin_left + text_width - 1.0
+    {
+        return None;
+    }
+    let trailing_after = table
+        .rows
+        .last()
+        .into_iter()
+        .flat_map(|r| &r.cells)
+        .filter_map(|c| match c.content.last() {
+            Some(Block::Paragraph(p)) => Some(p.space_after),
+            _ => None,
+        })
+        .fold(0.0f32, f32::max);
+    let height = table::compute_hf_table_height(table, ctx, text_width) - trailing_after;
+    let top = sp.page_height - fp.y;
+    Some((top, top + height.max(0.0)))
+}
+
 /// A page- or margin-anchored frame's top, down from the page top; None for a
 /// paragraph-anchored frame, which stays in the flow. `height` places a
 /// bottom- or center-aligned frame.
@@ -342,17 +405,25 @@ fn header_height(
     } else {
         Vec::new()
     };
+    let table_bands = if is_header {
+        blocking_table_bands(hf, sp, ctx)
+    } else {
+        Vec::new()
+    };
     for block in &hf.blocks {
         match block {
             Block::Paragraph(para) if para.frame_props.is_some() => {
                 // Frame paragraphs are out-of-flow; skip height contribution
             }
             Block::Paragraph(para) => {
-                height += hf_paragraph_gap(prev_para, prev_space_after, para);
+                let gap = hf_paragraph_gap(prev_para, prev_space_after, para);
                 prev_para = Some(para);
                 let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
+                height = below_blocking_tables(sp.header_margin + height, gap, para, line_h, &table_bands)
+                    - sp.header_margin
+                    + gap;
                 height = below_blocking_frames(sp.header_margin + height, line_h, &bands)
                     - sp.header_margin;
                 // Positioned runs and marks stretch their lines as in the render.
@@ -673,6 +744,11 @@ pub(super) fn render_header_footer(
     } else {
         Vec::new()
     };
+    let table_bands = if is_header {
+        blocking_table_bands(hf, sp, ctx)
+    } else {
+        Vec::new()
+    };
     for block in &hf.blocks {
         match block {
             Block::Table(table) => {
@@ -792,7 +868,7 @@ pub(super) fn render_header_footer(
                 let has_field_code = para.runs.iter().any(|r| r.field_code.is_some());
                 let text_empty = !has_field_code && is_text_empty(&para.runs);
 
-                cursor_y -= hf_paragraph_gap(prev_para, prev_space_after, para);
+                let gap = hf_paragraph_gap(prev_para, prev_space_after, para);
                 prev_para = Some(para);
 
                 let substituted_runs = substitute_hf_runs(
@@ -808,6 +884,9 @@ pub(super) fn render_header_footer(
                 let ascender_ratio = tallest_ar.unwrap_or(0.75);
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
+                cursor_y = sp.page_height
+                    - below_blocking_tables(sp.page_height - cursor_y, gap, para, line_h, &table_bands)
+                    - gap;
                 // Mirrors compute_header_height: a line overlapping a frame the
                 // text may not sit beside moves below it.
                 cursor_y = sp.page_height
