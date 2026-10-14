@@ -1786,7 +1786,10 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
     para.frame_props
         .as_ref()
         .is_some_and(|fp| !fp.text_below && fp.height == 0.0 && !frame_lifts(fp, sp))
-        && is_text_empty(&para.runs)
+        && para
+            .runs
+            .iter()
+            .all(|r| r.vanish || r.text.bytes().all(|b| b == b' '))
         && !para.runs.iter().any(|r| {
             r.is_line_break
                 || r.is_tab
@@ -5084,6 +5087,38 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn space_only_wrapping_frame_is_empty_but_content_controls_keep_flow() {
+        let mut doc = crate::docx::parse_bytes(include_bytes!(
+            "../../tests/fixtures/cases/space-only-frame/input.docx"
+        ))
+        .unwrap();
+        let section = &mut doc.sections[0];
+        let Block::Paragraph(para) = &mut section.blocks[0] else {
+            panic!("frame paragraph expected");
+        };
+        assert!(is_empty_wrapping_frame(para, &section.properties));
+        para.runs[0].text = "   ".into();
+        assert!(is_empty_wrapping_frame(para, &section.properties));
+        assert!(!is_text_empty(&para.runs)); // Ordinary paragraphs still flow.
+        for text in ["\u{a0}", "\t", "x"] {
+            para.runs[0].text = text.into();
+            assert!(!is_empty_wrapping_frame(para, &section.properties));
+        }
+        para.runs[0].text = " ".into();
+        para.runs[0].is_tab = true;
+        assert!(!is_empty_wrapping_frame(para, &section.properties));
+        para.runs[0].is_tab = false;
+        para.runs[0].is_line_break = true;
+        assert!(!is_empty_wrapping_frame(para, &section.properties));
+        para.runs[0].is_line_break = false;
+        para.frame_props.as_mut().unwrap().height = 20.0;
+        assert!(!is_empty_wrapping_frame(para, &section.properties));
+        para.frame_props.as_mut().unwrap().height = 0.0;
+        para.frame_props.as_mut().unwrap().text_below = true;
+        assert!(!is_empty_wrapping_frame(para, &section.properties));
+    }
 
     #[test]
     fn footnote_space_is_charged_to_the_line_holding_the_reference() {
