@@ -3154,7 +3154,9 @@ fn render_paragraph_block(
             let mut h = first_line_h;
             let last = lines.len() - 1;
             for (i, line) in lines.iter().enumerate().skip(1) {
-                if let Some(bfs) = line.break_font_size {
+                if let Some(pitch) = line.pitch.filter(|_| line.leading_tab_wrap) {
+                    h += pitch;
+                } else if let Some(bfs) = line.break_font_size {
                     // The empty line a trailing break leaves holds only the
                     // paragraph mark, whose rPr sizes it — the break char
                     // sizes the line it terminates, not this one (samtale:
