@@ -105,12 +105,19 @@ impl MathParser<'_> {
                 top: math_val(n, "barPr", "pos") == Some("top"),
                 body: self.arg(n, "e"),
             }),
-            "groupChr" => one(MathNode::GroupChr {
-                chr: chr(n, "groupChrPr", "chr", '\u{23DF}').unwrap_or('\u{23DF}'),
-                top: math_val(n, "groupChrPr", "pos") == Some("top"),
-                vert_top: math_val(n, "groupChrPr", "vertJc") != Some("bot"),
-                body: self.arg(n, "e"),
-            }),
+            // An m:chr without a value draws no character; m:vertJc is top
+            // when absent but bot when it has no value (Word).
+            "groupChr" => match chr(n, "groupChrPr", "chr", '\u{23DF}') {
+                Some(c) => one(MathNode::GroupChr {
+                    chr: c,
+                    top: math_val(n, "groupChrPr", "pos") == Some("top"),
+                    vert_top: math_child(n, "groupChrPr")
+                        .and_then(|p| math_child(p, "vertJc"))
+                        .is_none_or(|v| v.attribute((MATH_NS, "val")) == Some("top")),
+                    body: self.arg(n, "e"),
+                }),
+                None => self.arg(n, "e"),
+            },
             "limLow" | "limUpp" => one(MathNode::Limit {
                 upper: n.tag_name().name() == "limUpp",
                 body: self.arg(n, "e"),
