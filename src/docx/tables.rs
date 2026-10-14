@@ -809,6 +809,20 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     } else {
                         ctx.styles.defaults.space_after
                     });
+                    // The end-of-cell mark uses the document's default
+                    // paragraph style. Contextual after-spacing collapses only
+                    // when the last paragraph has that same style.
+                    let last_in_cell = p.parent().is_some_and(|parent| {
+                        parent.children().filter(|node| node.is_element()).last() == Some(p)
+                    });
+                    let space_after = if last_in_cell
+                        && para_style_id == ctx.styles.default_paragraph_style_id
+                        && super::paragraph::contextual_spacing(ppr, para_style)
+                    {
+                        0.0
+                    } else {
+                        space_after
+                    };
                     if let Some(tabs) = ppr.and_then(|ppr| wml(ppr, "tabs")) {
                         for t in tabs.children().filter(|n| n.has_tag_name((WML_NS, "tab"))) {
                             if t.attribute((WML_NS, "val")) == Some("num")
