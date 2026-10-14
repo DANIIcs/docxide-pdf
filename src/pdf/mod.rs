@@ -2964,8 +2964,22 @@ fn render_paragraph_block(
             } else if !text_empty && covers_first_line {
                 text_drop = text_drop.max(content_top - zone.bottom_y);
                 content_h = content_h.max(fi_h).max(lines_h + text_drop);
-            } else {
+            } else if fi.v_relative_from == VRelativeFrom::Paragraph {
                 content_h = content_h.max(fi_h);
+            } else {
+                // A page- or margin-placed float's offset is not from this
+                // paragraph: it reaches down to the float's own bottom (a
+                // 45pt rubric banner at 484.8pt from the page top made its
+                // one-line anchor 530pt tall and sent it to the next page).
+                // The space after overlaps the float: Word starts the next
+                // paragraph at the banner's foot. Only a float the next line
+                // would run into counts; one further down the page leaves the
+                // text flowing (a page-foot logo 680pt below its anchor).
+                // ponytail: lines that reach a lower float later are not moved.
+                let next_line_bottom = content_top - content_h - para.space_after - line_h;
+                if zone.top_y > next_line_bottom {
+                    content_h = content_h.max(content_top - zone.bottom_y - para.space_after);
+                }
             }
         } else if fi.v_relative_from == VRelativeFrom::Paragraph && fi.wrap_type.wraps_beside() {
             // Paragraph-relative wrapping images: track overflow
