@@ -57,6 +57,18 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   No padding: the bar is exactly as wide as the wider part.
 - Scripts: superscript at advance + italic correction, subscript at the
   advance; MATH shift rules.
+- Radicals: the surd is the first variant at least body + gap + rule tall.
+  Inline, a taller surd shares its surplus above and below the body (the
+  gap grows by half); in display the bar keeps the display gap and the
+  surplus all goes below (display √(a/b): bar 17.55pt up at 12pt, the
+  half-surplus rule says 18.13). Word lowers the surd at most
+  RadicalVerticalGap (the text-style one, in display too) below its designed
+  place, so over short contents the bar sits higher (√x: 10.0pt up at 12pt,
+  not 9.45), and a surd that then no longer reaches below the body gives way
+  to the next variant (√y, √g, √p take the 8.91pt surd). Probes `mp3_rad`
+  (12, 24pt) and `mp7_rad` (10, 16, 36, 72pt; 14 bodies inline, 5 display):
+  every variant agrees, bars within ±0.26pt in display; all 36 `mp5_delim`
+  delimiter probes now agree.
 - In display math a fraction never shrinks its parts: a nested a/b/c keeps
   12pt letters at 12pt (text-style shifts inside). Inline, the parts drop a
   script level (pendulum's π/2 at 11.5 of 16pt).
@@ -64,9 +76,9 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   `(x)` 0.5pt up at 12pt). With `m:grow` on (default) they take the first
   variant at least δ − 3/8 em tall, δ = TeX's axis-symmetric cover height
   2·max(asc − axis, desc + axis), and always one size past a delimiter inside
-  them: 34 of 36 probes (`mp5_delim`: x, y, b², x+y, inline and display
-  fractions, nested fractions and delimiters) agree for a shortfall in
-  [4.47, 4.58) pt at 12pt; the two misses are radicals (see Open). A
+  them: all 36 probes (`mp5_delim`: x, y, b², x+y, inline and display
+  fractions, nested fractions, delimiters and radicals) agree for a
+  shortfall in [4.47, 4.58) pt at 12pt. A
   `m:sepChr` without a value draws no separator.
 - A typed space in a math run is the spacing: nothing is added beside it
   (the zone ", " is comma + 0.22em space).
@@ -116,9 +128,10 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 
 ## Open
 
-- Radicals: the standard placement (gap grows by half the surd's surplus)
-  matches Word for b, H and fractions, but over short contents (x, a) Word's
-  overbar sits 0.6pt (12pt) to 1.4pt (24pt) higher. Probe `mp3_rad_*`.
+- Radicals inline over tall contents (b, H, 1, ℓ, x+1): Word's surd sits
+  0.3–0.6pt lower than the half-surplus rule at every size from 10 to 72pt
+  (an absolute offset, not a fraction of the em; the drop limit shows the
+  same). Not found in the MATH constants; snapping is ±0.25pt.
 - groupChr with the content as limit: Word's content sits 7pt under a ⏞
   (ours 1pt); a box-reaching-baseline clamp made the probe document worse.
 - Accents over tall bases, eqArr alignment points (`&`), display-math wrap

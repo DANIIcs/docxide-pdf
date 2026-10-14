@@ -56,8 +56,9 @@ matrices, equation arrays, boxes, phantoms) from the MATH table with Word's
 half-point script sizes and `ssty` alternates; glyphs embedded by id; math
 line heights (hhea box + MathLeading stretch); zones glued to touching text.
 Open, in order:
-1. Radical placement over short contents (Word 0.6–1.4pt higher), display
-   ∫ limit positions, groupChr brace placement, borderBox padding.
+1. ~~Radical placement~~ done (surd drop limit, display gap, variant by
+   coverage); display ∫ limit positions, groupChr brace placement, borderBox
+   padding.
 2. eqArr alignment points (`&`) and per-row justification.
 3. ~~Breaks inside long inline zones~~ done (after operators, as Word);
    display math wrap (`m:wrapIndent`).

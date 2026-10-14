@@ -105,6 +105,46 @@ fn pendulum_radical_fraction() {
 }
 
 #[test]
+fn radical_surd_drop_and_display_gap() {
+    // Word at 12pt (probes mp3_rad/mp7_rad): the bar over x stands 10.0pt
+    // up, above the half-surplus place; √y takes the 8.91pt-wide surd and
+    // its bar 10.56pt up; display √(a/b) keeps the gap (bar at 17.55pt).
+    let rad = |body: Vec<MathNode>, display: bool| {
+        let b = layout_at(vec![MathNode::Rad { degree: None, body }], display, 12.0);
+        let bar = b
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                MathItem::Rule { y, h, .. } => Some(y + h),
+                _ => None,
+            })
+            .fold(f32::MIN, f32::max);
+        let body_x = glyphs(&b).iter().find(|g| g.0 != '√').unwrap().1;
+        (bar, body_x)
+    };
+    let (bar, _) = rad(vec![run("x")], false);
+    assert!((bar - 10.0).abs() < 0.15, "√x bar {bar}");
+    let (bar, body_x) = rad(vec![run("y")], false);
+    assert!((body_x - 8.91).abs() < 0.05, "√y surd width {body_x}");
+    assert!((bar - 10.56).abs() < 0.15, "√y bar {bar}");
+    let frac = MathNode::Frac {
+        kind: crate::model::FracKind::Bar,
+        num: vec![run("a")],
+        den: vec![run("b")],
+    };
+    let (bar, _) = rad(vec![frac.clone()], true);
+    assert!((bar - 17.55).abs() < 0.15, "display √(a/b) bar {bar}");
+    // A body past the largest variant takes an assembled surd at once.
+    let tall = (0..3).fold(frac, |n, _| MathNode::Frac {
+        kind: crate::model::FracKind::Bar,
+        num: vec![n.clone()],
+        den: vec![n],
+    });
+    let (bar, _) = rad(vec![tall], true);
+    assert!(bar > 40.0 && bar < 120.0, "tall radical bar {bar}");
+}
+
+#[test]
 fn display_fraction_shifts() {
     // a/b on its own line at 12pt: numerator 9.05 up, denominator 7.95 down.
     let root = vec![MathNode::Frac {

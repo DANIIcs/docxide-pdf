@@ -751,21 +751,39 @@ impl<'a> Ctx<'a> {
     fn radical(&self, degree: Option<&MathRow>, body: &MathRow, st: St) -> B {
         let body_b = self.row(body, st.cramp());
         let t = self.k(st, Constants::radical_rule_thickness);
-        let mut gap = self.kd(
+        let gap = self.kd(
             st,
             Constants::radical_display_style_vertical_gap,
             Constants::radical_vertical_gap,
         );
-        let target = body_b.asc + body_b.desc + gap + t;
-        let surd = self.stretch('√', target, self.size(st), true);
-        let surd_h = surd.asc + surd.desc;
-        if surd_h > target {
-            gap += (surd_h - target) / 2.0;
-        }
-        let rule_top = body_b.asc + gap + t;
+        let need = body_b.asc + body_b.desc + gap + t;
+        // A taller surd than needed shares its surplus above and below the
+        // body inline; in display the bar keeps the gap and it all goes
+        // below. Word lowers the surd at most RadicalVerticalGap (the
+        // text-style one, in display too) below its designed place, so over
+        // short contents the bar sits higher, and a surd that then no longer
+        // reaches below the body gives way to the next size (√y takes the
+        // taller surd): probes `mp3_rad`/`mp7_rad`, 10-72pt.
+        let max_drop = self.k(st, Constants::radical_vertical_gap);
+        let share = if st.display() { 0.0 } else { 0.5 };
+        let mut target = need;
+        let (surd, rule_top, surd_bottom) = loop {
+            let surd = self.stretch('√', target, self.size(st), true);
+            let surd_h = surd.asc + surd.desc;
+            let mut rule_top = body_b.asc + gap + t + (surd_h - need).max(0.0) * share;
+            // An assembled surd has no designed place to drop from.
+            let variant = surd.single_glyph.is_some();
+            if variant {
+                rule_top = rule_top.max(surd.asc - max_drop);
+            }
+            let surd_bottom = surd_h - rule_top;
+            if surd_bottom >= body_b.desc || surd_h < target || !variant {
+                break (surd, rule_top, surd_bottom);
+            }
+            target = surd_h * 1.01;
+        };
         // The surd's top is the overbar's top.
         let surd_dy = rule_top - surd.asc;
-        let surd_bottom = surd.desc - surd_dy;
         let mut b = B::empty();
         let mut x = 0.0;
         if let Some(deg) = degree {
