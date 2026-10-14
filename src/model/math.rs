@@ -60,6 +60,8 @@ pub enum MathNode {
     GroupChr {
         chr: char,
         top: bool,
+        /// `m:vertJc` is top (Word's default when absent).
+        vert_top: bool,
         body: MathRow,
     },
     /// `m:limLow` (`upper` false) and `m:limUpp`.

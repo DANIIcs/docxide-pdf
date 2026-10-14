@@ -82,6 +82,14 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - Display operators' limits drop from the operator's ink like a box's
   scripts (display ∫: 13.7pt up, 11.3pt down at 12pt); inline operators'
   limits sit like a letter's (inline ∑: 4.8 up, 2.8 down).
+- Group characters (`m:groupChr`): a brace or arrow keeps its designed place
+  (a ⏟ hangs below the baseline) unless the content comes within the
+  stretch-stack gap: x+y+z's descenders push the brace 1.44pt down, a+b+c's
+  leave it. With `m:vertJc` on the character's side (default top, so any
+  pos="top" brace without vertJc) the content shrinks to a script-size limit
+  of the character.
+- `m:borderBox`: an overbar's gap and rule all round (border 1.94pt off 12pt
+  content, 0.72pt rule).
 - A display-math paragraph takes its own `m:oMathParaPr/m:jc` (centred by
   default) over the paragraph's `w:jc`: Word centres a `w:jc="both"` cell's
   equation.
@@ -107,7 +115,8 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
 - Radicals: the standard placement (gap grows by half the surd's surplus)
   matches Word for b, H and fractions, but over short contents (x, a) Word's
   overbar sits 0.6pt (12pt) to 1.4pt (24pt) higher. Probe `mp3_rad_*`.
-- Display ∫ limits, groupChr braces (Word places the assembly at the content
-  baseline), accents over tall bases, borderBox padding, eqArr alignment
-  points (`&`), `m:brkBin` line breaking inside a zone: not yet measured.
+- groupChr with the content as limit: Word's content sits 7pt under a ⏞
+  (ours 1pt); a box-reaching-baseline clamp made the probe document worse.
+- Accents over tall bases, eqArr alignment points (`&`), `m:brkBin` line
+  breaking inside a zone: not yet measured.
 - `m:nor` text draws in the math font, upright; Word uses the run's font.

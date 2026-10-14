@@ -431,7 +431,12 @@ impl<'a> Ctx<'a> {
             }
             MathNode::Accent { chr, body } => self.accent(*chr, body, st),
             MathNode::Bar { top, body } => self.bar(*top, body, st),
-            MathNode::GroupChr { chr, top, body } => self.group_chr(*chr, *top, body, st),
+            MathNode::GroupChr {
+                chr,
+                top,
+                vert_top,
+                body,
+            } => self.group_chr(*chr, *top, top == vert_top, body, st),
             MathNode::Limit { upper, body, limit } => {
                 let b = self.row(body, st);
                 let lim = Some(self.row(limit, st.sup()));
@@ -921,17 +926,32 @@ impl<'a> Ctx<'a> {
         b
     }
 
-    fn group_chr(&self, chr: char, top: bool, body: &MathRow, st: St) -> B {
-        let base = self.row(body, st);
+    /// A brace or arrow over or under its content. Word keeps the character
+    /// where its design puts it (a ⏟ hangs below the baseline) unless the
+    /// content comes within the stretch-stack gap of it: x+y+z's descenders
+    /// push the brace 1.44pt down, a+b+c's leave it. With `on_chr` (m:vertJc
+    /// on the character's side) the character carries the baseline and the
+    /// content is its script-size limit: Word sets a pos="top" brace's content
+    /// at script size beneath it, m:vertJc defaulting to top.
+    fn group_chr(&self, chr: char, top: bool, on_chr: bool, body: &MathRow, st: St) -> B {
+        let base = self.row(body, if on_chr { st.sup() } else { st });
         let brace = self.stretch(chr, base.w, self.size(st), false);
-        let w = base.w.max(brace.w);
+        if on_chr {
+            let (lo, hi) = if top {
+                (Some(base), None)
+            } else {
+                (None, Some(base))
+            };
+            return self.limits(brace, lo, hi, st);
+        }
         let dy = if top {
-            base.asc + self.k(st, Constants::stretch_stack_gap_below_min) + brace.desc
+            (base.asc + self.k(st, Constants::stretch_stack_gap_below_min) + brace.desc).max(0.0)
         } else {
-            -(base.desc + self.k(st, Constants::stretch_stack_gap_above_min) + brace.asc)
+            (-(base.desc + self.k(st, Constants::stretch_stack_gap_above_min) + brace.asc)).min(0.0)
         };
-        let mut b = B::empty();
+        let w = base.w.max(brace.w);
         let (bx, cx) = ((w - base.w) / 2.0, (w - brace.w) / 2.0);
+        let mut b = B::ends_of(&base);
         b.put(base, bx, 0.0);
         b.put(brace, cx, dy);
         b
@@ -983,10 +1003,10 @@ impl<'a> Ctx<'a> {
 
     fn border_box(&self, hide: [bool; 4], body: &MathRow, st: St) -> B {
         let base = self.row(body, st);
-        let t = self.k(st, Constants::fraction_rule_thickness);
-        // ponytail: the padding is one rule thickness plus the radical gap;
-        // measure Word's borderBox if documents rely on it.
-        let pad = self.k(st, Constants::radical_vertical_gap) + t;
+        // An overbar's gap and rule all round: Word's border sits 1.94pt off
+        // 12pt content with a 0.72pt rule (OverbarVerticalGap 2.02).
+        let t = self.k(st, Constants::overbar_rule_thickness);
+        let pad = self.k(st, Constants::overbar_vertical_gap) + t;
         let (w, asc, desc) = (base.w + 2.0 * pad, base.asc + pad, base.desc + pad);
         let mut b = B::empty();
         b.put(base, pad, 0.0);
@@ -1013,7 +1033,13 @@ impl<'a> Ctx<'a> {
         match self.font.stretch(gid, target, size, vertical) {
             font::Stretched::Glyph(g) => self.glyph_id(g, ch, size, None),
             font::Stretched::Assembly(parts) => {
-                let mut b = B::empty();
+                // The parts' own extents, which needn't reach the baseline (a
+                // horizontal brace hangs below it).
+                let mut b = B {
+                    asc: f32::NEG_INFINITY,
+                    desc: f32::NEG_INFINITY,
+                    ..B::empty()
+                };
                 for (g, offset) in parts {
                     let (dx, dy) = if vertical {
                         (0.0, offset)

@@ -108,6 +108,7 @@ impl MathParser<'_> {
             "groupChr" => one(MathNode::GroupChr {
                 chr: chr(n, "groupChrPr", "chr", '\u{23DF}').unwrap_or('\u{23DF}'),
                 top: math_val(n, "groupChrPr", "pos") == Some("top"),
+                vert_top: math_val(n, "groupChrPr", "vertJc") != Some("bot"),
                 body: self.arg(n, "e"),
             }),
             "limLow" | "limUpp" => one(MathNode::Limit {
