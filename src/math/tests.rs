@@ -311,4 +311,8 @@ fn inline_zones_break_after_operators() {
     assert_eq!(glyphs(&tail).len(), 2 + 4);
     assert!((head.width + tail.width - b.width).abs() < b.breaks[0].1 - b.breaks[0].0 + 0.01);
     assert!(glyphs(&tail).iter().all(|g| g.1 >= -0.01));
+    // Each part is as tall as its own atoms: the fraction's height stays on
+    // its line (Word, probe mp16_brk).
+    assert!(head.ascent < tail.ascent && head.descent < tail.descent);
+    assert_eq!((tail.ascent, tail.descent), (b.ascent, b.descent));
 }

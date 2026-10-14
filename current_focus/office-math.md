@@ -157,6 +157,11 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   operator, whatever `m:brkBin` says (with brkBin before or no mathPr alike:
   "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …"; a broken minus isn't repeated). Probe
   `mp6_break`: our breaks match Word's on all three lines.
+- Each part of a broken zone is as tall as its own atoms: a fraction at the
+  zone's start raises only the first line (probe `mp16_brk`: baselines within
+  0.18pt).
+- An `&` outside an equation array is an ordinary character: Word draws it
+  (probe `mp15`).
 
 ## Open
 
@@ -164,7 +169,6 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   0.3–0.6pt lower than the half-surplus rule at every size from 10 to 72pt
   (an absolute offset, not a fraction of the em; the drop limit shows the
   same). Not found in the MATH constants; snapping is ±0.25pt.
-- Accents over tall bases, display-math wrap (`m:wrapIndent`): not yet
-  measured. `&` outside an equation array still draws. The parts of a broken inline zone keep
+- Accents over tall bases: not yet measured. The parts of a broken inline zone keep
   the whole zone's height.
 - An `m:nor` superscript sits 0.6pt closer to its base than Word's (e^max).

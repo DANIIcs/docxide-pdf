@@ -33,6 +33,9 @@ pub struct MathBox {
     /// Where an inline zone may break: after a top-level binary or relation
     /// operator, as (end of the operator, start of what follows).
     pub breaks: Vec<(f32, f32)>,
+    /// Each top-level atom's start, ascent and descent: a broken zone's parts
+    /// take only their own atoms' height.
+    atoms: Vec<(f32, f32, f32)>,
     /// The math font's own line box at the zone's size (`MathFont::line_metrics`):
     /// what a line of nothing but plain math is sized by.
     pub line_ascent: f32,
@@ -77,10 +80,6 @@ pub(crate) struct TextBox {
 pub(crate) type TextMeasure<'a> = &'a dyn Fn(&TextFont, &str, f32) -> Option<TextBox>;
 
 impl MathBox {
-    /// The parts before `end` and from `start` (a break point): the first
-    /// keeps the items left of the break, the second the rest, moved to 0.
-    // ponytail: both parts keep the whole zone's ascent and descent; measure
-    // each part's items if a tall atom on one line stretches the other.
     /// The zone broken at its last break that leaves at most `room` before
     /// it: (that part, the rest), or None when no break does.
     pub(crate) fn fit(&self, room: f32) -> Option<(MathBox, MathBox)> {
@@ -88,17 +87,28 @@ impl MathBox {
         Some(self.split(*brk))
     }
 
+    /// The parts before `end` and from `start` (a break point): the first
+    /// keeps the items left of the break, the second the rest, moved to 0;
+    /// each as tall as its own atoms (Word: a fraction on the first line
+    /// doesn't raise the second, probe `mp16_brk`).
     fn split(&self, (end, start): (f32, f32)) -> (MathBox, MathBox) {
         let x = |it: &MathItem| match it {
             MathItem::Glyph { x, .. } | MathItem::Rule { x, .. } | MathItem::Text { x, .. } => *x,
         };
         let (head, tail): (Vec<_>, Vec<_>) = self.items.iter().cloned().partition(|it| x(it) < end);
-        let part = |items: Vec<MathItem>, width: f32, breaks: Vec<(f32, f32)>| MathBox {
+        let i = self.atoms.partition_point(|a| a.0 < end);
+        let head_atoms = self.atoms[..i].to_vec();
+        let tail_atoms = self.atoms[i..]
+            .iter()
+            .map(|&(x, a, d)| (x - start, a, d))
+            .collect();
+        let part = |items, width, breaks, atoms: Vec<(f32, f32, f32)>| MathBox {
             width,
             items,
             breaks,
-            ascent: self.ascent,
-            descent: self.descent,
+            ascent: extent(&atoms).0,
+            descent: extent(&atoms).1,
+            atoms,
             leading: self.leading,
             line_ascent: self.line_ascent,
             line_descent: self.line_descent,
@@ -111,8 +121,8 @@ impl MathBox {
             .map(|&(e, s)| (e - start, s - start))
             .collect();
         (
-            part(head, end, Vec::new()),
-            part(tail, self.width - start, tail_breaks),
+            part(head, end, Vec::new(), head_atoms),
+            part(tail, self.width - start, tail_breaks, tail_atoms),
         )
     }
 }
@@ -135,15 +145,24 @@ pub(crate) fn layout(
     };
     let style = if display { Style::D } else { Style::T };
     let st = St::new(style);
-    let (b, breaks) = cx.hbox_breaks(cx.atoms(root, st), st);
+    let mut atoms = cx.atoms(root, st);
+    let (xs, w) = cx.place(&mut atoms, st);
+    let extents: Vec<_> = atoms
+        .iter()
+        .zip(&xs)
+        .map(|(a, &x)| (x, a.asc, a.desc))
+        .collect();
+    let (ascent, descent) = extent(&extents);
+    let (b, breaks) = assemble(atoms, &xs);
     let (line_ascent, line_descent) = font.line_metrics(size);
     MathBox {
+        atoms: extents,
         // Word breaks inline math after an operator whatever m:brkBin says
         // (that applies to display math): "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …".
         breaks: if display { Vec::new() } else { breaks },
-        width: b.w,
-        ascent: b.asc,
-        descent: b.desc,
+        width: w,
+        ascent,
+        descent,
         items: b.items,
         leading: font.constant(Constants::math_leading, size),
         line_ascent,
@@ -395,18 +414,12 @@ impl<'a> Ctx<'a> {
         atoms
     }
 
-    fn hbox(&self, atoms: Vec<B>, st: St) -> B {
-        self.hbox_breaks(atoms, st).0
-    }
-
-    /// `hbox`, and where the row may break: after each binary or relation
-    /// operator, as (end of the operator, start of what follows).
-    fn hbox_breaks(&self, mut atoms: Vec<B>, st: St) -> (B, Vec<(f32, f32)>) {
+    fn hbox(&self, mut atoms: Vec<B>, st: St) -> B {
         let (xs, _) = self.place(&mut atoms, st);
         if atoms.len() == 1 {
-            return (atoms.pop().unwrap(), Vec::new());
+            return atoms.pop().unwrap();
         }
-        assemble(atoms, &xs)
+        assemble(atoms, &xs).0
     }
 
     /// Where each atom of a row goes, with TeX's spacing, and the row's width.
@@ -1309,6 +1322,13 @@ impl<'a> Ctx<'a> {
             }
         }
     }
+}
+
+/// The tallest ascent and deepest descent of a row's atoms.
+fn extent(atoms: &[(f32, f32, f32)]) -> (f32, f32) {
+    atoms.iter().fold((0.0f32, 0.0f32), |(a, d), &(_, aa, dd)| {
+        (a.max(aa), d.max(dd))
+    })
 }
 
 /// A row of atoms at `xs`, with where it may break: after each binary or
