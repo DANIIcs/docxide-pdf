@@ -75,7 +75,10 @@ pub(super) fn apply_pct_width(
         // in Word (white cell shading over grey table shading), where ours
         // shrank to its 355pt of text.
         let grid: f32 = table.col_widths.iter().sum();
-        if pct <= 1.0 && grid > total && grid <= target + 0.5 && widths.len() == table.col_widths.len()
+        if pct <= 1.0
+            && grid > total
+            && grid <= target + 0.5
+            && widths.len() == table.col_widths.len()
         {
             widths.copy_from_slice(&table.col_widths);
         }

@@ -55,10 +55,7 @@ fn font_family_names(face: &Face) -> (Vec<String>, bool) {
 
 /// Returns `(names, bold, italic, mac_roman_only, off_weight)` — one entry with
 /// ALL localized family names.
-fn read_font_style(
-    data: &[u8],
-    face_index: u32,
-) -> Option<(Vec<String>, bool, bool, bool, bool)> {
+fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, bool, bool, bool)> {
     let face = Face::parse(data, face_index).ok()?;
     let (names, mac_roman_only) = font_family_names(&face);
     if names.is_empty() {
@@ -68,7 +65,13 @@ fn read_font_style(
     // and bold ones (Apple's HelveticaNeue.ttc: only its Thin face carries a
     // Unicode family name, so it outranked the Mac-Roman-only Regular).
     let off_weight = !(350..=750).contains(&face.weight().to_number());
-    Some((names, face.is_bold(), face.is_italic(), mac_roman_only, off_weight))
+    Some((
+        names,
+        face.is_bold(),
+        face.is_italic(),
+        mac_roman_only,
+        off_weight,
+    ))
 }
 
 fn font_directories() -> Vec<PathBuf> {

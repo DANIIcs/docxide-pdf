@@ -183,7 +183,13 @@ fn blocking_table_bands(
 /// paragraph, its space before and its first line or picture, moves below
 /// (Word probes: 20pt before lands 20pt under the table, a 59pt logo below a
 /// table that starts 13pt down still moves).
-fn below_blocking_tables(top: f32, gap: f32, para: &Paragraph, line_h: f32, bands: &[(f32, f32)]) -> f32 {
+fn below_blocking_tables(
+    top: f32,
+    gap: f32,
+    para: &Paragraph,
+    line_h: f32,
+    bands: &[(f32, f32)],
+) -> f32 {
     below_blocking_frames(top, gap + line_h.max(runs_max_image_h(&para.runs)), bands)
 }
 
@@ -421,8 +427,13 @@ fn header_height(
                 let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
-                height = below_blocking_tables(sp.header_margin + height, gap, para, line_h, &table_bands)
-                    - sp.header_margin
+                height = below_blocking_tables(
+                    sp.header_margin + height,
+                    gap,
+                    para,
+                    line_h,
+                    &table_bands,
+                ) - sp.header_margin
                     + gap;
                 height = below_blocking_frames(sp.header_margin + height, line_h, &bands)
                     - sp.header_margin;
@@ -885,7 +896,13 @@ pub(super) fn render_header_footer(
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
                 cursor_y = sp.page_height
-                    - below_blocking_tables(sp.page_height - cursor_y, gap, para, line_h, &table_bands)
+                    - below_blocking_tables(
+                        sp.page_height - cursor_y,
+                        gap,
+                        para,
+                        line_h,
+                        &table_bands,
+                    )
                     - gap;
                 // Mirrors compute_header_height: a line overlapping a frame the
                 // text may not sit beside moves below it.
@@ -939,11 +956,23 @@ pub(super) fn render_header_footer(
                     let v_bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
                     if let Some(b) = &bdr.left {
                         let x = box_left - b.space_pt - super::LEFT_BORDER_GAP - b.width_pt / 2.0;
-                        stroke_segment(content, (x, box_top), (x, v_bottom), b.width_pt, Some(b.color));
+                        stroke_segment(
+                            content,
+                            (x, box_top),
+                            (x, v_bottom),
+                            b.width_pt,
+                            Some(b.color),
+                        );
                     }
                     if let Some(b) = &bdr.right {
                         let x = box_right + b.space_pt + super::RIGHT_BORDER_GAP + b.width_pt / 2.0;
-                        stroke_segment(content, (x, box_top), (x, v_bottom), b.width_pt, Some(b.color));
+                        stroke_segment(
+                            content,
+                            (x, box_top),
+                            (x, v_bottom),
+                            b.width_pt,
+                            Some(b.color),
+                        );
                     }
                 };
                 // Paragraph shading under the text, out to the side borders'
@@ -952,9 +981,15 @@ pub(super) fn render_header_footer(
                 let draw_para_shading = |content: &mut Content, box_bottom: f32| {
                     let Some(color) = para.shading else { return };
                     let left = box_left
-                        - bdr.left.as_ref().map_or(0.0, |b| b.space_pt + super::LEFT_BORDER_GAP);
+                        - bdr
+                            .left
+                            .as_ref()
+                            .map_or(0.0, |b| b.space_pt + super::LEFT_BORDER_GAP);
                     let right = box_right
-                        + bdr.right.as_ref().map_or(0.0, |b| b.space_pt + super::RIGHT_BORDER_GAP);
+                        + bdr
+                            .right
+                            .as_ref()
+                            .map_or(0.0, |b| b.space_pt + super::RIGHT_BORDER_GAP);
                     let bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
                     content.save_state();
                     super::color::fill_rgb(content, color);
