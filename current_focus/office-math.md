@@ -97,6 +97,17 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   12pt for plain rows), taller ink pushing them apart; the grid is measured
   and centred on the axis by its ink (heading-to-row distances match Word to
   0.05pt). Display cells keep display style (a cell's a/b shifts 9.12/7.92).
+- Equation arrays: a row's `&`s split it into segments (odd: alignment
+  point, even: padding). Each segment keeps its place in the row laid out
+  whole, a space between atoms going with the segment before; columns take
+  the widest segment, the segment before an alignment point flush right to
+  it, the one after flush left; no extra space at an even `&`. Rows without
+  any `&` are centred. Rows step a math line apart (14.06pt at 12pt) unless
+  their ink comes within StackDisplayStyleGapMin (inline too): 17.5 under a
+  display a/b row, 15.8 under an inline one; a row with an `&` stands as tall
+  as the ampersand glyph (20.0 under the a/b row). Probes `mp11_eqarr`–
+  `mp13_eqarr`: alignment within 0.3pt, row steps within 0.26pt. The spoken
+  form skips the `&`s and pauses between rows.
 - Display operators' limits drop from the operator's ink like a box's
   scripts (display ∫: 13.7pt up, 11.3pt down at 12pt); inline operators'
   limits sit like a letter's (inline ∑: 4.8 up, 2.8 down).
@@ -145,7 +156,7 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   0.3–0.6pt lower than the half-surplus rule at every size from 10 to 72pt
   (an absolute offset, not a fraction of the em; the drop limit shows the
   same). Not found in the MATH constants; snapping is ±0.25pt.
-- Accents over tall bases, eqArr alignment points (`&`), display-math wrap
-  (`m:wrapIndent`): not yet measured. The parts of a broken inline zone keep
+- Accents over tall bases, display-math wrap (`m:wrapIndent`): not yet
+  measured. `&` outside an equation array still draws. The parts of a broken inline zone keep
   the whole zone's height.
 - `m:nor` text draws in the math font, upright; Word uses the run's font.

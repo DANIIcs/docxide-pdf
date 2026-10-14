@@ -376,6 +376,15 @@ impl<'a> Ctx<'a> {
     /// `hbox`, and where the row may break: after each binary or relation
     /// operator, as (end of the operator, start of what follows).
     fn hbox_breaks(&self, mut atoms: Vec<B>, st: St) -> (B, Vec<(f32, f32)>) {
+        let (xs, _) = self.place(&mut atoms, st);
+        if atoms.len() == 1 {
+            return (atoms.pop().unwrap(), Vec::new());
+        }
+        assemble(atoms, &xs)
+    }
+
+    /// Where each atom of a row goes, with TeX's spacing, and the row's width.
+    fn place(&self, atoms: &mut [B], st: St) -> (Vec<f32>, f32) {
         // TeX rule: a binary operator with nothing to operate on is ordinary.
         for i in 0..atoms.len() {
             if atoms[i].first == Class::Bin {
@@ -394,38 +403,34 @@ impl<'a> Ctx<'a> {
                 }
             }
         }
-        if atoms.len() == 1 {
-            return (atoms.pop().unwrap(), Vec::new());
-        }
-        let mut breaks = Vec::new();
         let em = self.size(st);
-        let mut out = atoms.first().map_or_else(B::empty, B::ends_of);
-        let mut prev: Option<(Class, f32)> = None;
-        for a in atoms {
-            if let Some((last, ic)) = prev {
-                let end = out.w;
-                out.w += space(last, a.first, st) * em / 18.0;
+        let mut xs = Vec::with_capacity(atoms.len());
+        let mut w = 0.0f32;
+        for (i, a) in atoms.iter().enumerate() {
+            let mut x = w;
+            if let Some(p) = i.checked_sub(1).map(|p| &atoms[p]) {
+                x += space(p.last, a.first, st) * em / 18.0;
                 // An italic glyph followed by an upright one keeps its
                 // italic correction.
                 if !a.first_italic {
-                    out.w += ic;
-                }
-                if matches!(last, Class::Bin | Class::Rel) {
-                    breaks.push((end, out.w));
+                    x += p.ic;
                 }
             }
-            prev = Some((a.last, a.ic));
-            out.put(a, out.w, 0.0);
+            xs.push(x);
+            w = w.max(x + a.w);
         }
-        (out.last, out.ic) = prev.unwrap_or((Class::Ord, 0.0));
-        (out, breaks)
+        (xs, w)
     }
 
     /// A math run: one atom per character.
     fn run(&self, run: &MathRun, st: St) -> Vec<B> {
+        self.run_text(&run.text, run, st)
+    }
+
+    /// `text` set in `run`'s style.
+    fn run_text(&self, text: &str, run: &MathRun, st: St) -> Vec<B> {
         let size = self.size(st);
-        run.text
-            .chars()
+        text.chars()
             .map(|ch| {
                 let (drawn, italic) = alphanumeric::styled(ch, run.style, run.script);
                 let drawn = match drawn {
@@ -516,10 +521,7 @@ impl<'a> Ctx<'a> {
                     .collect();
                 self.grid(rows, st, true)
             }
-            MathNode::EqArr { rows } => {
-                let rows = rows.iter().map(|r| vec![self.row(r, st)]).collect();
-                self.grid(rows, st, false)
-            }
+            MathNode::EqArr { rows } => self.eq_arr(rows, st),
             MathNode::Boxed(body) => self.row(body, st).ord(),
             MathNode::BorderBox { hide, body } => self.border_box(*hide, body, st),
             MathNode::Phantom {
@@ -1065,6 +1067,97 @@ impl<'a> Ctx<'a> {
         b
     }
 
+    /// An equation array. A row's `&`s split it into segments: every odd
+    /// one is an alignment point, every even one a place for padding. Each
+    /// segment keeps its place in the row laid out whole (a space between
+    /// atoms goes with the segment before it), columns take the widest
+    /// segment, and the segment before an alignment point is set flush right
+    /// to it, the one after flush left. Rows without any `&` are centred
+    /// (probe `mp11_eqarr`: Word's rows align to 0.25pt).
+    fn eq_arr(&self, rows: &[MathRow], st: St) -> B {
+        let mut laid = Vec::with_capacity(rows.len());
+        for row in rows {
+            let (mut atoms, mut marks) = (Vec::new(), Vec::new());
+            for node in row {
+                match node {
+                    MathNode::Run(run) => {
+                        for (i, text) in run.text.split('&').enumerate() {
+                            if i > 0 {
+                                marks.push(atoms.len());
+                            }
+                            atoms.extend(self.run_text(text, run, st));
+                        }
+                    }
+                    _ => atoms.push(self.node(node, st)),
+                }
+            }
+            let (xs, w) = self.place(&mut atoms, st);
+            let mut bounds = vec![0.0];
+            bounds.extend(marks.iter().map(|&m| xs.get(m).copied().unwrap_or(w)));
+            bounds.push(w);
+            laid.push((atoms, xs, marks, bounds));
+        }
+        if laid.iter().all(|(_, _, marks, _)| marks.is_empty()) {
+            let rows = laid
+                .into_iter()
+                .map(|(atoms, xs, _, _)| vec![assemble(atoms, &xs).0])
+                .collect();
+            return self.grid(rows, st, false);
+        }
+        let ncols = laid
+            .iter()
+            .map(|(_, _, _, bounds)| bounds.len() - 1)
+            .max()
+            .unwrap_or(0);
+        let mut col_w = vec![0.0f32; ncols];
+        for (_, _, _, bounds) in &laid {
+            for (i, seg) in bounds.windows(2).enumerate() {
+                col_w[i] = col_w[i].max(seg[1] - seg[0]);
+            }
+        }
+        let col_x: Vec<f32> = col_w
+            .iter()
+            .scan(0.0, |x, w| Some(std::mem::replace(x, *x + w)))
+            .collect();
+        let total: f32 = col_w.iter().sum();
+        let amp = self.glyph('&', st, None);
+        let rows = laid
+            .into_iter()
+            .map(|(atoms, xs, marks, bounds)| {
+                // Segment s moves to its column, flush right before an
+                // alignment point (even s), flush left after it.
+                let dx: Vec<f32> = bounds
+                    .windows(2)
+                    .enumerate()
+                    .map(|(s, seg)| {
+                        let flush = if s % 2 == 0 {
+                            col_w[s] - (seg[1] - seg[0])
+                        } else {
+                            0.0
+                        };
+                        col_x[s] + flush - seg[0]
+                    })
+                    .collect();
+                let xs: Vec<f32> = xs
+                    .iter()
+                    .enumerate()
+                    .map(|(j, x)| x + dx[marks.partition_point(|&m| m <= j)])
+                    .collect();
+                let (mut b, _) = assemble(atoms, &xs);
+                b.w = total;
+                // The `&`s Word measures as glyphs: an "x&=y" row stands as
+                // tall as an ampersand (20.0pt under a display a/b row, 17.5
+                // without the &).
+                if !marks.is_empty() {
+                    b.asc = b.asc.max(amp.asc);
+                    b.desc = b.desc.max(amp.desc);
+                }
+                vec![b]
+            })
+            .collect();
+        self.grid(rows, st, false)
+    }
+
     /// Matrix cells (centred, columns an em apart) or equation-array rows,
     /// stacked a math line apart and centred on the math axis.
     fn grid(&self, rows: Vec<Vec<B>>, st: St, matrix: bool) -> B {
@@ -1081,14 +1174,22 @@ impl<'a> Ctx<'a> {
         let total_w = col_w.iter().sum::<f32>() + col_gap * ncols.saturating_sub(1) as f32;
         // Rows step like lines of the math font (a math line apart for plain
         // contents: Word 14.16pt at 12pt), taller ink pushing them apart; the
-        // grid is measured and centred on the axis by its ink.
+        // grid is measured and centred on the axis by its ink. Equation-array
+        // rows keep a math line apart unless their ink comes within
+        // StackDisplayStyleGapMin (inline too): 17.5pt under a display a/b
+        // row, 15.8 under an inline one (probe `mp13_eqarr`).
+        let stack_gap = self.k(st, Constants::stack_display_style_gap_min);
         let mut rows_b = B::empty();
         let (mut y, mut prev_desc) = (0.0f32, None::<f32>);
         for r in rows {
             let asc = r.iter().map(|c| c.asc).fold(0.0, f32::max);
             let desc = r.iter().map(|c| c.desc).fold(0.0, f32::max);
             if let Some(pd) = prev_desc {
-                y -= pd.max(line_desc) + asc.max(line_asc);
+                y -= if matrix {
+                    pd.max(line_desc) + asc.max(line_asc)
+                } else {
+                    (line_asc + line_desc).max(pd + asc + stack_gap)
+                };
             }
             prev_desc = Some(desc);
             let mut x = 0.0;
@@ -1160,6 +1261,23 @@ impl<'a> Ctx<'a> {
             }
         }
     }
+}
+
+/// A row of atoms at `xs`, with where it may break: after each binary or
+/// relation operator, as (end of the operator, start of what follows).
+fn assemble(atoms: Vec<B>, xs: &[f32]) -> (B, Vec<(f32, f32)>) {
+    let mut breaks = Vec::new();
+    let mut out = atoms.first().map_or_else(B::empty, B::ends_of);
+    let mut last = (Class::Ord, 0.0);
+    for (a, &x) in atoms.into_iter().zip(xs) {
+        if matches!(last.0, Class::Bin | Class::Rel) {
+            breaks.push((out.w, x));
+        }
+        last = (a.last, a.ic);
+        out.put(a, x, 0.0);
+    }
+    (out.last, out.ic) = last;
+    (out, breaks)
 }
 
 /// TeX's inter-atom space in eighteenths of an em; the medium and thick

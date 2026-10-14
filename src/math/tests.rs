@@ -170,6 +170,26 @@ fn group_chr_limit_and_side() {
 }
 
 #[test]
+fn eq_arr_alignment_points() {
+    // Word (probe mp11_eqarr): x&=1 over yyy&=22 puts both = at one x, the
+    // left parts flush right to it; the & draws nothing. In 2&x+&3&y+ over
+    // 4&x+&&y− the y's line up although the second row's third segment is
+    // empty (the space after + stays with the segment before).
+    let eq_x = |rows: &[&str], c: char| -> Vec<f32> {
+        let root = vec![MathNode::EqArr {
+            rows: rows.iter().map(|r| vec![run(r)]).collect(),
+        }];
+        let g = glyphs(&layout_at(root, true, 12.0));
+        assert!(g.iter().all(|g| g.0 != '&'));
+        g.iter().filter(|g| g.0 == c).map(|g| g.1).collect()
+    };
+    let eq = eq_x(&["x&=1", "yyy&=22"], '=');
+    assert!((eq[0] - eq[1]).abs() < 0.01, "= at {eq:?}");
+    let y = eq_x(&["2&x+&3&y+", "4&x+&&y−"], '\u{1D466}');
+    assert!((y[0] - y[1]).abs() < 0.01, "y at {y:?}");
+}
+
+#[test]
 fn display_fraction_shifts() {
     // a/b on its own line at 12pt: numerator 9.05 up, denominator 7.95 down.
     let root = vec![MathNode::Frac {

@@ -59,7 +59,7 @@ Open, in order:
 1. ~~Radical placement~~ done (surd drop limit, display gap, variant by
    coverage); ~~groupChr placement~~ done (limit shifts, bracket side, empty
    chr/vertJc); display ∫ limit positions, borderBox padding.
-2. eqArr alignment points (`&`) and per-row justification.
+2. ~~eqArr alignment points (`&`) and row spacing~~ done.
 3. ~~Breaks inside long inline zones~~ done (after operators, as Word);
    display math wrap (`m:wrapIndent`).
 4. `m:nor` runs in the run's own font.
