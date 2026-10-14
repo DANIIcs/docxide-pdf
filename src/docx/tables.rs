@@ -824,12 +824,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     // The end-of-cell mark uses the document's default
                     // paragraph style. Contextual after-spacing collapses only
                     // when the last paragraph has that same style.
-                    let last_in_cell = p.parent().is_some_and(|parent| {
-                        parent.children().filter(|node| node.is_element()).last() == Some(p)
-                    });
-                    let space_after = if last_in_cell
+                    let contextual_spacing = super::paragraph::contextual_spacing(ppr, para_style);
+                    let space_after = if contextual_spacing
                         && para_style_id == ctx.styles.default_paragraph_style_id
-                        && super::paragraph::contextual_spacing(ppr, para_style)
+                        && p.next_siblings().skip(1).all(|node| !node.is_element())
                     {
                         0.0
                     } else {
@@ -878,7 +876,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         textboxes: parsed.textboxes,
                         connectors: parsed.connectors,
                         style_id: Some(para_style_id.to_string()),
-                        contextual_spacing: super::paragraph::contextual_spacing(ppr, para_style),
+                        contextual_spacing,
                         keep_next: ppr
                             .and_then(|ppr| wml_bool(ppr, "keepNext"))
                             .or_else(|| para_style.and_then(|s| s.keep_next))
