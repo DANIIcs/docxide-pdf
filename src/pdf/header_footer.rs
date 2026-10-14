@@ -1196,17 +1196,10 @@ pub(super) fn render_header_footer(
                                                 ..Default::default()
                                             },
                                         );
-                                        if tb_lines.is_empty() {
-                                            let (fs, lhr, _) =
-                                                tallest_run_metrics(&tp.runs, ctx.fonts);
-                                            let lh = resolve_line_h(tp_ls, fs, lhr);
-                                            return tp.space_before + lh + tp.space_after;
-                                        }
-                                        let (tb_fs, tb_lhr, _) =
-                                            tallest_run_metrics(&tp.runs, ctx.fonts);
-                                        let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
+                                        let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
+                                        let line_h = resolve_line_h(tp_ls, fs, lhr);
                                         tp.space_before
-                                            + (tb_lines.len() as f32) * tb_line_h
+                                            + tb_lines.len().max(1) as f32 * line_h
                                             + tp.space_after
                                     };
                                     let total_h: f32 = tb.paragraphs.iter().map(tp_height).sum();
@@ -1283,16 +1276,14 @@ pub(super) fn render_header_footer(
                                         ..Default::default()
                                     },
                                 );
-                                if tb_lines.is_empty() {
-                                    let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
-                                    let lh = resolve_line_h(tp_ls, fs, lhr);
-                                    tb_cursor -= tp.space_before + lh + tp.space_after;
-                                    continue;
-                                }
                                 let (tb_fs, tb_lhr, tb_ar) =
                                     tallest_run_metrics(&tp.runs, ctx.fonts);
-                                let tb_ascender = tb_ar.unwrap_or(0.75);
                                 let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
+                                if tb_lines.is_empty() {
+                                    tb_cursor -= tp.space_before + tb_line_h + tp.space_after;
+                                    continue;
+                                }
+                                let tb_ascender = tb_ar.unwrap_or(0.75);
                                 let tb_baseline = tb_cursor - tp.space_before - tb_fs * tb_ascender;
                                 let tb_metrics = (
                                     tb_fs * tb_ascender,
