@@ -61,7 +61,9 @@ Open, in order:
    chr/vertJc); display ∫ limit positions, borderBox padding.
 2. ~~eqArr alignment points (`&`) and row spacing~~ done.
 3. ~~Breaks inside long inline zones~~ done (after operators, as Word; each
-   part as tall as its own atoms); display math wrap (`m:wrapIndent`).
+   part as tall as its own atoms); ~~display math wrap~~ done (breaks before
+   operators, relations past the indent, `m:wrapIndent`, group alignment;
+   `m:wrapRight` open).
 4. ~~`m:nor` runs in the run's own font~~ done.
 
 ## Floating table positioning

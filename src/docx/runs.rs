@@ -938,9 +938,7 @@ pub(super) fn paragraph_alignment(
 /// paragraphs without one.
 fn display_math_alignment(para: roxmltree::Node) -> Option<crate::model::Alignment> {
     use crate::model::Alignment;
-    let omp = para
-        .children()
-        .find(|n| n.has_tag_name((MATH_NS, "oMathPara")))?;
+    let omp = display_math(para)?;
     let jc = math_val(omp, "oMathParaPr", "jc");
     Some(match jc {
         Some("left") => Alignment::Left,
@@ -948,6 +946,12 @@ fn display_math_alignment(para: roxmltree::Node) -> Option<crate::model::Alignme
         // center / centerGroup / absent
         _ => Alignment::Center,
     })
+}
+
+/// The paragraph's display math (`m:oMathPara`), if it holds any.
+pub(super) fn display_math<'a>(para: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    para.children()
+        .find(|n| n.has_tag_name((MATH_NS, "oMathPara")))
 }
 
 /// One `m:oMath` as a single run: the zone laid out as a box, its linear text

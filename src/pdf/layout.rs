@@ -1633,6 +1633,8 @@ pub(super) fn build_paragraph_lines(
     // Indices of lines that kept a word by squeezing their spaces.
     let mut squeezed_lines: Vec<usize> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
+    // A display equation broke over lines (see the group alignment below).
+    let mut display_wrapped = false;
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
     // pending_space_w minus CJK auto-spacing: a space character really occurred.
@@ -1885,7 +1887,10 @@ pub(super) fn build_paragraph_lines(
                         &mut cur_right_info,
                     );
                     lines.push(line);
-                    (current_x, start) = (0.0, 0);
+                    // A display equation's continuation lines start at
+                    // m:wrapIndent (72pt by default: probe `mp17_wrap`).
+                    (current_x, start) = (if mb.display { mb.wrap_indent } else { 0.0 }, 0);
+                    display_wrapped |= mb.display;
                     mb = Arc::new(tail);
                 }
             }
@@ -2364,6 +2369,24 @@ pub(super) fn build_paragraph_lines(
 
     if lines.is_empty() {
         lines.push(TextLine::default());
+    }
+    // A display equation broken over lines is aligned as a group: each line
+    // as wide as the widest, so centring puts every line's start (the
+    // continuation lines' indent included) on one edge: Word starts a
+    // full-width first line 1.7pt in, the rest 72pt further (`mp18_after`).
+    if display_wrapped {
+        let display = |l: &TextLine| {
+            l.chunks
+                .iter()
+                .any(|c| c.math.as_ref().is_some_and(|m| m.display))
+        };
+        let group_w = lines
+            .iter()
+            .filter(|l| display(l))
+            .fold(0.0f32, |w, l| w.max(l.total_width));
+        for line in lines.iter_mut().filter(|l| display(l)) {
+            line.total_width = group_w;
+        }
     }
     for i in squeezed_lines {
         if let Some(line) = lines.get_mut(i) {

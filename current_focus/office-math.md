@@ -157,6 +157,16 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   operator, whatever `m:brkBin` says (with brkBin before or no mathPr alike:
   "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …"; a broken minus isn't repeated). Probe
   `mp6_break`: our breaks match Word's on all three lines.
+- A display equation too wide for its line breaks before a binary or
+  relation operator (after it with `m:brkBin` after), filling each line;
+  but when a relation fits at least `m:wrapIndent` into the line, the line
+  ends there however much more would fit (y=a+b+cd= breaks before its second
+  =, y=a+b+c= at 69.8pt doesn't). Continuation lines start `m:wrapIndent`
+  (1440 twips by default) further in, and the lines are aligned as a group:
+  centred, the widest line (indent included) decides where they all start.
+  The equation never splits over pages. Probes `mp17_wrap`–`mp21_relmin`:
+  every line's start and end within 0.6pt. `m:wrapRight` (continuation
+  lines flush right) is not done.
 - Each part of a broken zone is as tall as its own atoms: a fraction at the
   zone's start raises only the first line (probe `mp16_brk`: baselines within
   0.18pt).

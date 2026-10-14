@@ -30,12 +30,16 @@ pub struct MathBox {
     /// The font's MathLeading at the zone's size: ink higher than the text's
     /// ascent less this gap raises the line (OpenType MATH, `MathLeading`).
     pub leading: f32,
-    /// Where an inline zone may break: after a top-level binary or relation
-    /// operator, as (end of the operator, start of what follows).
-    pub breaks: Vec<(f32, f32)>,
+    /// Where the zone may break, as (end of the line's part, start of the
+    /// next, at a relation): see `assemble`.
+    pub breaks: Vec<(f32, f32, bool)>,
     /// Each top-level atom's start, ascent and descent: a broken zone's parts
     /// take only their own atoms' height.
     atoms: Vec<(f32, f32, f32)>,
+    /// A display zone (`m:oMathPara`), and how far its continuation lines
+    /// are indented.
+    pub display: bool,
+    pub wrap_indent: f32,
     /// The math font's own line box at the zone's size (`MathFont::line_metrics`):
     /// what a line of nothing but plain math is sized by.
     pub line_ascent: f32,
@@ -81,10 +85,16 @@ pub(crate) type TextMeasure<'a> = &'a dyn Fn(&TextFont, &str, f32) -> Option<Tex
 
 impl MathBox {
     /// The zone broken at its last break that leaves at most `room` before
-    /// it: (that part, the rest), or None when no break does.
+    /// it: (that part, the rest), or None when no break does. A display
+    /// equation breaks at a relation when one fits at least m:wrapIndent into
+    /// the line, however much more would fit: y=a+b+cd= breaks before its
+    /// second =, y=a+b+c= (69.8pt) doesn't (probes `mp20_relpos`,
+    /// `mp21_relmin`).
     pub(crate) fn fit(&self, room: f32) -> Option<(MathBox, MathBox)> {
-        let brk = self.breaks.iter().rev().find(|b| b.0 <= room)?;
-        Some(self.split(*brk))
+        let fits = || self.breaks.iter().rev().filter(|b| b.0 <= room);
+        let rel = fits().find(|b| self.display && b.2 && b.0 >= self.wrap_indent);
+        let &(end, start, _) = rel.or_else(|| fits().next())?;
+        Some(self.split((end, start)))
     }
 
     /// The parts before `end` and from `start` (a break point): the first
@@ -109,6 +119,8 @@ impl MathBox {
             ascent: extent(&atoms).0,
             descent: extent(&atoms).1,
             atoms,
+            display: self.display,
+            wrap_indent: self.wrap_indent,
             leading: self.leading,
             line_ascent: self.line_ascent,
             line_descent: self.line_descent,
@@ -118,7 +130,7 @@ impl MathBox {
             .breaks
             .iter()
             .filter(|b| b.0 > end)
-            .map(|&(e, s)| (e - start, s - start))
+            .map(|&(e, s, rel)| (e - start, s - start, rel))
             .collect();
         (
             part(head, end, Vec::new(), head_atoms),
@@ -153,13 +165,17 @@ pub(crate) fn layout(
         .map(|(a, &x)| (x, a.asc, a.desc))
         .collect();
     let (ascent, descent) = extent(&extents);
-    let (b, breaks) = assemble(atoms, &xs);
+    // Inline math breaks after an operator whatever m:brkBin says; a display
+    // equation too wide for its line breaks before one unless m:brkBin is
+    // after (probes `mp17_wrap`, `mp18_after`).
+    let before = display && !settings.break_after;
+    let (b, breaks) = assemble(atoms, &xs, before);
     let (line_ascent, line_descent) = font.line_metrics(size);
     MathBox {
         atoms: extents,
-        // Word breaks inline math after an operator whatever m:brkBin says
-        // (that applies to display math): "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …".
-        breaks: if display { Vec::new() } else { breaks },
+        display,
+        wrap_indent: settings.wrap_indent,
+        breaks,
         width: w,
         ascent,
         descent,
@@ -419,7 +435,7 @@ impl<'a> Ctx<'a> {
         if atoms.len() == 1 {
             return atoms.pop().unwrap();
         }
-        assemble(atoms, &xs).0
+        assemble(atoms, &xs, false).0
     }
 
     /// Where each atom of a row goes, with TeX's spacing, and the row's width.
@@ -1161,7 +1177,7 @@ impl<'a> Ctx<'a> {
         if laid.iter().all(|(_, _, marks, _)| marks.is_empty()) {
             let rows = laid
                 .into_iter()
-                .map(|(atoms, xs, _, _)| vec![assemble(atoms, &xs).0])
+                .map(|(atoms, xs, _, _)| vec![assemble(atoms, &xs, false).0])
                 .collect();
             return self.grid(rows, st, false);
         }
@@ -1204,7 +1220,7 @@ impl<'a> Ctx<'a> {
                     .enumerate()
                     .map(|(j, x)| x + dx[marks.partition_point(|&m| m <= j)])
                     .collect();
-                let (mut b, _) = assemble(atoms, &xs);
+                let (mut b, _) = assemble(atoms, &xs, false);
                 b.w = total;
                 // The `&`s Word measures as glyphs: an "x&=y" row stands as
                 // tall as an ampersand (20.0pt under a display a/b row, 17.5
@@ -1332,14 +1348,16 @@ fn extent(atoms: &[(f32, f32, f32)]) -> (f32, f32) {
 }
 
 /// A row of atoms at `xs`, with where it may break: after each binary or
-/// relation operator, as (end of the operator, start of what follows).
-fn assemble(atoms: Vec<B>, xs: &[f32]) -> (B, Vec<(f32, f32)>) {
+/// relation operator (`before`: before each one but the first atom), as (end
+/// of the line's part, start of the next, at a relation).
+fn assemble(atoms: Vec<B>, xs: &[f32], before: bool) -> (B, Vec<(f32, f32, bool)>) {
     let mut breaks = Vec::new();
     let mut out = atoms.first().map_or_else(B::empty, B::ends_of);
     let mut last = (Class::Ord, 0.0);
-    for (a, &x) in atoms.into_iter().zip(xs) {
-        if matches!(last.0, Class::Bin | Class::Rel) {
-            breaks.push((out.w, x));
+    for (i, (a, &x)) in atoms.into_iter().zip(xs).enumerate() {
+        let c = if before { a.first } else { last.0 };
+        if i > 0 && matches!(c, Class::Bin | Class::Rel) {
+            breaks.push((out.w, x, c == Class::Rel));
         }
         last = (a.last, a.ic);
         out.put(a, x, 0.0);

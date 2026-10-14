@@ -81,9 +81,12 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .and_then(|ppr| wml_bool(ppr, "keepNext"))
         .unwrap_or_else(|| para_style.and_then(|s| s.keep_next).unwrap_or(false));
 
+    // Word never splits display math over pages: a wrapped equation that
+    // doesn't fit moves whole (probe `mp20_relpos`).
     let keep_lines = ppr
         .and_then(|ppr| wml_bool(ppr, "keepLines"))
-        .unwrap_or_else(|| para_style.and_then(|s| s.keep_lines).unwrap_or(false));
+        .unwrap_or_else(|| para_style.and_then(|s| s.keep_lines).unwrap_or(false))
+        || super::runs::display_math(node).is_some();
 
     let widow_control = ppr
         .and_then(|ppr| wml_bool(ppr, "widowControl"))

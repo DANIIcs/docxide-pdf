@@ -196,6 +196,12 @@ pub struct MathSettings {
     pub int_under_over: bool,
     /// Limits of other n-ary operators go under/over (`m:naryLim`, default undOvr).
     pub nary_under_over: bool,
+    /// `m:wrapIndent` in points: how far a display equation's continuation
+    /// lines are indented (default 1440 twips).
+    pub wrap_indent: f32,
+    /// `m:brkBin` after: a display equation breaks after an operator, not
+    /// before it.
+    pub break_after: bool,
 }
 
 impl Default for MathSettings {
@@ -205,6 +211,8 @@ impl Default for MathSettings {
             small_frac: false,
             int_under_over: false,
             nary_under_over: true,
+            wrap_indent: 72.0,
+            break_after: false,
         }
     }
 }

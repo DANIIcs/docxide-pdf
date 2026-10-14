@@ -251,6 +251,25 @@ fn normal_text_in_its_own_font() {
 }
 
 #[test]
+fn display_breaks_prefer_relations_past_the_wrap_indent() {
+    // Word (probes mp20_relpos/mp21_relmin): y=a+b+cd=… breaks before its
+    // second = once that = stands 72pt into the line, even with room for
+    // more; y=a+b= keeps going to the last + that fits.
+    let terms: String = (1..12).map(|i| format!("+a{i}x{i}")).collect();
+    let head = |pre: &str| {
+        let b = layout_at(vec![run(&format!("{pre}=a0x0{terms}"))], true, 12.0);
+        let (head, tail) = b.fit(200.0).unwrap();
+        (head.width, glyphs(&tail)[0].0)
+    };
+    let (w, first) = head("y=a+b+cd");
+    assert_eq!(first, '=');
+    assert!(w > 72.0 && w < 100.0, "head {w}");
+    let (w, first) = head("y=a+b");
+    assert_eq!(first, '+');
+    assert!(w > 150.0, "head {w}");
+}
+
+#[test]
 fn display_fraction_shifts() {
     // a/b on its own line at 12pt: numerator 9.05 up, denominator 7.95 down.
     let root = vec![MathNode::Frac {
@@ -293,7 +312,8 @@ fn binary_and_relation_spacing() {
 #[test]
 fn inline_zones_break_after_operators() {
     // Word: "… + 𝑎5𝑥5 +" / "𝑎6𝑥6 + …": a break after each top-level binary
-    // or relation operator, none in display math or inside a fraction.
+    // or relation operator, none inside a fraction; display math breaks
+    // before them instead.
     let root = vec![
         run("a+b="),
         MathNode::Frac {
@@ -304,7 +324,9 @@ fn inline_zones_break_after_operators() {
     ];
     let b = layout_at(root.clone(), false, 12.0);
     assert_eq!(b.breaks.len(), 2, "{:?}", b.breaks);
-    assert!(layout_at(root, true, 12.0).breaks.is_empty());
+    let display = layout_at(root, true, 12.0);
+    assert_eq!(display.breaks.len(), 2);
+    assert!(display.breaks.iter().zip(&b.breaks).all(|(d, i)| d.1 < i.1));
     let room = b.breaks[0].0;
     let (head, tail) = b.fit(room).unwrap();
     assert_eq!(glyphs(&head).len(), 2);

@@ -222,6 +222,10 @@ pub(super) fn parse_math_settings(settings_root: roxmltree::Node) -> MathSetting
     if let Some(v) = val("naryLim") {
         s.nary_under_over = v == "undOvr";
     }
+    if let Some(twips) = val("wrapIndent").and_then(|v| v.parse().ok()) {
+        s.wrap_indent = super::twips_to_pts(twips);
+    }
+    s.break_after = val("brkBin") == Some("after");
     s
 }
 
