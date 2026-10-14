@@ -1589,7 +1589,6 @@ impl PageBuilder {
         }
     }
 
-    /// Flush this page and open the next one of section `sp`.
     fn take_pending_first_page(&mut self, sect_idx: usize) -> bool {
         self.pending_section_first_page
             .take()
@@ -1598,6 +1597,7 @@ impl PageBuilder {
             })
     }
 
+    /// Flush this page and open the next one of section `sp`.
     pub(super) fn begin_next_page(
         &mut self,
         sect_idx: usize,

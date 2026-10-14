@@ -346,7 +346,9 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                         let inset = if table.fixed_layout {
                             h_pad + para.indent_left.min(0.0) + para.indent_right.min(0.0)
                         } else {
-                            h_pad + para.indent_left + para.indent_right
+                            h_pad
+                                + para.indent_left
+                                + para.indent_right
                                 + para.indent_first_line.max(0.0)
                         };
                         let required = (ww + inset).max(h_pad);
