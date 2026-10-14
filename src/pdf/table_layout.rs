@@ -1174,7 +1174,7 @@ pub(super) fn compute_row_layouts(
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h = nested_layouts.iter().map(|rl| rl.height).sum::<f32>();
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && matches!(cell.v_align, crate::model::CellVAlign::Top))
+                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (matches!(cell.v_align, crate::model::CellVAlign::Top) || (block_idx == 0 && pos.v_offset_pt > 0.0 && matches!(cell.v_align, crate::model::CellVAlign::Center))))
                                     .filter(|_| cell.content[block_idx + 1..].iter().all(|b| match b {
                                         Block::Paragraph(p) => p.runs.iter().all(|r| r.text.trim().is_empty()
                                             && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
@@ -1215,7 +1215,9 @@ pub(super) fn compute_row_layouts(
                                     floating_x_offset,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
-                                prev_was_nested_table = floating_offset.is_none();
+                                prev_was_nested_table = floating_offset.is_none()
+                                    || (matches!(cell.v_align, crate::model::CellVAlign::Center)
+                                        && floating_offset.is_some_and(|offset| offset > 0.0));
                                 para_idx += 1;
                             }
                         }
@@ -1227,7 +1229,9 @@ pub(super) fn compute_row_layouts(
                     // the row height — the mark glyph height and line_h are
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
-                        && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset: None, .. }))
+                        && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
+                            if floating_offset.is_none() || (matches!(cell.v_align, crate::model::CellVAlign::Center)
+                                && floating_offset.is_some_and(|offset| offset > 0.0)))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
