@@ -1,11 +1,13 @@
 mod chart;
 mod drawing;
+mod math;
 mod table;
 
 use std::collections::HashMap;
 
 pub use chart::*;
 pub use drawing::*;
+pub use math::*;
 pub use table::*;
 
 /// `w:suff`: what follows a list label before the text.
@@ -295,6 +297,8 @@ pub struct Document {
     pub additive_paragraph_spacing: bool,
     /// Word's `adjustLineHeightInTable` (see `docx::settings`).
     pub adjust_line_height_in_table: bool,
+    /// Document-level Office Math properties (`m:mathPr`).
+    pub math: MathSettings,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -622,10 +626,6 @@ pub struct Run {
     /// text to tint: Word anchors a comment at its `w:commentReference`, so an
     /// empty or missing range still gets a balloon there.
     pub comment_anchor_ids: Vec<u32>,
-    /// True for runs synthesized from Office Math (OMML). The math font (e.g.
-    /// Cambria Math) has very tall metrics for big operators; such runs must not
-    /// inflate the surrounding text line height.
-    pub is_math: bool,
     /// `w:rtl`: weak and neutral characters read right to left (bidi
     /// ordering); the run is already formatted with its cs properties.
     pub rtl: bool,
@@ -634,6 +634,8 @@ pub struct Run {
     pub formula: Option<std::sync::Arc<str>>,
     /// A legacy FORMCHECKBOX field, drawn as a square in place of `text`.
     pub checkbox: Option<FormCheckbox>,
+    /// An Office Math zone laid out as one box; `text` holds its linear form.
+    pub math: Option<std::sync::Arc<MathZone>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -740,10 +742,10 @@ impl Default for Run {
             italic_is_direct: false,
             comment_ids: Vec::new(),
             comment_anchor_ids: Vec::new(),
-            is_math: false,
             rtl: false,
             formula: None,
             checkbox: None,
+            math: None,
         }
     }
 }

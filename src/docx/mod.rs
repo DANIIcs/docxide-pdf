@@ -8,6 +8,7 @@ pub(crate) mod emf;
 mod group;
 mod headers_footers;
 mod images;
+mod math;
 mod math_speech;
 pub(crate) mod numbering;
 mod paragraph;
@@ -411,6 +412,13 @@ pub(super) fn math_child<'a>(
 /// A math property's `m:val`: `<pr><name m:val="…"/></pr>` under `node`.
 pub(super) fn math_val<'a>(node: roxmltree::Node<'a, 'a>, pr: &str, name: &str) -> Option<&'a str> {
     math_child(math_child(node, pr)?, name)?.attribute((MATH_NS, "val"))
+}
+
+/// A math property flag (`<pr><name m:val="…"/></pr>`): None when absent; an
+/// element without `m:val` is on (ST_OnOff).
+pub(super) fn math_bool(node: roxmltree::Node, pr: &str, name: &str) -> Option<bool> {
+    let n = math_child(math_child(node, pr)?, name)?;
+    Some(n.attribute((MATH_NS, "val")).is_none_or(parse_on_off))
 }
 
 /// A math run's text (its `m:t` children).
@@ -1275,6 +1283,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         wp_justification: settings.wp_justification,
         additive_paragraph_spacing: settings.no_html_auto_spacing,
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
+        math: settings.math,
     })
 }
 

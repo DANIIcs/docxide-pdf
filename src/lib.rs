@@ -2,6 +2,7 @@ mod docx;
 mod error;
 mod fonts;
 mod geometry;
+mod math;
 mod model;
 mod pdf;
 

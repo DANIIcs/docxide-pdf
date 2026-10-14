@@ -11,8 +11,10 @@ paragraph mark's format (`40d7c45c`), endnotes.xml's separator paragraph
 (`4c47ec52`, replaces `01eae84e`). Suite mean J 68.25 → 71.95, no real
 regressions. Still open where WordCraft leads:
 
-- **Office Math layout** (pendulum_mechanics, J 18 vs 36): we linearize OMML
-  into text runs; fractions, radicals and scripts change line heights.
+- ~~**Office Math layout**~~ Done 2026-10-14 (branch `office-math`): zones
+  are laid out as boxes from Cambria Math's MATH table (`src/math/`), see the
+  Office Math section and `current_focus/office-math.md`. pendulum_mechanics
+  J 18.3 -> 45.8, SSIM 38.1 -> 64.0; nothing else moves.
 - ~~**Comic Sans MS Italic missing**~~ Done 2026-10-13: the Microsoft 365
   build is in `fonts/` and assets `eed459d`; greek_history J 49.1 -> 78.2,
   nothing else moved (door_air uses no Comic Sans).
@@ -44,6 +46,22 @@ regressions. Still open where WordCraft leads:
   online 633.70). Next: probe Word online's defaults for a docx without
   styles.xml. Online Word also tags case152–168's tables as paragraphs, so
   a11y_struct reads 33–37% there; our Table tagging is unchanged.
+
+## Office Math (IN PROGRESS — 2026-10-14, branch `office-math`)
+
+Rules and evidence: `current_focus/office-math.md`. Done: OMML tree parser,
+`m:mathPr`, box layout (runs, atom spacing, scripts, fractions, radicals,
+n-ary, delimiters, functions, accents, bars, group characters, limits,
+matrices, equation arrays, boxes, phantoms) from the MATH table with Word's
+half-point script sizes and `ssty` alternates; glyphs embedded by id; math
+line heights (hhea box + MathLeading stretch); zones glued to touching text.
+Open, in order:
+1. Radical placement over short contents (Word 0.6–1.4pt higher), display
+   ∫ limit positions, groupChr brace placement, borderBox padding.
+2. eqArr alignment points (`&`) and per-row justification.
+3. `m:brkBin` breaks inside long inline zones; display math wrap
+   (`m:wrapIndent`).
+4. `m:nor` runs in the run's own font.
 
 ## Floating table positioning
 

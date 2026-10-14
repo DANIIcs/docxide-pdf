@@ -34,6 +34,7 @@ pub(super) struct DocumentSettings {
     /// `w:compat/w:wpJustification`: justified lines may keep a word by
     /// squeezing the whole line (WordPerfect-style justification).
     pub wp_justification: bool,
+    pub math: crate::model::MathSettings,
 }
 
 impl Default for DocumentSettings {
@@ -53,6 +54,7 @@ impl Default for DocumentSettings {
             adjust_line_height_in_table: false,
             no_html_auto_spacing: false,
             wp_justification: false,
+            math: Default::default(),
         }
     }
 }
@@ -106,5 +108,6 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         adjust_line_height_in_table: compat_flag("adjustLineHeightInTable"),
         no_html_auto_spacing: compat_flag("doNotUseHTMLParagraphAutoSpacing"),
         wp_justification: compat_flag("wpJustification"),
+        math: super::math::parse_math_settings(root),
     }
 }

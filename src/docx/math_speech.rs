@@ -4,7 +4,7 @@
 // ponytail: the structures and symbols the corpus uses; matrices, accents and
 // equation arrays are read as their contents in order
 
-use super::{MATH_NS, find_children, math_child, math_run_text, math_val, parse_on_off};
+use super::{MATH_NS, find_children, math_bool, math_child, math_run_text, math_val};
 
 /// The spoken form of an `m:oMath` zone; empty when it has nothing to say.
 pub(super) fn speak(omath: roxmltree::Node) -> String {
@@ -41,9 +41,7 @@ fn speak_into(node: roxmltree::Node, out: &mut Vec<String>) {
                 part("den", out);
             }
             "rad" => {
-                let hidden = math_child(c, "radPr")
-                    .and_then(|p| math_child(p, "degHide"))
-                    .is_some_and(|h| h.attribute((MATH_NS, "val")).is_none_or(parse_on_off));
+                let hidden = math_bool(c, "radPr", "degHide").unwrap_or(false);
                 if hidden || !said("root", "deg", out) {
                     out.push("square root of".into());
                 } else {

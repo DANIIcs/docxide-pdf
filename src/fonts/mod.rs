@@ -3,7 +3,7 @@ mod discovery;
 mod embed;
 mod encoding;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -36,6 +36,8 @@ pub(crate) struct FontMetrics {
     pub(crate) char_to_gid: HashMap<char, u16>,
     pub(crate) char_widths_1000: HashMap<char, f32>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
+    /// Subset ids of `FontContext::extra_glyphs`, by original id.
+    pub(crate) gid_remap: HashMap<u16, u16>,
 }
 
 /// Font metrics bundled with resolution metadata from the font discovery phase.
@@ -88,6 +90,11 @@ pub(crate) struct FontEntry {
     /// Font file path for glyph outline extraction (text warping).
     pub(crate) font_path: Option<PathBuf>,
     pub(crate) face_index: u32,
+    /// Subset ids of glyphs embedded by id (`FontContext::extra_glyphs`).
+    pub(crate) gid_remap: HashMap<u16, u16>,
+    /// The math font's laid-out Office Math zones, by `MathZone` address
+    /// (`pdf::fonts::register_math_font`), drawing subset ids.
+    pub(crate) math_boxes: HashMap<usize, std::sync::Arc<crate::math::MathBox>>,
 }
 
 #[cfg(test)]
@@ -119,6 +126,8 @@ impl FontEntry {
             drew_notdef: Default::default(),
             font_path: None,
             face_index: 0,
+            gid_remap: Default::default(),
+            math_boxes: Default::default(),
         }
     }
 }
@@ -190,6 +199,16 @@ impl FontEntry {
     }
 }
 
+/// The bytes and face index of a font the document embeds or the system has,
+/// for reading tables the PDF side lays out with (Office Math).
+pub(crate) fn font_file(name: &str, embedded: &EmbeddedFonts) -> Option<(Vec<u8>, u32)> {
+    if let Some(data) = embedded.get(&(name.to_lowercase(), false, false)) {
+        return Some((data.clone(), 0));
+    }
+    let (path, index, ..) = discovery::find_font_file(name, false, false)?;
+    Some((std::fs::read(path).ok()?, index))
+}
+
 pub(crate) fn primary_font_name(name: &str) -> &str {
     first_css_name(name.split(';').next().unwrap_or(name))
 }
@@ -240,6 +259,9 @@ pub(crate) struct FontContext<'a> {
     pub(crate) font_table: &'a FontTable,
     pub(crate) used_chars: &'a HashSet<char>,
     pub(crate) word_text: bool,
+    /// Glyphs to embed by original id, with the character each reads as
+    /// (math's script-size alternates and stretched variants have none).
+    pub(crate) extra_glyphs: Option<&'a BTreeMap<u16, char>>,
 }
 
 /// The object numbers one font occupies, allocated before resolution so every
@@ -261,15 +283,7 @@ fn try_font(
     ctx: &FontContext,
 ) -> Option<ResolvedFont> {
     let mut embed = |data: &[u8], face_index: u32| {
-        embed::embed_truetype(
-            pdf,
-            refs,
-            candidate,
-            data,
-            face_index,
-            ctx.used_chars,
-            alloc,
-        )
+        embed::embed_truetype(pdf, refs, candidate, data, face_index, ctx, alloc)
     };
 
     let embedded_key = (candidate.to_lowercase(), bold, italic);
@@ -830,6 +844,8 @@ pub(crate) fn register_font(
             drew_notdef: Default::default(),
             font_path: r.font_path,
             face_index: r.face_index,
+            gid_remap: r.metrics.gid_remap,
+            math_boxes: HashMap::new(),
         },
         None => {
             // Pick the matching standard-14 Helvetica variant so a bold/italic run of an
@@ -873,6 +889,8 @@ pub(crate) fn register_font(
                 drew_notdef: Default::default(),
                 font_path: None,
                 face_index: 0,
+                gid_remap: HashMap::new(),
+                math_boxes: HashMap::new(),
             }
         }
     };
@@ -968,6 +986,7 @@ mod tests {
                 font_table: &table,
                 used_chars: &chars,
                 word_text: true,
+                extra_glyphs: None,
             };
             let entry = register_font(
                 &mut Pdf::new(),

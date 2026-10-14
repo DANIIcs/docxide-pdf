@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, UnicodeCmap};
 use pdf_writer::{Filter, Name, Pdf, Rect, Ref, Str};
@@ -6,7 +6,7 @@ use ttf_parser::Face;
 use ttf_parser::gpos::{PairAdjustment, PositioningSubtable};
 
 use super::encoding::winansi_to_char;
-use super::{FontMetrics, FontRefs};
+use super::{FontContext, FontMetrics, FontRefs};
 
 pub(super) fn embed_truetype(
     pdf: &mut Pdf,
@@ -14,9 +14,10 @@ pub(super) fn embed_truetype(
     font_name: &str,
     font_data: &[u8],
     face_index: u32,
-    used_chars: &HashSet<char>,
+    ctx: &FontContext,
     alloc: &mut impl FnMut() -> Ref,
 ) -> Option<FontMetrics> {
+    let used_chars = ctx.used_chars;
     let face = Face::parse(font_data, face_index).ok()?;
     let units = face.units_per_em() as f32;
     let to_1000 = |v: f32| v / units * 1000.0;
@@ -65,6 +66,14 @@ pub(super) fn embed_truetype(
             char_to_gid.insert(ch, new_gid);
             char_widths_1000.insert(ch, advance_1000(gid));
         }
+    }
+
+    let mut gid_remap = HashMap::new();
+    let mut extra_widths = Vec::new();
+    for (&gid, &ch) in ctx.extra_glyphs.into_iter().flatten() {
+        let new_gid = remapper.remap(gid);
+        gid_remap.insert(gid, new_gid);
+        extra_widths.push((new_gid, advance_1000(ttf_parser::GlyphId(gid)), ch));
     }
 
     let mut kern_pairs = HashMap::new();
@@ -132,8 +141,10 @@ pub(super) fn embed_truetype(
         let mut gid_widths: Vec<(u16, f32)> = char_to_gid
             .iter()
             .map(|(&ch, &new_gid)| (new_gid, char_widths_1000[&ch]))
+            .chain(extra_widths.iter().map(|&(gid, w, _)| (gid, w)))
             .collect();
         gid_widths.sort_by_key(|&(gid, _)| gid);
+        gid_widths.dedup_by_key(|&mut (gid, _)| gid);
         if !gid_widths.is_empty() {
             let mut w = cid.widths();
             for &(gid, width) in &gid_widths {
@@ -164,6 +175,9 @@ pub(super) fn embed_truetype(
             .entry(new_gid)
             .and_modify(|c| *c = (*c).min(uni))
             .or_insert(uni);
+    }
+    for &(cid, _, ch) in &extra_widths {
+        cid_unicode.entry(cid).or_insert(ch);
     }
     for (cid, uni) in cid_unicode {
         match crate::docx::arabic::source_letters(uni) {
@@ -210,6 +224,7 @@ pub(super) fn embed_truetype(
         char_to_gid,
         char_widths_1000,
         kern_pairs,
+        gid_remap,
     })
 }
 

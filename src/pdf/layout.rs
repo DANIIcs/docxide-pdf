@@ -321,8 +321,6 @@ pub(super) struct WordChunk {
     /// individually, so the space is drawn as an invisible glyph after the word
     /// purely so text extraction and screen readers see the word boundary.
     pub(super) space_after: bool,
-    /// From an Office Math run: its tall operator metrics never size a line.
-    pub(super) is_math: bool,
     /// The math zone's spoken form, for its Formula (see `Run::formula`).
     pub(super) formula: Option<Arc<str>>,
     /// Pair kerning is on for this run at this size (`w:kern`); `width` already
@@ -338,6 +336,21 @@ pub(super) struct WordChunk {
     /// The space before this chunk came from a `w:rtl` run: bidi ordering
     /// gives it that run's embedding.
     pub(super) gap_rtl: bool,
+    /// An Office Math zone drawn from its box; `text` is its linear form.
+    pub(super) math: Option<Arc<crate::math::MathBox>>,
+}
+
+/// A run's Office Math box and the math font it draws with, once laid out
+/// (`fonts::register_math_font`); None leaves the zone's linear text.
+pub(super) fn math_box<'f>(
+    run: &'f Run,
+    fonts: &'f HashMap<String, FontEntry>,
+) -> Option<(&'f FontEntry, &'f Arc<crate::math::MathBox>)> {
+    let entry = fonts.get(super::fonts::MATH_FONT_KEY)?;
+    let mb = entry
+        .math_boxes
+        .get(&Arc::as_ptr(run.math.as_ref()?).addr())?;
+    Some((entry, mb))
 }
 
 /// Pale-pink highlight color Word uses for comment-anchored text spans.
@@ -448,14 +461,30 @@ impl WordChunk {
             actual_text: None,
             lang: chunk_lang(run, word),
             space_after: false,
-            is_math: run.is_math,
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
             checkbox: run.checkbox,
             rtl: run.rtl,
             rtl_glyphs: false,
             gap_rtl: false,
+            math: None,
         }
+    }
+
+    /// A laid-out Office Math zone at `x_offset`, drawn in the math font.
+    fn math(entry: &FontEntry, run: &Run, mb: &Arc<crate::math::MathBox>, x_offset: f32) -> Self {
+        let mut chunk = Self::text(
+            entry,
+            run,
+            &run.text,
+            run.font_size,
+            0.0,
+            0.0,
+            x_offset,
+            mb.width,
+        );
+        chunk.math = Some(mb.clone());
+        chunk
     }
 
     fn image(
@@ -500,13 +529,13 @@ impl WordChunk {
             inline_image_alt: img.alt.clone(),
             inline_image_decorative: img.decorative,
             punct_compressed: 0.0,
-            is_math: false,
             formula: None,
             kern: false,
             checkbox: None,
             rtl: false,
             rtl_glyphs: false,
             gap_rtl: false,
+            math: None,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -563,13 +592,13 @@ impl WordChunk {
             inline_image_alt: None,
             inline_image_decorative: false,
             punct_compressed: 0.0,
-            is_math: false,
             formula: None,
             kern: false,
             checkbox: None,
             rtl: false,
             rtl_glyphs: false,
             gap_rtl: false,
+            math: None,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -631,13 +660,13 @@ impl WordChunk {
             inline_image_alt: None,
             inline_image_decorative: false,
             punct_compressed: 0.0,
-            is_math: false,
             formula: None,
             kern: false,
             checkbox: None,
             rtl: false,
             rtl_glyphs: false,
             gap_rtl: false,
+            math: None,
             synthetic_bold: false,
             synthetic_italic: false,
             text_outline: None,
@@ -954,10 +983,15 @@ pub(super) fn size_lines_by_own_runs(
         // almost no descent, so the 12pt Arial beside it sets the bottom.
         // Math faces never size a line (their operator metrics are huge).
         let (mut ascent, mut below, mut sized) = (0.0f32, 0.0f32, false);
+        for mb in line.chunks.iter().filter_map(|c| c.math.as_ref()) {
+            ascent = ascent.max(mb.line_ascent);
+            below = below.max(mb.line_descent);
+            sized = true;
+        }
         for c in line
             .chunks
             .iter()
-            .filter(|c| !c.is_math && !c.text.trim().is_empty())
+            .filter(|c| c.math.is_none() && !c.text.trim().is_empty())
         {
             let Some(entry) = by_pdf_name.get(c.pdf_font.as_str()) else {
                 continue;
@@ -983,12 +1017,36 @@ pub(super) fn size_lines_by_own_runs(
         if !sized {
             continue;
         }
-        let pitch = super::helpers::resolve_line_h(line_spacing, 1.0, Some(ascent + below));
+        let (above_extra, below_extra) = math_line_stretch(line, ascent, below, line_spacing);
+        let pitch = super::helpers::resolve_line_h(line_spacing, 1.0, Some(ascent + below))
+            + above_extra
+            + below_extra;
         if (pitch - para_pitch).abs() > 0.01 {
             line.pitch = Some(pitch);
-            line.ascent_shift = ascent - para_ascent;
+            line.ascent_shift = ascent + above_extra - para_ascent;
         }
     }
+}
+
+/// How far a line's math boxes reach past its text box (`ascent` above,
+/// `below` under the baseline, before line spacing), added to the line
+/// unscaled: ink above the ascent less the font's MathLeading, and ink below
+/// the descent, stretch it (OpenType MATH `MathLeading`). Word probes at 12
+/// and 24pt in Calibri and Arial, single and 1.5 spacing: an inline a/b line
+/// grows 1.75-2.0pt above and 2.5-3.5pt below whatever the multiple.
+fn math_line_stretch(line: &TextLine, ascent: f32, below: f32, ls: LineSpacing) -> (f32, f32) {
+    if matches!(ls, LineSpacing::Exact(_)) {
+        return (0.0, 0.0);
+    }
+    line.chunks
+        .iter()
+        .filter_map(|c| c.math.as_ref())
+        .fold((0.0f32, 0.0f32), |(a, b), mb| {
+            (
+                a.max(mb.ascent + mb.leading - ascent),
+                b.max(mb.descent - below),
+            )
+        })
 }
 
 /// What `size_lines_by_own_runs` adds to a one-line paragraph whose runs are
@@ -1775,6 +1833,61 @@ pub(super) fn build_paragraph_lines(
                 // moves "Step" below a full-width banner picture).
                 prev_last_char = Some('\u{FFFC}');
             }
+            continue;
+        }
+
+        if let Some((entry, mb)) = math_box(run, seen_fonts) {
+            // A math zone is one box, glued to text it touches without a
+            // space: Word wraps pendulum's "cambiando la lunghezza 𝑙 del
+            // filo" before the zone "𝑙 " since nothing may break before "del".
+            let glued = pending_space_w == 0.0
+                && !current_chunks.is_empty()
+                && !prev_last_char.is_some_and(|a| breaks_between(a, 'x'));
+            let mut start = if glued {
+                word_start
+            } else {
+                current_chunks.len()
+            };
+            let proposed_x = current_x + pending_space_w;
+            let cur_max = if in_right_region {
+                cur_right_info
+                    .map(|(_, _, rw)| rw)
+                    .unwrap_or(left_max(lines.len()))
+            } else if lines.is_empty() {
+                left_max(0) + first_line_hanging
+            } else {
+                left_max(lines.len())
+            };
+            current_x = proposed_x;
+            if start > 0
+                && proposed_x + mb.width > cur_max + 0.05
+                && !in_right_region
+                && right_region_for(lines.len()).is_none()
+            {
+                let carried: Vec<WordChunk> = current_chunks.drain(start..).collect();
+                let dx = carried.first().map_or(proposed_x, |c| c.x_offset);
+                let line = finish_dual_line(
+                    &mut current_chunks,
+                    &mut in_right_region,
+                    &mut cur_right_info,
+                );
+                lines.push(line);
+                current_chunks.extend(carried.into_iter().map(|mut c| {
+                    c.x_offset -= dx;
+                    c
+                }));
+                current_x -= dx;
+                start = 0;
+            }
+            if pending_space_w > 0.0 {
+                mark_space_after(&mut current_chunks);
+            }
+            pending_space_w = 0.0;
+            current_chunks.push(WordChunk::math(entry, run, mb, current_x));
+            current_x += mb.width;
+            word_start = start;
+            // Text right after the zone continues its word.
+            prev_last_char = Some('x');
             continue;
         }
 
@@ -2702,6 +2815,14 @@ pub(super) fn build_tabbed_line(
                 continue;
             }
 
+            if let Some((entry, mb)) = math_box(run, seen_fonts) {
+                current_x += pending_space_w;
+                pending_space_w = 0.0;
+                all_chunks.push(WordChunk::math(entry, run, mb, current_x));
+                current_x += mb.width;
+                continue;
+            }
+
             let key = font_key_buf(run, &mut key_buf);
             let entry = seen_fonts.get(key).expect("font registered");
             let eff_fs = effective_font_size(run, entry);
@@ -3584,6 +3705,44 @@ pub(super) fn render_paragraph_lines(
                     cur_font_size = chunk.font_size;
                 }
 
+                if let Some(mb) = &chunk.math {
+                    // Each glyph by its subset id at its own place; the font is
+                    // set at 1pt and each glyph's size goes in its matrix. The
+                    // rules join the line's decorations.
+                    if cur_font_size != 1.0 {
+                        content.set_font(Name(chunk.pdf_font.as_bytes()), 1.0);
+                        cur_font_size = 1.0;
+                    }
+                    for item in &mb.items {
+                        match *item {
+                            crate::math::MathItem::Glyph {
+                                gid,
+                                x: gx,
+                                y: gy,
+                                size,
+                                color,
+                                ..
+                            } => {
+                                let color = color.or(effective_color);
+                                if color != current_color {
+                                    fill_color_or_black(content, color);
+                                    current_color = color;
+                                }
+                                (td_x, td_y) = (x + gx, cy + gy);
+                                content.set_text_matrix([size, 0.0, 0.0, size, td_x, td_y]);
+                                content.show(Str(&gid.to_be_bytes()));
+                            }
+                            crate::math::MathItem::Rule { x: rx, y: ry, w, h } => {
+                                decorations.push((x + rx, cy + ry, w, h, effective_color));
+                            }
+                        }
+                    }
+                    // Unscaled again, so the next chunk's relative move is in points.
+                    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, td_x, td_y]);
+                    cur_shear = 0.0;
+                    continue;
+                }
+
                 // Legacy w:shadow/emboss/imprint: draw an offset gray copy of the
                 // glyphs behind the main text, then fall through to draw the real
                 // glyphs on top. ponytail: single offset, no highlight pass, and
@@ -4009,10 +4168,7 @@ pub(super) fn tallest_glyph_run_half_leading(
 ) -> f32 {
     let mut best = (0.0f32, 0.0f32);
     let mut key_buf = String::new();
-    for run in runs
-        .iter()
-        .filter(|r| sizes_line(r) && !r.is_line_break && !r.is_math)
-    {
+    for run in runs.iter().filter(|r| sizes_line(r) && !r.is_line_break) {
         let Some(entry) = seen_fonts.get(font_key_buf(run, &mut key_buf)) else {
             continue;
         };
@@ -4049,13 +4205,14 @@ fn tallest_by_ascent<'a>(
             continue;
         }
         let entry = seen_fonts.get(font_key_buf(run, &mut key_buf));
-        // Math runs use a math font (e.g. Cambria Math) whose ascent/descent are
-        // very tall to accommodate big operators. Inline math should sit within
-        // the surrounding text line height (as Word lays it out), so clamp math
-        // runs to a normal ratio and don't let them contribute a line-height
-        // ratio — otherwise every line containing math balloons vertically.
-        let (lhr, ascender_ratio) = if run.is_math {
-            (None, None)
+        let (lhr, ascender_ratio) = if let Some((_, mb)) = math_box(run, seen_fonts) {
+            // A laid-out zone counts as text in the math font's hhea box
+            // (`MathBox::line_ascent`); its taller ink is `math_line_stretch`'s.
+            let fs = run.font_size.max(f32::EPSILON);
+            (
+                Some((mb.line_ascent + mb.line_descent) / fs),
+                Some(mb.line_ascent / fs),
+            )
         } else {
             entry.map_or((None, None), |e| run_line_metrics(e, &run.text))
         };
@@ -4147,7 +4304,7 @@ pub(super) fn grid_snapped_line_h(
     let mut grid_h = 0.0f32;
     let mut key_buf = String::new();
     for run in runs {
-        if run.is_line_break || run.is_math {
+        if run.is_line_break {
             continue;
         }
         if let Some(e) = seen_fonts.get(font_key_buf(run, &mut key_buf))
@@ -4176,9 +4333,7 @@ pub(super) fn grid_baseline_offset(
 ) -> Option<f32> {
     let mut key_buf = String::new();
     runs.iter()
-        .filter(|r| {
-            r.inline_image.is_none() && !r.vanish && !r.is_line_break && !r.is_math && sizes_line(r)
-        })
+        .filter(|r| r.inline_image.is_none() && !r.vanish && !r.is_line_break && sizes_line(r))
         .filter_map(|r| {
             let e = seen_fonts.get(font_key_buf(r, &mut key_buf))?;
             Some(e.grid_baseline_shift? * effective_font_size(r, e))

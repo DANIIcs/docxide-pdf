@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use pdf_writer::{Pdf, Ref};
 
@@ -71,7 +71,11 @@ pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
         .collect()
 }
 
-fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, HashSet<char>> {
+fn collect_used_chars(
+    doc: &Document,
+    all_runs: &[&Run],
+    fonts: &HashMap<String, FontEntry>,
+) -> HashMap<String, HashSet<char>> {
     let mut used: HashMap<String, HashSet<char>> = HashMap::new();
     let mut key_buf = String::new();
 
@@ -106,7 +110,9 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         // Word boundaries are drawn with the preceding word's font, which may
         // not be the font of the run that holds the space.
         chars.insert(' ');
-        if run.caps || run.small_caps {
+        if super::layout::math_box(run, fonts).is_some() {
+            // Drawn from its box in the math font.
+        } else if run.caps || run.small_caps {
             chars.extend(run.text.to_uppercase().chars());
         } else {
             chars.extend(run.text.chars());
@@ -371,6 +377,78 @@ fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
     }
 }
 
+/// The `seen_fonts` key of the math font (`register_math_font`).
+pub(super) const MATH_FONT_KEY: &str = "__math";
+
+/// Lay out every Office Math zone with the document's math font, then embed
+/// that font with the glyphs the boxes draw (by id: script-size alternates and
+/// stretched variants have no characters). Without a font that has a MATH
+/// table the zones stay unlaid and draw their linear text.
+fn register_math_font(
+    doc: &Document,
+    all_runs: &[&Run],
+    pdf: &mut Pdf,
+    alloc: &mut impl FnMut() -> Ref,
+    seen_fonts: &mut HashMap<String, FontEntry>,
+    font_order: &mut Vec<String>,
+) {
+    // A zone and its size (the run's), once each.
+    let mut zones: Vec<(&std::sync::Arc<crate::model::MathZone>, f32)> = Vec::new();
+    for run in all_runs {
+        if let Some(z) = &run.math
+            && !zones
+                .iter()
+                .any(|(seen, _)| std::sync::Arc::ptr_eq(seen, z))
+        {
+            zones.push((z, run.font_size));
+        }
+    }
+    if zones.is_empty() {
+        return;
+    }
+    let Some((name, (data, index))) = [doc.math.font.as_str(), "Cambria Math"]
+        .into_iter()
+        .find_map(|n| Some((n, crate::fonts::font_file(n, &doc.embedded_fonts)?)))
+    else {
+        return;
+    };
+    let Some(font) = crate::math::MathFont::new(&data, index) else {
+        log::warn!("Math font {name} has no MATH table: equations stay linear");
+        return;
+    };
+    let mut boxes: Vec<crate::math::MathBox> = zones
+        .iter()
+        .map(|(z, size)| crate::math::layout(&z.root, z.display, *size, &font, &doc.math))
+        .collect();
+    let mut glyphs = BTreeMap::new();
+    for item in boxes.iter().flat_map(|b| &b.items) {
+        if let crate::math::MathItem::Glyph { gid, ch, .. } = item {
+            glyphs.entry(*gid).or_insert(*ch);
+        }
+    }
+    let pdf_name = format!("F{}", font_order.len() + 1);
+    let ctx = FontContext {
+        embedded_fonts: &doc.embedded_fonts,
+        font_table: &doc.font_table,
+        used_chars: &HashSet::new(),
+        word_text: false,
+        extra_glyphs: Some(&glyphs),
+    };
+    let mut entry = register_font(pdf, name, false, false, pdf_name, alloc, &ctx);
+    for item in boxes.iter_mut().flat_map(|b| &mut b.items) {
+        if let crate::math::MathItem::Glyph { gid, .. } = item {
+            *gid = entry.gid_remap.get(gid).copied().unwrap_or(0);
+        }
+    }
+    entry.math_boxes = zones
+        .into_iter()
+        .zip(boxes)
+        .map(|((z, _), b)| (std::sync::Arc::as_ptr(z).addr(), std::sync::Arc::new(b)))
+        .collect();
+    font_order.push(MATH_FONT_KEY.to_string());
+    seen_fonts.insert(MATH_FONT_KEY.to_string(), entry);
+}
+
 pub(super) fn collect_and_register_fonts(
     doc: &Document,
     pdf: &mut Pdf,
@@ -379,7 +457,8 @@ pub(super) fn collect_and_register_fonts(
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
     let all_runs = collect_all_runs(doc);
-    let mut used_chars_per_font = collect_used_chars(doc, &all_runs);
+    register_math_font(doc, &all_runs, pdf, alloc, &mut seen_fonts, &mut font_order);
+    let mut used_chars_per_font = collect_used_chars(doc, &all_runs, &seen_fonts);
 
     for section in &doc.sections {
         for block in &section.blocks {
@@ -424,6 +503,7 @@ pub(super) fn collect_and_register_fonts(
                 font_table: &doc.font_table,
                 used_chars: &used,
                 word_text: true,
+                extra_glyphs: None,
             };
             let entry = register_font(
                 pdf,
@@ -460,6 +540,7 @@ pub(super) fn collect_and_register_fonts(
             font_table: &doc.font_table,
             used_chars: used,
             word_text: false,
+            extra_glyphs: None,
         };
         let entry = register_font(pdf, base, bold, italic, pdf_name, alloc, &ctx);
         seen_fonts.insert(key.clone(), entry);
@@ -481,6 +562,7 @@ pub(super) fn collect_and_register_fonts(
             font_table: &doc.font_table,
             used_chars: &all_missing_cjk,
             word_text: false,
+            extra_glyphs: None,
         };
         let entry = register_font(
             pdf,
@@ -520,6 +602,7 @@ pub(super) fn collect_and_register_fonts(
             font_table: &doc.font_table,
             used_chars: &HashSet::new(),
             word_text: false,
+            extra_glyphs: None,
         };
         let entry = register_font(pdf, "Helvetica", false, false, pdf_name, alloc, &ctx);
         seen_fonts.insert("Helvetica".to_string(), entry);

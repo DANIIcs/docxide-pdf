@@ -17,8 +17,8 @@ use super::styles::{
 };
 use super::textbox::parse_textbox_from_vml;
 use super::{
-    MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_child, math_run_text,
-    math_val, parse_hex_color, parse_pt, wml, wml_attr, wml_bool,
+    MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_run_text, math_val,
+    parse_hex_color, parse_pt, wml, wml_attr, wml_bool,
 };
 use super::{is_complex_script_char, is_east_asian_char};
 
@@ -867,6 +867,8 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && run.field_code.is_none()
                 && prev.checkbox.is_none()
                 && run.checkbox.is_none()
+                && prev.math.is_none()
+                && run.math.is_none()
                 && prev.font_name == run.font_name
                 && prev.east_asia_font_name == run.east_asia_font_name
                 && prev.rtl == run.rtl
@@ -934,120 +936,40 @@ pub(super) fn display_math_alignment(para: roxmltree::Node) -> Option<crate::mod
     })
 }
 
-/// Linearize an Office Math (OMML `m:oMath`) tree into ordinary text runs,
-/// reusing the normal run pipeline (fonts, sub/superscript). Stacked constructs
-/// are approximated inline — fractions as `num/den`, radicals as `√(radicand)`,
-/// delimiters as `(…)` — rather than laid out two-dimensionally. This is not
-/// full equation layout, but it renders the symbols and sub/superscripts that
-/// were previously dropped entirely (e.g. table headers `T₁₀±∆T₁₀` and inline
-/// formulas), since the run parser never descended into the math namespace.
-fn omath_to_runs(
-    node: roxmltree::Node,
+/// One `m:oMath` as a single run: the zone laid out as a box, its linear text
+/// for extraction, its spoken form for the Formula tag.
+fn math_zone_run(
+    omath: roxmltree::Node,
     defaults: &ParagraphRunDefaults,
     theme: &ThemeFonts,
-    vert: VertAlign,
-    out: &mut Vec<Run>,
-) {
-    let push_lit = |out: &mut Vec<Run>, s: &str| {
-        let fmt = defaults.resolve_run_format(None, None, None, theme);
-        let mut r = fmt.text_run(s.to_string(), None);
-        r.vertical_align = vert;
-        r.is_math = true;
-        out.push(r);
+) -> Option<Run> {
+    let parser = super::math::MathParser {
+        format: &|rpr| defaults.resolve_run_format(rpr, None, None, theme),
     };
-    for child in node.children() {
-        if child.tag_name().namespace() != Some(MATH_NS) {
-            continue;
-        }
-        match child.tag_name().name() {
-            "r" => {
-                let text = math_run_text(child);
-                if !text.is_empty() {
-                    // Math runs carry a w:rPr (fonts/size); m:rPr math styling is ignored.
-                    let fmt = defaults.resolve_run_format(wml(child, "rPr"), None, None, theme);
-                    let mut r = fmt.text_run(text, None);
-                    // In math, sub/superscript is conveyed by the structure
-                    // (m:sSub/m:sSup), not the run's w:vertAlign. Word ignores a
-                    // run-level vertAlign here, so always apply the structural
-                    // position — otherwise a cell whose runs all carry a spurious
-                    // w:vertAlign="subscript" renders entirely shrunken.
-                    r.vertical_align = vert;
-                    r.is_math = true;
-                    out.extend(split_run_by_script(r).into_iter().map(|mut sr| {
-                        sr.is_math = true;
-                        sr
-                    }));
-                }
-            }
-            "sSub" => {
-                if let Some(e) = math_child(child, "e") {
-                    omath_to_runs(e, defaults, theme, vert, out);
-                }
-                if let Some(s) = math_child(child, "sub") {
-                    omath_to_runs(s, defaults, theme, VertAlign::Subscript, out);
-                }
-            }
-            "sSup" => {
-                if let Some(e) = math_child(child, "e") {
-                    omath_to_runs(e, defaults, theme, vert, out);
-                }
-                if let Some(s) = math_child(child, "sup") {
-                    omath_to_runs(s, defaults, theme, VertAlign::Superscript, out);
-                }
-            }
-            "sSubSup" => {
-                if let Some(e) = math_child(child, "e") {
-                    omath_to_runs(e, defaults, theme, vert, out);
-                }
-                if let Some(s) = math_child(child, "sub") {
-                    omath_to_runs(s, defaults, theme, VertAlign::Subscript, out);
-                }
-                if let Some(s) = math_child(child, "sup") {
-                    omath_to_runs(s, defaults, theme, VertAlign::Superscript, out);
-                }
-            }
-            "f" => {
-                if let Some(n) = math_child(child, "num") {
-                    omath_to_runs(n, defaults, theme, vert, out);
-                }
-                push_lit(out, "/");
-                if let Some(d) = math_child(child, "den") {
-                    omath_to_runs(d, defaults, theme, vert, out);
-                }
-            }
-            "rad" => {
-                push_lit(out, "√");
-                if let Some(e) = math_child(child, "e") {
-                    push_lit(out, "(");
-                    omath_to_runs(e, defaults, theme, vert, out);
-                    push_lit(out, ")");
-                }
-            }
-            "d" => {
-                push_lit(out, "(");
-                if let Some(e) = math_child(child, "e") {
-                    omath_to_runs(e, defaults, theme, vert, out);
-                }
-                push_lit(out, ")");
-            }
-            "nary" => {
-                let chr = math_val(child, "naryPr", "chr").unwrap_or("∫");
-                push_lit(out, chr);
-                if let Some(s) = math_child(child, "sub") {
-                    omath_to_runs(s, defaults, theme, VertAlign::Subscript, out);
-                }
-                if let Some(s) = math_child(child, "sup") {
-                    omath_to_runs(s, defaults, theme, VertAlign::Superscript, out);
-                }
-                if let Some(e) = math_child(child, "e") {
-                    omath_to_runs(e, defaults, theme, vert, out);
-                }
-            }
-            // Structural containers reached directly (e.g. m:e, m:func, m:limLow,
-            // m:groupChr) — recurse to collect their text in document order.
-            _ => omath_to_runs(child, defaults, theme, vert, out),
-        }
+    let root = parser.row(omath);
+    if root.is_empty() {
+        return None;
     }
+    let text: String = omath
+        .descendants()
+        .filter(|n| n.has_tag_name((MATH_NS, "r")))
+        .map(math_run_text)
+        .collect();
+    // The zone takes its first run's size (and the paragraph's otherwise).
+    let first_rpr = omath
+        .descendants()
+        .find(|n| n.has_tag_name((MATH_NS, "r")))
+        .and_then(|r| wml(r, "rPr"));
+    let mut run = (parser.format)(first_rpr).text_run(text, None);
+    let spoken = super::math_speech::speak(omath);
+    run.formula = (!spoken.is_empty()).then(|| std::sync::Arc::<str>::from(spoken));
+    run.math = Some(std::sync::Arc::new(crate::model::MathZone {
+        root,
+        display: omath
+            .parent()
+            .is_some_and(|p| p.has_tag_name((MATH_NS, "oMathPara"))),
+    }));
+    Some(run)
 }
 
 pub(super) fn parse_runs<R: Read + Seek>(
@@ -1115,19 +1037,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     {
         attach_comment_anchors(&mut runs, &mut ref_anchors, node_idx);
         if run_node.has_tag_name((MATH_NS, "oMath")) {
-            let first = runs.len();
-            omath_to_runs(
-                run_node,
-                &defaults,
-                ctx.theme,
-                VertAlign::Baseline,
-                &mut runs,
-            );
-            let spoken = super::math_speech::speak(run_node);
-            let formula = (!spoken.is_empty()).then(|| std::sync::Arc::<str>::from(spoken));
-            for r in &mut runs[first..] {
-                r.formula = formula.clone();
-            }
+            runs.extend(math_zone_run(run_node, &defaults, ctx.theme));
             continue;
         }
         let runs_before = runs.len();

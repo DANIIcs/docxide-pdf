@@ -865,14 +865,8 @@ pub(super) fn compute_row_layouts(
                                     })
                                     .or(runs.first());
                                 let font_size = metric_run.map_or(12.0, |r| r.font_size);
-                                // A math run uses a math font (e.g. Cambria Math)
-                                // whose tall ascent/descent must not set the cell
-                                // line height (mirrors the is_math clamp in
-                                // tallest_run_metrics) — otherwise a header cell
-                                // whose metric run is math balloons the row.
                                 let mut kb0 = String::new();
                                 let metric_font = metric_run
-                                    .filter(|r| !r.is_math)
                                     .map(|r| font_key_buf(r, &mut kb0).to_owned())
                                     .and_then(|k| ctx.fonts.get(&k));
                                 let (tallest_lhr, tallest_ar) = metric_run
