@@ -152,6 +152,40 @@ fn field_args(s: &str) -> Vec<String> {
 /// 153pt while the top margin says 86pt (annotation #195). ponytail: `w:h`
 /// is taken as the frame height whatever `w:hRule` says; grow it by the
 /// frame's content height if a frame ever overflows it.
+/// Header lines size as body lines do: runs of nothing but spaces or tabs
+/// size nothing, and a line left with nothing takes the paragraph mark's
+/// metrics. A header of a tab and spaces in 11pt Tahoma under a 20pt mark is
+/// a 20pt Arial line in Word (body probes: spaces, tabs or both under a 20pt
+/// mark give the empty mark's line, a 20pt tab under an 8pt mark an 8pt
+/// line), and "GOVERNOR", 113 spaces and "SECRETARY" in 10pt with the spaces
+/// at 11pt is a 10pt line.
+fn hf_run_metrics(
+    runs: &[crate::model::Run],
+    para: &Paragraph,
+    fonts: &HashMap<String, crate::fonts::FontEntry>,
+) -> (f32, Option<f32>, Option<f32>) {
+    let glyphs = super::layout::tallest_glyph_run_metrics(runs, fonts);
+    let nothing_sizes = glyphs.1.is_none()
+        && runs.iter().any(|r| !r.vanish)
+        && !runs
+            .iter()
+            .any(|r| r.is_line_break || r.inline_image.is_some());
+    let mark = para.paragraph_mark_font_size.filter(|_| nothing_sizes);
+    let Some(fs) = mark else {
+        return if glyphs.1.is_some() {
+            glyphs
+        } else {
+            tallest_run_metrics(runs, fonts)
+        };
+    };
+    let (lhr, ar) = para
+        .paragraph_mark_font_name
+        .as_deref()
+        .and_then(|n| fonts.get(n))
+        .map_or((None, None), |e| super::layout::run_line_metrics(e, ""));
+    (fs, lhr, ar)
+}
+
 fn blocking_frame_bands(hf: &HeaderFooter, sp: &SectionProperties) -> Vec<(f32, f32)> {
     hf.blocks
         .iter()
@@ -424,7 +458,7 @@ fn header_height(
             Block::Paragraph(para) => {
                 let gap = hf_paragraph_gap(prev_para, prev_space_after, para);
                 prev_para = Some(para);
-                let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
+                let (font_size, tallest_lhr, _) = hf_run_metrics(&para.runs, para, ctx.fonts);
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
                 height = below_blocking_tables(
@@ -891,7 +925,7 @@ pub(super) fn render_header_footer(
                 );
 
                 let (font_size, tallest_lhr, tallest_ar) =
-                    tallest_run_metrics(&substituted_runs, ctx.fonts);
+                    hf_run_metrics(&substituted_runs, para, ctx.fonts);
                 let ascender_ratio = tallest_ar.unwrap_or(0.75);
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
