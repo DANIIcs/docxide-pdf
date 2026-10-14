@@ -61,11 +61,6 @@ def extract_text_snippet(docx_path: Path, max_chars: int = 500) -> str:
 # ── Claude naming ────────────────────────────────────────────────────────────
 
 
-def baseline_key(name: str) -> str:
-    """The case part of the baseline/hash key (display_name in tests/common/mod.rs)."""
-    return f"{name[:16]}.." if len(name) > 16 else name
-
-
 def name_files_with_claude(file_snippets: dict[str, str], existing_names: set[str]) -> dict[str, str]:
     """Call claude -p once to name all files. Returns {hash: name}."""
     existing_list = ", ".join(sorted(existing_names)) if existing_names else "(none)"
@@ -86,7 +81,6 @@ Rules:
 - Describe the document's topic/purpose, not its language
 - If the text is in a non-English language, translate the topic to English
 - Each name must be unique and not collide with existing names
-- The first 16 characters must also differ from every existing name and from each other
 - No generic names like "document_1" or "test_file"
 
 Existing names (avoid these): {existing_list}
@@ -275,23 +269,22 @@ def main() -> None:
         raise SystemExit("Claude naming failed — no names returned")
 
     # Validate names
-    # Keys keep only the first 16 chars, so two names sharing them would overwrite each other's baselines
-    used_keys = {baseline_key(n) for n in existing_names}
+    used_names = set(existing_names)
     hash_to_name: dict[str, str] = {}
     for h, _ in candidates:
         name = names.get(h)
-        if not name or baseline_key(name) in used_keys:
+        if not name or name in used_names:
             log.warning("No valid name for %s (got %r), skipping", h[:16], name)
             continue
         # Sanitize: ensure it's valid snake_case
         name = name.strip().lower().replace(" ", "_").replace("-", "_")
         name = "".join(c for c in name if c.isalnum() or c == "_")
         name = name.strip("_")
-        if not name or baseline_key(name) in used_keys:
+        if not name or name in used_names:
             log.warning("Sanitized name collision for %s: %r, skipping", h[:16], name)
             continue
         hash_to_name[h] = name
-        used_keys.add(baseline_key(name))
+        used_names.add(name)
 
     log.info("Named %d files:", len(hash_to_name))
     for h, name in hash_to_name.items():

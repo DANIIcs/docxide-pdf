@@ -336,7 +336,7 @@ fn print_change(
 }
 
 /// Copy generated PNGs to acknowledged/ for each accepted case, enabling delta view.
-/// Case names are display_name format ("group/truncated.."), resolve to output dirs by scanning.
+/// Case names are display_name format ("group/case"), resolve to output dirs by scanning.
 fn snapshot_accepted_cases(root: &Path, accepted_names: &[String]) {
     if accepted_names.is_empty() {
         return;
@@ -366,13 +366,7 @@ fn snapshot_accepted_cases(root: &Path, accepted_names: &[String]) {
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("");
-            // Build the display_name key (same truncation as tests/common/mod.rs)
-            let short = if case_name.len() > 16 {
-                format!("{}..", &case_name[..16])
-            } else {
-                case_name.to_string()
-            };
-            let key = format!("{group_name}/{short}");
+            let key = format!("{group_name}/{case_name}");
             if !accepted_names.contains(&key) {
                 continue;
             }

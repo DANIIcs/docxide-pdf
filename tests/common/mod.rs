@@ -70,15 +70,11 @@ pub fn output_dir(fixture: &Path) -> PathBuf {
         .join(case.as_ref())
 }
 
-/// Display name for tables: group/case (hashes truncated to 16 chars)
+/// group/case: the key for baselines, hashes and score tables. The full case
+/// name, since cases sharing a prefix must not share a key.
 pub fn display_name(fixture: &Path) -> String {
     let case = fixture.file_name().unwrap().to_string_lossy();
-    let short = if case.len() > 16 {
-        format!("{}..", &case[..16])
-    } else {
-        case.to_string()
-    };
-    format!("{}/{}", group_name(fixture), short)
+    format!("{}/{}", group_name(fixture), case)
 }
 
 fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {

@@ -83,14 +83,9 @@ fn ref_page_count(fixture_path: &Path) -> Option<usize> {
     None
 }
 
-/// Baselines key format: "scraped/<name truncated to 16 chars>.." or "cases/<name truncated to 16 chars>.."
+/// Baselines key format: "<group>/<case>"
 fn baselines_key(group: &str, name: &str) -> String {
-    let short = if name.len() > 16 {
-        format!("{}..", &name[..16])
-    } else {
-        name.to_string()
-    };
-    format!("{}/{}", group, short)
+    format!("{}/{}", group, name)
 }
 
 fn load_baselines() -> (HashMap<String, f64>, HashMap<String, f64>) {

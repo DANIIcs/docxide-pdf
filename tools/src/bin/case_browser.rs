@@ -204,12 +204,7 @@ fn baseline_key(name: &str) -> String {
     } else {
         ("cases", name)
     };
-    let short = if case_name.len() > 16 {
-        format!("{}..", &case_name[..16])
-    } else {
-        case_name.to_string()
-    };
-    format!("{}/{}", group, short)
+    format!("{}/{}", group, case_name)
 }
 
 fn load_baselines(output_dir: &Path) -> HashMap<String, BaselineScores> {
