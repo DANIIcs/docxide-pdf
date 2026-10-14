@@ -780,19 +780,19 @@ fn spacers_clear_nested_registration(
     if hf_sub.is_some() || cell.text_direction != TextDirection::LrTb {
         return false;
     }
-    let prefix = cell
+    let tables: Vec<&Table> = cell
         .content
         .iter()
-        .take_while(|b| matches!(b, Block::Table(_)))
-        .count();
-    if prefix == 0 || prefix > 2 || block_idx >= prefix {
+        .map_while(|b| match b {
+            Block::Table(t) => Some(t),
+            Block::Paragraph(_) => None,
+        })
+        .collect();
+    if tables.is_empty() || tables.len() > 2 || block_idx >= tables.len() {
         return false;
     }
     let mut occupied = 0.0f32;
-    for block in &cell.content[..prefix] {
-        let Block::Table(table) = block else {
-            return false;
-        };
+    for table in &tables {
         let Some(pos) = &table.position else {
             return false;
         };
@@ -823,7 +823,7 @@ fn spacers_clear_nested_registration(
     let mut empty_space = 0.0f32;
     let mut prev_after = 0.0f32;
     let mut visible_seen = false;
-    for block in &cell.content[prefix..] {
+    for block in &cell.content[tables.len()..] {
         let Block::Paragraph(p) = block else {
             return false;
         };
@@ -851,19 +851,19 @@ fn spacers_clear_nested_registration(
         {
             return false;
         }
-        if !visible_seen {
-            empty_space += prev_after.max(p.space_before);
-            if p.runs.iter().any(|r| !r.text.trim().is_empty()) {
-                if empty_space < occupied {
-                    return false;
-                }
-                visible_seen = true;
-            } else {
-                let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
-                empty_space +=
-                    resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
-                prev_after = p.space_after;
+        if visible_seen {
+            continue;
+        }
+        empty_space += prev_after.max(p.space_before);
+        if p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+            if empty_space < occupied {
+                return false;
             }
+            visible_seen = true;
+        } else {
+            let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
+            empty_space += resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+            prev_after = p.space_after;
         }
     }
     visible_seen
@@ -1395,13 +1395,7 @@ pub(super) fn compute_row_layouts(
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
-                                    .map(|pos| {
-                                        if block_idx == 0 {
-                                            pos.v_offset_pt.max(0.0)
-                                        } else {
-                                            pos.v_offset_pt
-                                        }
-                                    });
+                                    .map(|pos| if block_idx == 0 { pos.v_offset_pt.max(0.0) } else { pos.v_offset_pt });
                                 let space_before = prev_space_after;
                                 let mut floating_x_offset = None;
                                 let auto_left_float = nested_table.position.as_ref().is_some_and(|p|
