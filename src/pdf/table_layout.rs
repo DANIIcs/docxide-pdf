@@ -556,17 +556,21 @@ pub(super) fn auto_fit_columns(
     // An explicit table width can also carry a content-derived saved grid.
     // A tcW that no longer fits its cell's text is a stale preference, not
     // evidence that the saved nested-table host column should be rescaled.
-    let stale_content_preference = table.rows.iter().any(|row| {
-        row.grid_cells().any(|(col, span, cell)| {
-            span == 1
-                && cell.width > 0.0
-                && min_widths
-                    .get(col)
-                    .is_some_and(|minimum| *minimum > cell.width + 0.01)
+    let stale_content_preference = || {
+        table.rows.iter().any(|row| {
+            row.grid_cells().any(|(col, span, cell)| {
+                span == 1
+                    && cell.width > 0.0
+                    && min_widths
+                        .get(col)
+                        .is_some_and(|minimum| *minimum > cell.width + 0.01)
+            })
         })
-    });
+    };
     let keep_saved_grid = !table.fixed_layout
-        && ((!grid_uniform && has_nested_table && (table.auto_width || stale_content_preference))
+        && ((!grid_uniform
+            && has_nested_table
+            && (table.auto_width || stale_content_preference()))
             || (table.auto_width && saved_grid_asymmetric && stale_uniform_preferences));
     if !keep_saved_grid {
         for row in &table.rows {
