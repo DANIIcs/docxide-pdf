@@ -315,9 +315,17 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
             let h_pad = ecm.left + ecm.right;
             let mut key_buf = String::new();
             for para in cell.all_paragraphs() {
+                let mut joined_width = 0.0f32;
+                let mut prev_char = None;
                 for run in &para.runs {
+                    if run.is_tab || run.is_line_break {
+                        joined_width = 0.0;
+                        prev_char = None;
+                    }
                     let key = font_key_buf(run, &mut key_buf);
                     let Some(entry) = fonts.get(key) else {
+                        joined_width = 0.0;
+                        prev_char = None;
                         continue;
                     };
                     let text = if run.caps {
@@ -328,10 +336,8 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                     let fs = run.font_size;
                     // Same break opportunities as line layout: a CJK sentence holds
                     // no spaces but may wrap after any ideograph.
-                    let words = super::layout::split_preserving_spaces(&text)
-                        .into_iter()
-                        .map(|(_, w)| w);
-                    for word in words {
+                    let words = super::layout::split_preserving_spaces(&text).into_iter();
+                    for (spaces, word) in words {
                         let ww =
                             word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
                         // AutoFit reserves paragraph indents inside the cell width.
@@ -345,8 +351,20 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                                 + para.indent_right
                                 + para.indent_first_line.max(0.0)
                         };
-                        let required = (ww + inset).max(h_pad);
+                        let continues = !table.fixed_layout
+                            && para.indent_right > 0.0
+                            && spaces == 0
+                            && prev_char
+                                .zip(word.chars().next())
+                                .is_some_and(|(a, b)| !super::layout::breaks_between(a, b));
+                        joined_width = if continues { joined_width + ww } else { ww };
+                        prev_char = word.chars().last();
+                        let required = (joined_width + inset).max(h_pad);
                         min_widths[grid_col] = min_widths[grid_col].max(required);
+                    }
+                    if run.text.chars().last().is_some_and(char::is_whitespace) {
+                        joined_width = 0.0;
+                        prev_char = None;
                     }
                 }
             }
@@ -1862,6 +1880,73 @@ pub(super) fn find_cell_split(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn stub_font_entry() -> FontEntry {
+        FontEntry {
+            pdf_name: "F1".to_string(),
+            font_ref: pdf_writer::Ref::new(1),
+            widths_1000: vec![500.0; 224],
+            line_h_ratio: None,
+            ascender_ratio: None,
+            grid_line_ratio: None,
+            plain_line_h_ratio: None,
+            grid_baseline_shift: None,
+            superscript_ratio: None,
+            subscript_ratio: None,
+            underline: None,
+            strikeout: None,
+            east_asian: false,
+            plain_ascender_ratio: None,
+            char_to_gid: None,
+            char_widths_1000: None,
+            kern_pairs: None,
+            synthetic_bold: false,
+            synthetic_italic: false,
+            is_substituted: false,
+            missing_cjk_chars: Default::default(),
+            drew_notdef: Default::default(),
+            font_path: None,
+            face_index: 0,
+        }
+    }
+
+    #[test]
+    fn indented_autofit_word_width_is_invariant_to_run_formatting() {
+        let measure = |parts: &[&str]| {
+            let runs: Vec<crate::model::Run> = parts
+                .iter()
+                .enumerate()
+                .map(|(i, text)| crate::model::Run {
+                    text: (*text).into(),
+                    font_name: "TestFont".into(),
+                    font_size: 10.0,
+                    color: Some([0, 0, i as u8]),
+                    ..Default::default()
+                })
+                .collect();
+            let mut key_buf = String::new();
+            let key = crate::fonts::font_key_buf(&runs[0], &mut key_buf).to_string();
+            let fonts = HashMap::from([(key, stub_font_entry())]);
+            let mut doc = crate::docx::parse_bytes(include_bytes!(
+                "../../tests/fixtures/cases/min-width-run-whole/input.docx"
+            ))
+            .unwrap();
+            let Block::Table(mut table) = doc.sections[0].blocks.remove(0) else {
+                panic!("table")
+            };
+            table.rows[0].cells[1].content = vec![Block::Paragraph(crate::model::Paragraph {
+                runs,
+                indent_right: 11.0,
+                ..Default::default()
+            })];
+            table.fixed_layout = false;
+            min_content_widths(&table, &fonts)[1]
+        };
+        let whole = measure(&["abcdef"]);
+        assert_eq!(whole, measure(&["abc", "def"]));
+        assert!(measure(&["abc ", "def"]) < whole);
+        assert!(measure(&["abc", " def"]) < whole);
+    }
 
     #[test]
     fn nested_empty_reserved_cells_keep_explicit_grid_when_it_fits() {
