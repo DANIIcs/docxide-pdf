@@ -68,6 +68,12 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   start 1.79), as do "=−sin", "(−sin", "−log" and "−∑" (probe `mp8_fn`).
 - After a script: SpaceAfterScript.
 
+- A stacked fraction is TeX's inner atom: a thin space from ordinary
+  neighbours, operators and punctuation (𝑎½𝑏: 9.32pt between a and b, a
+  medium space to a binary operator, a thick one to a relation, none
+  inside fences); a linear fraction stays ordinary (probes `mp_spacing`,
+  `mp25_empty`).
+
 ### Structures
 - Fractions: MATH fraction shifts and gaps; display numerator 9.05 / denominator
   7.95 at 12pt (Word 9.05 / 7.95); inline parts at script size, 7.0 / 6.0.

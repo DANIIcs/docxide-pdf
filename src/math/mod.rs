@@ -270,6 +270,8 @@ enum Class {
     /// A space typed in a math run: it is the spacing, nothing is added
     /// beside it (Word's ", " zone is a comma and a 0.22em space).
     Space,
+    /// A stacked fraction: a thin space from its ordinary neighbours.
+    Inner,
 }
 
 /// A box being built: like `MathBox`, plus what spacing needs to know of
@@ -653,6 +655,16 @@ impl<'a> Ctx<'a> {
     }
 
     fn frac(&self, kind: FracKind, num: &MathRow, den: &MathRow, st: St) -> B {
+        let mut b = self.frac_box(kind, num, den, st);
+        // A stacked fraction is TeX's inner atom: Word sets 𝑎½𝑏 with a thin
+        // space either side (probes `mp_spacing`, `mp25_empty`).
+        if matches!(kind, FracKind::Bar | FracKind::NoBar) {
+            (b.first, b.last) = (Class::Inner, Class::Inner);
+        }
+        b
+    }
+
+    fn frac_box(&self, kind: FracKind, num: &MathRow, den: &MathRow, st: St) -> B {
         // m:smallFrac sets display fractions at text size.
         let st = if self.settings.small_frac && st.display() {
             St::new(Style::T)
@@ -1428,11 +1440,10 @@ fn space(left: Class, right: Class, st: St) -> f32 {
     let (n, script_too) = match (left, right) {
         (Space, _) | (_, Space) => (0.0, true),
         (Ord, Op) | (Op, Ord) | (Op, Op) | (Close, Op) => (3.0, true),
-        (Ord, Bin) | (Bin, Ord) | (Bin, Op) | (Bin, Open) | (Op, Bin) | (Close, Bin) => {
-            (4.0, false)
-        }
-        (Ord | Op | Close, Rel) | (Rel, Ord | Op | Open) => (5.0, false),
-        (Punct, Ord | Op | Rel | Open | Close | Punct) => (3.0, false),
+        (Ord | Op | Close | Inner, Bin) | (Bin, Ord | Op | Open | Inner) => (4.0, false),
+        (Ord | Op | Close | Inner, Rel) | (Rel, Ord | Op | Open | Inner) => (5.0, false),
+        (Punct, Ord | Op | Rel | Open | Close | Punct | Inner) => (3.0, false),
+        (Ord | Op | Close | Inner, Inner) | (Inner, Ord | Op | Open | Punct) => (3.0, false),
         _ => (0.0, true),
     };
     if script && !script_too { 0.0 } else { n }
