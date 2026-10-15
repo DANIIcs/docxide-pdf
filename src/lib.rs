@@ -21,6 +21,11 @@ pub fn convert_docx_bytes_to_pdf(input: &[u8], path: impl AsRef<Path>) -> Result
     render_and_write(&doc, path)
 }
 
+/// For callers that serve or store the PDF themselves (web handlers, databases, wasm).
+pub fn convert_docx_bytes_to_pdf_bytes(input: &[u8]) -> Result<Vec<u8>, Error> {
+    pdf::render(&docx::parse_bytes(input)?)
+}
+
 fn render_and_write(doc: &model::Document, path: impl AsRef<Path>) -> Result<(), Error> {
     let path = path.as_ref().with_extension("pdf");
     let t0 = Instant::now();

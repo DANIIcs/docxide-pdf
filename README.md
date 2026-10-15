@@ -141,6 +141,12 @@ convert_docx_to_pdf(
 )?;
 ```
 
+To keep everything in memory, `convert_docx_bytes_to_pdf_bytes` takes the DOCX as bytes and returns the PDF as bytes:
+
+```rust
+let pdf: Vec<u8> = docxide_pdf::convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
+```
+
 ## Works well with `docxide-template`
 
 [`docxide-template`](https://github.com/sverrejb/docxide-template) is a sibling crate for type-safe MS Word templates. It scans a folder of `.docx` files at compile time and generates a Rust struct per template, with `{Placeholder}` patterns turned into snake_case fields. Pair it with `docxide-pdf` to go from template → filled DOCX → PDF in a single, fully in-memory pipeline:

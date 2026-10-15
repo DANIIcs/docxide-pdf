@@ -100,7 +100,7 @@ See `roadmap.md` for planned work prioritized by impact. **Always consult the ro
 
 ```
 src/
-  lib.rs              — public API: convert_docx_to_pdf(input, output) and convert_docx_bytes_to_pdf(bytes, output); paths are impl AsRef<Path>
+  lib.rs              — public API: convert_docx_to_pdf(input, output), convert_docx_bytes_to_pdf(bytes, output) and convert_docx_bytes_to_pdf_bytes(bytes) -> Vec<u8>; paths are impl AsRef<Path>
   error.rs            — Error enum (InvalidDocx, Zip, Xml, Pdf, Io variants)
   main.rs             — CLI binary (behind `cli` feature)
   model/
