@@ -772,6 +772,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                     let style_num = para_style.and_then(|s| s.num_id.as_deref());
                     let style_ilvl = para_style.and_then(|s| s.num_ilvl);
+                    let mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
                     let numbering = parse_list_info(
                         num_pr,
                         style_num,
@@ -780,7 +781,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         &ctx.styles.paragraph_styles,
                         ctx.numbering,
                         cell_lists,
-                        Some(&super::runs::paragraph_mark_run(ppr, para_style, ctx)),
+                        Some(&mark),
                     );
                     let (indent_left, indent_right, indent_hanging, indent_first_line) =
                         super::paragraph::resolve_indents(
@@ -816,6 +817,18 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     } else {
                         ctx.styles.defaults.space_after
                     });
+                    // The end-of-cell mark uses the document's default
+                    // paragraph style. Contextual after-spacing collapses only
+                    // when the last paragraph has that same style.
+                    let contextual_spacing = super::paragraph::contextual_spacing(ppr, para_style);
+                    let space_after = if contextual_spacing
+                        && para_style_id == ctx.styles.default_paragraph_style_id
+                        && p.next_siblings().skip(1).all(|node| !node.is_element())
+                    {
+                        0.0
+                    } else {
+                        space_after
+                    };
                     if let Some(tabs) = ppr.and_then(|ppr| wml(ppr, "tabs")) {
                         for t in tabs.children().filter(|n| n.has_tag_name((WML_NS, "tab"))) {
                             if t.attribute((WML_NS, "val")) == Some("num")
@@ -859,11 +872,13 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         textboxes: parsed.textboxes,
                         connectors: parsed.connectors,
                         style_id: Some(para_style_id.to_string()),
-                        contextual_spacing: super::paragraph::contextual_spacing(ppr, para_style),
+                        contextual_spacing,
                         keep_next: ppr
                             .and_then(|ppr| wml_bool(ppr, "keepNext"))
                             .or_else(|| para_style.and_then(|s| s.keep_next))
                             .unwrap_or(false),
+                        paragraph_mark_font_size: Some(mark.font_size),
+                        paragraph_mark_font_name: Some(mark.font_name),
                         paragraph_mark_position: super::paragraph::paragraph_mark_position(
                             ppr.and_then(|ppr| wml(ppr, "rPr")),
                             para_style,

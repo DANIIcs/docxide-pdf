@@ -735,7 +735,7 @@ const MIN_EMPTY_STRIP: f32 = 18.0;
 
 /// The part of a collapsed paragraph gap that is the paragraph's own space
 /// before, beyond the previous paragraph's space after.
-fn own_space_before(gap: f32, prev_space_after: f32) -> f32 {
+pub(super) fn own_space_before(gap: f32, prev_space_after: f32) -> f32 {
     (gap - prev_space_after).max(0.0)
 }
 
@@ -1829,6 +1829,161 @@ fn line_count(para: &Paragraph, ctx: &RenderContext, col_w: f32) -> usize {
     .len()
 }
 
+/// Modern Word keeps a margin-anchored empty frame's box even though its
+/// paragraphs consume no body flow. A full-width inline table cannot wrap
+/// beside that box. Only introductory boxes whose anchor fits this page are
+/// collected; frames after visible body text or forced breaks are left alone.
+fn empty_frame_table_bands(
+    blocks: &[Block],
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+    body_top: f32,
+    available_h: f32,
+) -> Vec<(f32, f32)> {
+    if ctx.compat_mode < 15 {
+        return Vec::new();
+    }
+    let para_height = |p: &Paragraph| {
+        let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+        let (fs, lhr) = if lhr.is_none() {
+            unsized_line_metrics(p, fs, ctx.fonts)
+        } else {
+            (fs, lhr)
+        };
+        resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
+    };
+    let mut bands = Vec::new();
+    let mut i = 0;
+    while i < blocks.len() {
+        let Block::Paragraph(p) = &blocks[i] else {
+            i += 1;
+            continue;
+        };
+        if p.is_section_break {
+            break;
+        }
+        let Some(fp) = p
+            .frame_props
+            .as_ref()
+            .filter(|_| is_empty_wrapping_frame(p, sp))
+        else {
+            if p.runs.iter().any(|r| {
+                (!r.vanish && !r.text.trim().is_empty())
+                    || r.is_tab
+                    || r.inline_image.is_some()
+                    || r.field_code.is_some()
+                    || r.checkbox.is_some()
+                    || r.footnote_id.is_some()
+                    || r.endnote_id.is_some()
+            }) || p.image.is_some()
+                || p.inline_chart.is_some()
+                || !p.smartart.is_empty()
+                || !p.floating_images.is_empty()
+                || !p.textboxes.is_empty()
+                || !p.connectors.is_empty()
+                || p.page_break_before
+                || p.page_break_after
+                || p.page_break_at.is_some()
+                || p.column_break_before
+                || p.column_break_after
+            {
+                break;
+            }
+            i += 1;
+            continue;
+        };
+        if fp.v_relative_from != VRelativeFrom::Margin
+            || !matches!(&fp.v_position, VerticalPosition::Offset(y) if *y == 0.0)
+            || fp.width <= 0.0
+            || p.paragraph_mark_vanish
+        {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        let mut height = 0.0;
+        let mut prev_after: f32 = 0.0;
+        while let Some(Block::Paragraph(q)) = blocks.get(i) {
+            if q.is_section_break
+                || q.paragraph_mark_vanish
+                || !is_empty_wrapping_frame(q, sp)
+                || q.frame_props.as_ref() != Some(fp)
+            {
+                break;
+            }
+            height += prev_after.max(q.space_before)
+                + para_height(q) * line_count(q, ctx, fp.width).max(1) as f32;
+            prev_after = q.space_after;
+            i += 1;
+        }
+        let top = sp.margin_top - fp.v_space;
+        let bottom = sp.margin_top + height + prev_after + fp.v_space;
+        let x = resolve_h_position(
+            fp.h_relative_from,
+            &fp.h_position,
+            fp.width,
+            sp,
+            sp.margin_left,
+            sp.text_width(),
+            sp.text_width(),
+        );
+        if bottom <= body_top
+            || x + fp.width + fp.h_space <= sp.margin_left
+            || x - fp.h_space >= sp.page_width - sp.margin_right
+        {
+            continue;
+        }
+        // Conservatively count floating extents too. Never reserve a box on
+        // this page if its introductory anchor could already be on the next.
+        let mut prefix_h = height + prev_after;
+        let fits = blocks[..start].iter().all(|b| {
+            match b {
+                Block::Table(t) => {
+                    if t.rows
+                        .iter()
+                        .flat_map(|r| r.cells.iter())
+                        .flat_map(|c| c.all_paragraphs())
+                        .any(|q| {
+                            q.page_break_before
+                                || q.page_break_after
+                                || q.page_break_at.is_some()
+                                || q.runs
+                                    .iter()
+                                    .any(|r| r.footnote_id.is_some() || r.endnote_id.is_some())
+                        })
+                    {
+                        return false;
+                    }
+                    let widths =
+                        table_layout::auto_fit_columns(t, ctx.fonts, None, Some(sp.text_width()));
+                    prefix_h += table_layout::compute_row_layouts(t, &widths, ctx, None)
+                        .iter()
+                        .map(|r| r.height)
+                        .sum::<f32>();
+                    if let Some(pos) = &t.position {
+                        prefix_h += pos.v_offset_pt.max(0.0)
+                            + pos.top_from_text.max(0.0)
+                            + pos.bottom_from_text.max(0.0);
+                    }
+                }
+                Block::Paragraph(q) => {
+                    if !is_empty_wrapping_frame(q, sp) {
+                        prefix_h += q.space_before.max(0.0)
+                            + q.space_after.max(0.0)
+                            + para_height(q)
+                                * (1 + q.runs.iter().filter(|r| r.is_line_break).count()) as f32;
+                    }
+                }
+            }
+            prefix_h <= available_h
+        }) && prefix_h <= available_h;
+        if fits {
+            bands.push((top, bottom));
+        }
+    }
+    bands
+}
+
 /// Empty auto-height wrapping frames have no body-flow content. Ordinary
 /// empty paragraphs and explicit breaks retain their paragraph-mark lines.
 /// Inside a lifted frame the mark keeps its line too: Word spaces
@@ -1988,9 +2143,11 @@ fn compute_bookmark_positions(
                     let next_continuous = doc.sections.get(si + 1).is_some_and(|next| {
                         next.properties.break_type == SectionBreakType::Continuous
                     });
-                    let keeps_line = ctx.compat_mode >= 15
-                        && next_continuous
-                        && matches!(blocks.get(bi.wrapping_sub(1)), Some(Block::Table(_)));
+                    let keeps_line = keeps_section_mark_line(
+                        ctx.compat_mode,
+                        next_continuous,
+                        bi.checked_sub(1).and_then(|i| blocks.get(i)),
+                    );
                     if para.is_section_break && bi != 0 && !keeps_line && is_text_empty(&para.runs)
                     {
                         let drop;
@@ -2167,6 +2324,14 @@ pub(super) fn side_border_outsets(
     )
 }
 
+/// An empty section mark keeps its line after an inline table (the rule is
+/// explained in `render_paragraph_block`); bookmark positions follow it too.
+fn keeps_section_mark_line(compat_mode: u32, next_continuous: bool, prev: Option<&Block>) -> bool {
+    compat_mode >= 15
+        && next_continuous
+        && matches!(prev, Some(Block::Table(t)) if t.position.is_none())
+}
+
 /// Render a single paragraph block. Returns `true` if the block was skipped
 /// (the caller should `continue` the block loop).
 #[allow(clippy::too_many_arguments)]
@@ -2227,17 +2392,17 @@ fn render_paragraph_block(
         .get(sect_idx + 1)
         .is_some_and(|next| next.properties.break_type == SectionBreakType::Continuous);
     // In modern compatibility mode, Word preserves the section mark's own
-    // paragraph line after a table. Legacy mode still collapses that line.
+    // paragraph line after an inline table. Floating tables do not reserve
+    // that extra line. Legacy mode still collapses it for both kinds.
     // Only before a continuous section: before a new page the line could only
     // push itself onto a blank page, which Word doesn't do (indigenous_innovation
     // ends a page with its signature table and starts Schedule A on the next).
     let keeps_line = block_idx == 0
-        || (ctx.compat_mode >= 15
-            && next_continuous
-            && matches!(
-                block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)),
-                Some(Block::Table(_))
-            ));
+        || keeps_section_mark_line(
+            ctx.compat_mode,
+            next_continuous,
+            block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)),
+        );
     if para.is_section_break
         && !keeps_line
         && is_text_empty(&para.runs)
@@ -2837,6 +3002,28 @@ fn render_paragraph_block(
             },
         )
     };
+    // A pure one-break anchor can be taller than a short floating table.
+    // In that case its first line extends below the float and occupies flow
+    // height; dropping it also drops a full line before the paragraph mark.
+    let short_empty_clear = || {
+        let mut breaks = para.runs.iter().filter(|r| r.is_line_break);
+        let (Some(br), None) = (breaks.next(), breaks.next()) else {
+            return false;
+        };
+        para.runs
+            .iter()
+            .all(|r| r.text.is_empty() && !r.is_tab && r.inline_image.is_none())
+            && para.image.is_none()
+            && para.inline_chart.is_none()
+            && para.smartart.is_empty()
+            && para.floating_images.is_empty()
+            && para.textboxes.is_empty()
+            && state.pb.float_zone.as_ref().is_some_and(|zone| {
+                let lhr = break_run_lhr(&effective_runs, br.font_size, ctx.fonts);
+                let first_pitch = resolve_line_h(effective_ls, br.font_size, lhr);
+                zone.from_table && state.pb.slot_top - inter_gap - first_pitch < zone.bottom_y
+            })
+    };
     // A clearing break that opens the anchor paragraph of the floating table
     // above it sits beside that table's top; only what follows the break comes
     // below the table (indigenous_innovation's defined terms: one line, not two).
@@ -2846,6 +3033,7 @@ fn render_paragraph_block(
     if (leading_table_clear
         || para.clears_floats
             && follows_floating_table
+            && !short_empty_clear()
             && state.pb.float_table_extent.as_ref().is_some_and(|t| {
                 side_strip(
                     (t.left, t.right),
@@ -2983,7 +3171,11 @@ fn render_paragraph_block(
             let mut h = first_line_h;
             let last = lines.len() - 1;
             for (i, line) in lines.iter().enumerate().skip(1) {
-                if let Some(bfs) = line.break_font_size {
+                if line.leading_tab_wrap
+                    && let Some(pitch) = line.pitch
+                {
+                    h += pitch;
+                } else if let Some(bfs) = line.break_font_size {
                     // The empty line a trailing break leaves holds only the
                     // paragraph mark, whose rPr sizes it — the break char
                     // sizes the line it terminates, not this one (samtale:
@@ -4491,6 +4683,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             _ => Vec::new(),
         };
 
+        let empty_frame_anchor_page = state.pb.page_count();
+        let empty_frame_bands = if col_count == 1 {
+            empty_frame_table_bands(
+                &section.blocks,
+                sp,
+                &ctx,
+                sp.page_height - state.pb.slot_top,
+                state.pb.slot_top - sp.margin_bottom,
+            )
+        } else {
+            Vec::new()
+        };
+
         let layout_blocks = |state: &mut LayoutState| {
             let mut frame: Option<OpenFrame> = None;
             for (block_idx, block) in section.blocks.iter().enumerate() {
@@ -4536,6 +4741,23 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                 }
 
+                if frame.is_none()
+                    && !empty_frame_bands.is_empty()
+                    && state.pb.page_count() == empty_frame_anchor_page
+                    && matches!(block, Block::Table(t) if t.position.is_none()
+                        && t.col_widths.iter().sum::<f32>() >= text_width - 0.05)
+                {
+                    let top = sp.page_height - state.pb.slot_top;
+                    let bottom = empty_frame_bands
+                        .iter()
+                        .filter(|(start, end)| top >= *start && top < *end)
+                        .map(|(_, end)| *end)
+                        .fold(top, f32::max);
+                    if bottom > top {
+                        state.pb.slot_top = sp.page_height - bottom;
+                    }
+                }
+
                 let mut table_cleared_float = false;
                 // If a float zone is active, decide whether to wrap text beside
                 // the object or push it below.
@@ -4553,7 +4775,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             && matches!(block, Block::Paragraph(p) if {
                                 let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                                 let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                state.pb.slot_top - resolve_line_h(ls, fs, lhr) < fz.top_y
+                                // An indented empty anchor can enter the float
+                                // through its before-spacing, before its line starts.
+                                let before = if ctx.compat_mode >= 15
+                                    && (p.indent_left != 0.0 || p.indent_right != 0.0)
+                                    && is_text_empty(&p.runs)
+                                {
+                                    state.prev_space_after.max(p.space_before)
+                                } else { 0.0 };
+                                state.pb.slot_top - before - resolve_line_h(ls, fs, lhr) < fz.top_y
                             }))
                     {
                         // Cursor is within, entering, or (for paragraph-relative
@@ -4565,6 +4795,21 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let (ex_left, ex_right) = fz.exclusion_at_y(state.pb.slot_top);
                         let space_right = (col_x + col_w) - (ex_right + fz.right_from_text);
                         let space_left = (ex_left - fz.left_from_text) - col_x;
+                        // Word 2013+ requires even an empty line's indented box
+                        // to fit beside a float; legacy mode ignores its indents.
+                        let (space_left, space_right) = match block {
+                            Block::Paragraph(p)
+                                if ctx.compat_mode >= 15 && is_text_empty(&p.runs) =>
+                            {
+                                let left = col_x + p.indent_left;
+                                let right = col_x + col_w - p.indent_right;
+                                (
+                                    (ex_left - fz.left_from_text).min(right) - left,
+                                    right - (ex_right + fz.right_from_text).max(left),
+                                )
+                            }
+                            _ => (space_left, space_right),
+                        };
                         let min_wrap_w: f32 = 72.0;
                         let enough_space = if fz.wrap_text == WrapText::BothSides {
                             // For bothSides, check combined width of both regions

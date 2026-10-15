@@ -321,6 +321,8 @@ pub(super) struct WordChunk {
     /// individually, so the space is drawn as an invisible glyph after the word
     /// purely so text extraction and screen readers see the word boundary.
     pub(super) space_after: bool,
+    /// Literal break spaces before this chunk (more than one when typed so).
+    pub(super) preceding_spaces: usize,
     /// The math zone's spoken form, for its Formula (see `Run::formula`).
     pub(super) formula: Option<Arc<str>>,
     /// Pair kerning is on for this run at this size (`w:kern`); `width` already
@@ -461,6 +463,7 @@ impl WordChunk {
             actual_text: None,
             lang: chunk_lang(run, word),
             space_after: false,
+            preceding_spaces: 1,
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
             checkbox: run.checkbox,
@@ -547,6 +550,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
+            preceding_spaces: 1,
         }
     }
 
@@ -610,6 +614,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
+            preceding_spaces: 1,
         }
     }
 
@@ -678,6 +683,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
+            preceding_spaces: 1,
         }
     }
 }
@@ -924,6 +930,8 @@ pub(super) struct TextLine {
     pub(super) break_lhr: Option<f32>,
     /// An empty line made by leading spaces wrapping an inline picture.
     pub(super) leading_space_wrap: bool,
+    /// An empty line retained by a wrapping tab; its consumed tabs size the line.
+    pub(super) leading_tab_wrap: bool,
     /// First chunk after the line's last tab: justification stretches only the
     /// gaps from here on (Word starts the text at the tab stop).
     pub(super) justify_from: usize,
@@ -969,7 +977,7 @@ pub(super) fn size_lines_by_own_runs(
     let by_pdf_name: HashMap<&str, &FontEntry> =
         fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
     for line in lines.iter_mut() {
-        if line.leading_space_wrap {
+        if line.leading_space_wrap || line.leading_tab_wrap {
             if let Some(fs) = line.break_font_size {
                 line.pitch = Some(super::resolve_line_h(line_spacing, fs, line.break_lhr));
             }
@@ -1436,7 +1444,7 @@ fn spaces_before_each(chunks: &[WordChunk]) -> Vec<usize> {
         .iter()
         .scan((0usize, None::<(f32, bool)>), |(n, prev), c| {
             if prev.is_some_and(|(end, was_space)| was_space || c.x_offset > end + 0.01) {
-                *n += 1;
+                *n += c.preceding_spaces;
             }
             let is_space = c.inline_image_name.is_none() && c.text.chars().all(is_break_space);
             *prev = Some((c.x_offset + c.width, is_space));
@@ -1637,6 +1645,7 @@ pub(super) fn build_paragraph_lines(
     let mut display_wrapped = false;
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
+    let mut pending_space_count: usize = 0;
     // pending_space_w minus CJK auto-spacing: a space character really occurred.
     let mut pending_real_space = false;
     // Underline state of the run that emitted the pending whitespace. A space
@@ -1749,6 +1758,7 @@ pub(super) fn build_paragraph_lines(
             lines.push(line);
             current_x = 0.0;
             pending_space_w = 0.0;
+            pending_space_count = 0;
             pending_real_space = false;
             prev_last_char = None;
             continue;
@@ -1783,6 +1793,7 @@ pub(super) fn build_paragraph_lines(
                         cur_right_info = Some((current_chunks.len(), rx, rw));
                         in_right_region = true;
                         pending_space_w = 0.0;
+                        pending_space_count = 0;
                         // Retry placement in right region
                         let proposed_x2 = 0.0;
                         if proposed_x2 + img_w <= rw {
@@ -1820,6 +1831,7 @@ pub(super) fn build_paragraph_lines(
                     current_x = proposed_x;
                 }
                 pending_space_w = 0.0;
+                pending_space_count = 0;
 
                 current_chunks.push(WordChunk::image(
                     pdf_name,
@@ -1940,6 +1952,8 @@ pub(super) fn build_paragraph_lines(
         let mut prev_char = None;
         let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
         while let Some((space_count, mut source)) = words.pop_front() {
+            pending_space_count += space_count;
+            let literal_spaces = pending_space_count;
             let mut shown = caps_word(run, source);
             pending_space_w +=
                 space_count as f32 * word_space_width(run, entry, eff_fs, source, &mut prev_char);
@@ -2109,6 +2123,7 @@ pub(super) fn build_paragraph_lines(
                     &mut cur_right_info,
                 ));
                 pending_space_w = 0.0;
+                pending_space_count = 0;
                 word_start = 0;
                 push_word_chunks(
                     &mut current_chunks,
@@ -2214,6 +2229,7 @@ pub(super) fn build_paragraph_lines(
                             0.0
                         };
                         pending_space_w = 0.0;
+                        pending_space_count = 0;
                         word_start = current_chunks.len();
                         push_word_chunks(
                             &mut current_chunks,
@@ -2270,6 +2286,7 @@ pub(super) fn build_paragraph_lines(
                         cur_right_info = Some((0, rx, rw));
                         in_right_region = true;
                         pending_space_w = 0.0;
+                        pending_space_count = 0;
                         word_start = 0;
                         push_word_chunks(
                             &mut current_chunks,
@@ -2306,10 +2323,12 @@ pub(super) fn build_paragraph_lines(
                 ));
             }
             pending_space_w = 0.0;
+            pending_space_count = 0;
 
             if !is_continuation {
                 word_start = current_chunks.len();
             }
+            let chunk_start = current_chunks.len();
             push_word_chunks(
                 &mut current_chunks,
                 entry,
@@ -2323,6 +2342,13 @@ pub(super) fn build_paragraph_lines(
                 ww,
                 space_rtl,
             );
+            if literal_spaces > 1
+                && !pending_space_underline
+                && chunk_start > 0
+                && let Some(c) = current_chunks.get_mut(chunk_start)
+            {
+                c.preceding_spaces = literal_spaces;
+            }
             current_x += ww;
         }
 
@@ -2333,6 +2359,7 @@ pub(super) fn build_paragraph_lines(
             .take_while(|c| is_break_space(*c))
             .count();
         if trailing_spaces > 0 {
+            pending_space_count += trailing_spaces;
             pending_space_w +=
                 trailing_spaces as f32 * word_space_width(run, entry, eff_fs, "", &mut prev_char);
             pending_real_space = true;
@@ -2623,6 +2650,7 @@ pub(super) fn build_tabbed_line(
     // or anywhere after an explicit stop past the margin before compat 15.
     let mut line_reach = 0.0f32;
 
+    let mut tab_line_metrics: Option<(f32, Option<f32>)> = None;
     for (seg_idx, (seg_runs, seg_indices, tab_before, tab_run_before)) in
         segments.iter().enumerate()
     {
@@ -2741,10 +2769,22 @@ pub(super) fn build_tabbed_line(
                 // tabs take two lines in Word); one tab on an empty line stays.
                 && (!all_chunks.is_empty() || current_x > 0.0)
             {
-                result_lines.push(TextLine {
+                let mut line = TextLine {
                     justify_from: std::mem::take(&mut justify_from),
                     ..finish_line(&mut all_chunks)
-                });
+                };
+                // Leading tabs occupy a line even without printable chunks.
+                // The overflowing tab moves with its following word; the
+                // tabs already consumed size the otherwise blank line.
+                if line.chunks.is_empty()
+                    && let Some((font_size, lhr)) = tab_line_metrics
+                {
+                    line.break_font_size = Some(font_size);
+                    line.break_lhr = lhr;
+                    line.leading_tab_wrap = true;
+                }
+                tab_line_metrics = None;
+                result_lines.push(line);
                 tab_wrapped_line = true;
                 line_reach = 0.0;
                 current_x = 0.0;
@@ -2759,6 +2799,18 @@ pub(super) fn build_tabbed_line(
             }
             if stop.alignment != TabAlignment::Left {
                 line_reach = line_reach.max(effective_tab_target);
+            }
+            if let Some(tab_run) = tab_run_before {
+                let entry = seen_fonts
+                    .get(font_key_buf(tab_run, &mut key_buf))
+                    .expect("font registered");
+                let fs = effective_font_size(tab_run, entry);
+                let lhr = entry.line_h_ratio;
+                if tab_line_metrics.is_none_or(|(old_fs, old_lhr)| {
+                    fs * lhr.unwrap_or(1.2) > old_fs * old_lhr.unwrap_or(1.2)
+                }) {
+                    tab_line_metrics = Some((fs, lhr));
+                }
             }
 
             // Draw leader fill between end of previous text and start of aligned text
@@ -2847,6 +2899,7 @@ pub(super) fn build_tabbed_line(
                     ..finish_line_with_break(&mut all_chunks)
                 });
                 tab_wrapped_line = false;
+                tab_line_metrics = None;
                 line_reach = 0.0;
                 current_x = 0.0;
                 is_first_line = false;
@@ -2958,6 +3011,7 @@ pub(super) fn build_tabbed_line(
                         ..finish_line(&mut all_chunks)
                     });
                     tab_wrapped_line = false;
+                    tab_line_metrics = None;
                     line_reach = 0.0;
                     current_x = 0.0;
                     is_first_line = false;
@@ -4642,6 +4696,48 @@ mod tests {
             split_preserving_spaces("2019-2024"),
             vec![(0, "2019-"), (0, "2024")]
         );
+    }
+
+    #[test]
+    fn repeated_spaces_keep_their_justification_weight_across_runs() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = |s: &str| Run {
+            text: s.into(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        for runs in [
+            vec![run("Label  MARK tail")],
+            vec![run("Label "), run(" "), run("MARK tail")],
+        ] {
+            let lines = build_paragraph_lines(
+                &runs,
+                &fonts,
+                200.0,
+                0.0,
+                &HashMap::new(),
+                &HashMap::new(),
+                None,
+                None,
+                None,
+                plain_layout(false),
+            );
+            assert_eq!(spaces_before_each(&lines[0].chunks), vec![0, 2, 3]);
+        }
+        let lines = build_paragraph_lines(
+            &[run("Label  MARK tail")],
+            &fonts,
+            35.0,
+            0.0,
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+            None,
+            None,
+            plain_layout(false),
+        );
+        for line in lines {
+            assert_eq!(spaces_before_each(&line.chunks)[0], 0);
+        }
     }
 
     #[test]

@@ -553,10 +553,25 @@ pub(super) fn auto_fit_columns(
             .iter()
             .all(|&w| w > 0.0 && (w - uniform_cell_preferences[0]).abs() < 0.01)
         && uniform_cell_preferences[0] * ncols as f32 > total;
-    let keep_saved_grid = table.auto_width
-        && !table.fixed_layout
-        && ((!grid_uniform && has_nested_table)
-            || (saved_grid_asymmetric && stale_uniform_preferences));
+    // An explicit table width can also carry a content-derived saved grid.
+    // A tcW that no longer fits its cell's text is a stale preference, not
+    // evidence that the saved nested-table host column should be rescaled.
+    let stale_content_preference = || {
+        table.rows.iter().any(|row| {
+            row.grid_cells().any(|(col, span, cell)| {
+                span == 1
+                    && cell.width > 0.0
+                    && min_widths
+                        .get(col)
+                        .is_some_and(|minimum| *minimum > cell.width + 0.01)
+            })
+        })
+    };
+    let keep_saved_grid = !table.fixed_layout
+        && ((!grid_uniform
+            && has_nested_table
+            && (table.auto_width || stale_content_preference()))
+            || (table.auto_width && saved_grid_asymmetric && stale_uniform_preferences));
     if !keep_saved_grid {
         for row in &table.rows {
             for (grid_col, span, cell) in row.grid_cells() {
@@ -671,6 +686,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) font_substituted: bool,
     pub(super) alignment: Alignment,
     pub(super) space_before: f32,
+    /// Collapsed spacing less the previous page's already consumed after gap.
+    pub(super) continuation_space_before: f32,
     pub(super) indent_left: f32,
     pub(super) indent_right: f32,
     pub(super) indent_hanging: f32,
@@ -773,6 +790,108 @@ pub(super) struct HfSubstitution<'a> {
     pub(super) page_num_format: Option<&'a str>,
 }
 
+// Leading margin-anchored registration tables may precede visible cell text
+// without contributing to flow height when measured empty paragraphs already
+// clear their entire extent. Keep the old narrow path for all other layouts.
+fn spacers_clear_nested_registration(
+    cell: &crate::model::TableCell,
+    block_idx: usize,
+    cell_text_w: f32,
+    ctx: &RenderContext,
+    hf_sub: Option<&HfSubstitution>,
+) -> bool {
+    if hf_sub.is_some() || cell.text_direction != TextDirection::LrTb {
+        return false;
+    }
+    let tables: Vec<&Table> = cell
+        .content
+        .iter()
+        .map_while(|b| match b {
+            Block::Table(t) => Some(t),
+            Block::Paragraph(_) => None,
+        })
+        .collect();
+    if tables.is_empty() || tables.len() > 2 || block_idx >= tables.len() {
+        return false;
+    }
+    let mut occupied = 0.0f32;
+    for table in &tables {
+        let Some(pos) = &table.position else {
+            return false;
+        };
+        if table.rows.len() != 1
+            || pos.v_anchor != "text"
+            || pos.h_anchor != "margin"
+            || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
+            || table.table_indent != 0.0
+            || table.alignment != crate::model::TableAlignment::Left
+        {
+            return false;
+        }
+        let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
+        apply_pct_width(table, &mut widths, cell_text_w, ctx.compat_mode);
+        let strip =
+            cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
+        if strip < MIN_NESTED_FLOAT_STRIP {
+            return false;
+        }
+        occupied += compute_row_layouts(table, &widths, ctx, hf_sub)
+            .iter()
+            .map(|r| r.height)
+            .sum::<f32>()
+            + pos.v_offset_pt.max(0.0)
+            + pos.top_from_text
+            + pos.bottom_from_text;
+    }
+    let mut empty_space = 0.0f32;
+    let mut prev_after = 0.0f32;
+    let mut visible_seen = false;
+    for block in &cell.content[tables.len()..] {
+        let Block::Paragraph(p) = block else {
+            return false;
+        };
+        if p.frame_props.is_some()
+            || p.paragraph_mark_vanish
+            || p.image.is_some()
+            || p.inline_chart.is_some()
+            || !p.smartart.is_empty()
+            || !p.floating_images.is_empty()
+            || !p.textboxes.is_empty()
+            || !p.connectors.is_empty()
+            || p.contextual_spacing
+            || p.space_before_auto
+            || p.space_after_auto
+            || p.runs.iter().any(|r| {
+                r.is_tab
+                    || r.is_line_break
+                    || r.inline_image.is_some()
+                    || r.field_code.is_some()
+                    || r.math.is_some()
+                    || r.vanish
+                    || r.footnote_id.is_some()
+                    || r.endnote_id.is_some()
+            })
+        {
+            return false;
+        }
+        if visible_seen {
+            continue;
+        }
+        empty_space += prev_after.max(p.space_before);
+        if p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+            if empty_space < occupied {
+                return false;
+            }
+            visible_seen = true;
+        } else {
+            let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
+            empty_space += resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+            prev_after = p.space_after;
+        }
+    }
+    visible_seen
+}
+
 pub(super) fn compute_row_layouts(
     table: &Table,
     col_widths: &[f32],
@@ -826,6 +945,8 @@ pub(super) fn compute_row_layouts(
                     let mut prev_space_after = 0.0f32;
                     let mut para_idx = 0usize;
                     let mut prev_was_nested_table = false;
+                    let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
+                    let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
                     let block_count = cell.content.len();
                     for (block_idx, block) in cell.content.iter().enumerate() {
@@ -852,6 +973,24 @@ pub(super) fn compute_row_layouts(
                                 } else {
                                     &para.runs
                                 };
+                                // A cell paragraph containing only ordinary
+                                // padding spaces has the paragraph mark's line
+                                // metrics in Word, not the spaces' run format.
+                                let padding_mark;
+                                let runs = if para.content_height == 0.0
+                                    && runs.iter().any(|run| !run.text.is_empty())
+                                    && runs.iter().all(|run| !run.is_tab
+                                        && !run.is_line_break && run.math.is_none()
+                                        && run.inline_image.is_none()
+                                        && run.text.bytes().all(|b| b == b' '))
+                                {
+                                    padding_mark = crate::model::Run {
+                                        font_size: para.paragraph_mark_font_size.unwrap_or(10.0),
+                                        font_name: para.paragraph_mark_font_name.clone().unwrap_or_default(),
+                                        ..Default::default()
+                                    };
+                                    std::slice::from_ref(&padding_mark)
+                                } else { runs };
                                 // Size the cell line from the tallest run, not the
                                 // first — a small leading run (e.g. padding spaces)
                                 // must not pull the baseline up. Math runs are
@@ -1075,6 +1214,18 @@ pub(super) fn compute_row_layouts(
                                             line_h,
                                             font_size * ascender_ratio,
                                         );
+                                        // A final empty line after a break contains the
+                                        // paragraph mark, rather than the preceding text.
+                                        if runs.last().is_some_and(|r| r.is_line_break)
+                                            && let Some(last) = lines.last_mut().filter(|l| l.chunks.is_empty())
+                                            && let Some(mark_size) = para.paragraph_mark_font_size
+                                        {
+                                            let mark_lhr = para.paragraph_mark_font_name.as_deref()
+                                                .and_then(|name| ctx.fonts.get(name))
+                                                .and_then(|font| run_line_metrics(font, "").0)
+                                                .or(tallest_lhr);
+                                            last.pitch = Some(resolve_line_h(effective_ls, mark_size, mark_lhr));
+                                        }
                                     }
                                     // hideMark also hides the mark left alone on the
                                     // line after the cell's closing break, with its
@@ -1214,6 +1365,7 @@ pub(super) fn compute_row_layouts(
                                     font_substituted,
                                     alignment: para.alignment,
                                     space_before,
+                                    continuation_space_before: super::own_space_before(space_before, prev_space_after),
                                     indent_left: para.indent_left,
                                     indent_right: para.indent_right,
                                     indent_hanging: para.indent_hanging,
@@ -1277,7 +1429,7 @@ pub(super) fn compute_row_layouts(
                                         && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty()
                                 };
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && matches!(cell.v_align, crate::model::CellVAlign::Top))
+                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (top_aligned || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
@@ -1290,7 +1442,7 @@ pub(super) fn compute_row_layouts(
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
-                                        })
+                                        }) || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
@@ -1326,7 +1478,8 @@ pub(super) fn compute_row_layouts(
                                     floating_x_offset,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
-                                prev_was_nested_table = floating_offset.is_none();
+                                // A centered cell only floats a positive offset (filter above).
+                                prev_was_nested_table = floating_offset.is_none() || centered;
                                 para_idx += 1;
                             }
                         }
@@ -1338,7 +1491,8 @@ pub(super) fn compute_row_layouts(
                     // the row height — the mark glyph height and line_h are
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
-                        && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset: None, .. }))
+                        && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
+                            if floating_offset.is_none() || centered)
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
@@ -1721,6 +1875,11 @@ pub(super) fn partial_row_height(
 /// "Remarks" paragraph keeps its 4pt).
 pub(super) fn chunk_space_before(item: &CellContentItem, pi: usize, start: &CellCursor) -> f32 {
     match item {
+        CellContentItem::Paragraph(p)
+            if pi == start.item && start.line == 0 && *start != CELL_START =>
+        {
+            p.continuation_space_before
+        }
         CellContentItem::Paragraph(p) if pi != start.item || start.line == 0 => p.space_before,
         _ => 0.0,
     }
@@ -2078,6 +2237,20 @@ mod tests {
             auto_fit_columns(&table, &fonts, None, None),
             vec![250.0, 150.0]
         );
+    }
+
+    #[test]
+    fn continued_cell_drops_previous_after_but_keeps_own_before() {
+        for own in [0.0, 4.0] {
+            let item = CellContentItem::Paragraph(CellParagraphLayout {
+                space_before: 8.0,
+                continuation_space_before: own,
+                ..Default::default()
+            });
+            assert_eq!(chunk_space_before(&item, 1, &CELL_START), 8.0);
+            assert_eq!(chunk_space_before(&item, 1, &CellCursor::at(1, 0)), own);
+            assert_eq!(chunk_space_before(&item, 1, &CellCursor::at(1, 1)), 0.0);
+        }
     }
 
     /// stem_partnerships p4 (annotation #237): a 10-line cell paragraph after a

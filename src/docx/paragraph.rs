@@ -466,7 +466,9 @@ pub(super) fn resolve_indents(
         // attributes fall back to the paragraph style values.
         if let Some(s) = para_style {
             if numbering_ind {
-                let f = if first_hanging_direct {
+                let f = if first_hanging_direct || numbering.indent_hanging != 0.0 {
+                    // A direct left/right alone does not replace the level's
+                    // hanging with the style's first-line indent.
                     f
                 } else {
                     s.indent_first_line
@@ -527,6 +529,46 @@ pub(super) fn resolve_indents(
 mod tests {
     use super::*;
     use crate::model::Run;
+
+    #[test]
+    fn list_level_hanging_survives_direct_left_or_right() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+
+        for (ind, left, hanging, first) in [
+            (r#"w:left="1418""#, 70.9, 18.0, 0.0),
+            (r#"w:right="100""#, 98.95, 18.0, 0.0),
+            (r#"w:left="1418" w:firstLine="360""#, 70.9, 0.0, 18.0),
+            (r#"w:left="1418" w:firstLine="0""#, 70.9, 0.0, 0.0),
+            (r#"w:left="1418" w:hanging="284""#, 70.9, 14.2, 0.0),
+        ] {
+            let document = format!(
+                r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="List"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:ind {ind}/></w:pPr><w:r><w:t>Public list item</w:t></w:r></w:p><w:sectPr/></w:body></w:document>"#
+            );
+            let styles = format!(
+                r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="List"><w:name w:val="List"/><w:pPr><w:ind w:left="720" w:firstLine="360"/></w:pPr></w:style></w:styles>"#
+            );
+            let numbering = format!(
+                r#"<w:numbering xmlns:w="{WML_NS}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="1979" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>"#
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            for (name, xml) in [
+                ("word/document.xml", document),
+                ("word/styles.xml", styles),
+                ("word/numbering.xml", numbering),
+            ] {
+                zip.start_file(name, SimpleFileOptions::default()).unwrap();
+                zip.write_all(xml.as_bytes()).unwrap();
+            }
+            let parsed = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            let crate::model::Block::Paragraph(p) = &parsed.sections[0].blocks[0] else {
+                panic!("expected a paragraph");
+            };
+            assert!((p.indent_left - left).abs() < 0.001, "{ind}");
+            assert!((p.indent_hanging - hanging).abs() < 0.001, "{ind}");
+            assert!((p.indent_first_line - first).abs() < 0.001, "{ind}");
+        }
+    }
 
     #[test]
     fn hanging_indent_adds_one_stop_at_the_indent() {
