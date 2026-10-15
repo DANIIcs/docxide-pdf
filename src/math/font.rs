@@ -1,6 +1,6 @@
 //! The math font: its MATH table, `ssty` alternates and glyph metrics.
 
-use ttf_parser::gsub::{AlternateSubstitution, SubstitutionSubtable};
+use ttf_parser::gsub::{AlternateSubstitution, SingleSubstitution, SubstitutionSubtable};
 use ttf_parser::math::{Constants, MathValue};
 use ttf_parser::{Face, GlyphId, Tag};
 
@@ -9,6 +9,8 @@ pub(crate) struct MathFont<'a> {
     constants: Constants<'a>,
     /// The `ssty` feature's alternate subtables, found once.
     ssty: Vec<AlternateSubstitution<'a>>,
+    /// The `flac` feature's single substitutions (accents over tall bases).
+    flac: Vec<SingleSubstitution<'a>>,
     upem: f32,
 }
 
@@ -23,29 +25,41 @@ impl<'a> MathFont<'a> {
     pub(crate) fn new(data: &'a [u8], index: u32) -> Option<Self> {
         let face = Face::parse(data, index).ok()?;
         let constants = face.tables().math?.constants?;
-        let ssty = face
-            .tables()
-            .gsub
-            .and_then(|gsub| {
-                let feature = gsub.features.find(Tag::from_bytes(b"ssty"))?;
-                let lookups = feature.lookup_indices.into_iter();
-                Some(
-                    lookups
-                        .filter_map(|li| gsub.lookups.get(li))
-                        .flat_map(|l| l.subtables.into_iter::<SubstitutionSubtable>())
-                        .filter_map(|st| match st {
-                            SubstitutionSubtable::Alternate(alt) => Some(alt),
-                            _ => None,
-                        })
-                        .collect(),
-                )
+        let subtables = |tag: &[u8; 4]| -> Vec<SubstitutionSubtable<'a>> {
+            face.tables()
+                .gsub
+                .and_then(|gsub| {
+                    let feature = gsub.features.find(Tag::from_bytes(tag))?;
+                    let lookups = feature.lookup_indices.into_iter();
+                    Some(
+                        lookups
+                            .filter_map(|li| gsub.lookups.get(li))
+                            .flat_map(|l| l.subtables.into_iter::<SubstitutionSubtable>())
+                            .collect(),
+                    )
+                })
+                .unwrap_or_default()
+        };
+        let ssty = subtables(b"ssty")
+            .into_iter()
+            .filter_map(|st| match st {
+                SubstitutionSubtable::Alternate(alt) => Some(alt),
+                _ => None,
             })
-            .unwrap_or_default();
+            .collect();
+        let flac = subtables(b"flac")
+            .into_iter()
+            .filter_map(|st| match st {
+                SubstitutionSubtable::Single(s) => Some(s),
+                _ => None,
+            })
+            .collect();
         Some(Self {
             upem: face.units_per_em() as f32,
             face,
             constants,
             ssty,
+            flac,
         })
     }
 
@@ -102,6 +116,20 @@ impl<'a> MathFont<'a> {
         })
     }
 
+    /// The flattened form of an accent, for bases taller than
+    /// FlattenedAccentBaseHeight.
+    pub(super) fn flac(&self, gid: u16) -> Option<u16> {
+        self.flac.iter().find_map(|st| {
+            let i = st.coverage().get(GlyphId(gid))?;
+            match st {
+                SingleSubstitution::Format1 { delta, .. } => {
+                    Some((i32::from(gid) + i32::from(*delta)) as u16)
+                }
+                SingleSubstitution::Format2 { substitutes, .. } => substitutes.get(i).map(|g| g.0),
+            }
+        })
+    }
+
     /// Advance, ink ascent and ink descent at `size`.
     pub(super) fn metrics(&self, gid: u16, size: f32) -> (f32, f32, f32) {
         let g = GlyphId(gid);
@@ -134,18 +162,28 @@ impl<'a> MathFont<'a> {
         Some(self.pt(v.value as f32, size))
     }
 
-    /// The smallest variant of `gid` at least `target` points tall (or wide),
-    /// else its assembly built to that length, else the largest variant.
-    pub(super) fn stretch(&self, gid: u16, target: f32, size: f32, vertical: bool) -> Stretched {
-        let Some(variants) = self.face.tables().math.and_then(|m| m.variants) else {
-            return Stretched::Glyph(gid);
-        };
+    /// The MATH table's variants and `gid`'s construction in one direction.
+    fn construction(
+        &self,
+        gid: u16,
+        vertical: bool,
+    ) -> Option<(
+        ttf_parser::math::Variants<'a>,
+        ttf_parser::math::GlyphConstruction<'a>,
+    )> {
+        let variants = self.face.tables().math?.variants?;
         let constructions = if vertical {
             variants.vertical_constructions
         } else {
             variants.horizontal_constructions
         };
-        let Some(c) = constructions.get(GlyphId(gid)) else {
+        Some((variants, constructions.get(GlyphId(gid))?))
+    }
+
+    /// The smallest variant of `gid` at least `target` points tall (or wide),
+    /// else its assembly built to that length, else the largest variant.
+    pub(super) fn stretch(&self, gid: u16, target: f32, size: f32, vertical: bool) -> Stretched {
+        let Some((variants, c)) = self.construction(gid, vertical) else {
             return Stretched::Glyph(gid);
         };
         let mut largest = gid;
@@ -155,9 +193,51 @@ impl<'a> MathFont<'a> {
                 return Stretched::Glyph(largest);
             }
         }
-        let Some(assembly) = c.assembly else {
-            return Stretched::Glyph(largest);
+        match c.assembly {
+            Some(a) => Stretched::Assembly(self.assembly(&variants, a, target, size, vertical)),
+            None => Stretched::Glyph(largest),
+        }
+    }
+
+    /// An accent at most `room` points wide: its assembly built to `room`
+    /// when that fits, else its widest variant that fits (its narrowest when
+    /// none does), in its `flac` form when `flat`.
+    pub(super) fn accent(&self, gid: u16, room: f32, size: f32, flat: bool) -> Stretched {
+        let flatten = |g: u16| if flat { self.flac(g).unwrap_or(g) } else { g };
+        let Some((variants, c)) = self.construction(gid, false) else {
+            return Stretched::Glyph(flatten(gid));
         };
+        if let Some(a) = c.assembly {
+            let parts = self.assembly(&variants, a, room, size, false);
+            if parts
+                .last()
+                .is_some_and(|&(g, x)| x + self.metrics(g, size).0 <= room + 0.01)
+            {
+                return Stretched::Assembly(parts);
+            }
+        }
+        let fits = |v: &ttf_parser::math::GlyphVariant| {
+            self.pt(v.advance_measurement as f32, size) <= room
+        };
+        let best = c
+            .variants
+            .into_iter()
+            .take_while(fits)
+            .last()
+            .or(c.variants.get(0))
+            .map_or(gid, |v| v.variant_glyph.0);
+        Stretched::Glyph(flatten(best))
+    }
+
+    /// An assembly's parts and their offsets, built to `target` points.
+    fn assembly(
+        &self,
+        variants: &ttf_parser::math::Variants<'a>,
+        assembly: ttf_parser::math::GlyphAssembly<'a>,
+        target: f32,
+        size: f32,
+        vertical: bool,
+    ) -> Vec<(u16, f32)> {
         let parts: Vec<_> = assembly.parts.into_iter().collect();
         let overlap = variants.min_connector_overlap as f32;
         let target_units = target * self.upem / size;
@@ -202,6 +282,6 @@ impl<'a> MathFont<'a> {
                 o.1 += self.metrics(o.0, size).2;
             }
         }
-        Stretched::Assembly(out)
+        out
     }
 }

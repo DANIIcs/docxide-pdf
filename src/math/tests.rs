@@ -270,6 +270,45 @@ fn display_breaks_prefer_relations_past_the_wrap_indent() {
 }
 
 #[test]
+fn accent_fits_within_its_base() {
+    // Word (probe mp22_acc): the widest hat that fits on both sides of the
+    // attachment point; 𝐴's apex leaves less room than 𝐻 gives, and a hat
+    // over xyz stays narrower than the three letters.
+    let data = cambria_math();
+    let font = MathFont::new(&data, 1).expect("Cambria Math face");
+    let hat_width = |body: &str| {
+        let root = vec![MathNode::Accent {
+            chr: '\u{302}',
+            body: vec![run(body)],
+        }];
+        let b = layout(
+            &root,
+            false,
+            12.0,
+            &font,
+            &MathSettings::default(),
+            &|_, _, _| None,
+        );
+        let gid = b
+            .items
+            .iter()
+            .find_map(|it| match it {
+                MathItem::Glyph {
+                    gid, ch: '\u{302}', ..
+                } => Some(*gid),
+                _ => None,
+            })
+            .unwrap();
+        (font.metrics(gid, 12.0).0, b.width)
+    };
+    let (a, _) = hat_width("A");
+    let (h, _) = hat_width("H");
+    let (x3, base) = hat_width("xyz");
+    assert!(a < 4.0 && (h - 6.66).abs() < 0.05, "A {a} H {h}");
+    assert!((x3 - 11.34).abs() < 0.05 && x3 < base, "xyz hat {x3}");
+}
+
+#[test]
 fn display_fraction_shifts() {
     // a/b on its own line at 12pt: numerator 9.05 up, denominator 7.95 down.
     let root = vec![MathNode::Frac {

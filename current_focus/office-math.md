@@ -135,6 +135,16 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   side calls for (a ⏞ asked to go below is a ⏟; also ⏜⏝ and ⎴⎵), and an
   `m:chr` without a value draws none. Probes `mp9_gc` (3 characters × pos ×
   vertJc × 2 bodies, 12 and 24pt: all within 0.27pt) and `mp10_gc`.
+- Accents (`m:acc`): the widest variant that fits within the base on both
+  sides of its top-accent attachment, 2·min(attachment, advance −
+  attachment) (a several-glyph base attaches at its centre, so its width):
+  𝑥 and 𝑏 take the 4.88pt hat, 𝐻 the 6.81, 𝑎𝑏 and 𝑥𝑦𝑧 the 11.34, 𝐴 (apex at
+  5.32 of 7.60) the narrowest. Over a base taller than
+  FlattenedAccentBaseHeight the accent takes its `flac` form. An extensible
+  accent (⃗) stretches to that room when its assembly fits it, else takes
+  its glyph. The accent rises by the base's height above AccentBaseHeight.
+  Probe `mp22_acc` (6 accents × 7 bases): every glyph as Word's, positions
+  within 0.44pt.
 - `m:borderBox`: an overbar's gap and rule all round (border 1.94pt off 12pt
   content, 0.72pt rule).
 - A display-math paragraph takes its own `m:oMathParaPr/m:jc` (centred by
@@ -182,6 +192,5 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   0.3–0.6pt lower than the half-surplus rule at every size from 10 to 72pt
   (an absolute offset, not a fraction of the em; the drop limit shows the
   same). Not found in the MATH constants; snapping is ±0.25pt.
-- Accents over tall bases: not yet measured. The parts of a broken inline zone keep
-  the whole zone's height.
+- `m:wrapRight` (continuation lines flush right) is not done.
 - An `m:nor` superscript sits 0.6pt closer to its base than Word's (e^max).

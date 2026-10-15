@@ -1049,15 +1049,24 @@ impl<'a> Ctx<'a> {
     fn accent(&self, chr: char, body: &MathRow, st: St) -> B {
         let base = self.row(body, st.cramp());
         let size = self.size(st);
-        let acc = self.stretch(chr, base.w, size, false);
-        // Accents are drawn for x-height letters; a taller base lifts them.
-        let dy = (base.asc - self.k(st, Constants::accent_base_height)).max(0.0);
         let attach = |b: &B| {
             b.single_glyph
                 .and_then(|g| self.font.top_accent_attachment(g, size))
                 .unwrap_or(b.w / 2.0)
         };
-        let dx = attach(&base) - attach(&acc);
+        // Word takes the widest accent that fits within the base on both
+        // sides of its attachment point (𝐴's apex leaves the narrowest hat),
+        // flattened over bases taller than FlattenedAccentBaseHeight; an
+        // extensible accent (⃗) stretches to that room when its assembly
+        // fits it (probe `mp22_acc`: every glyph as Word's).
+        let base_attach = attach(&base);
+        let room = 2.0 * base_attach.min(base.w - base_attach);
+        let flat = base.asc > self.k(st, Constants::flattened_accent_base_height);
+        let found = self.font.accent(self.font.glyph(chr, 0), room, size, flat);
+        let acc = self.stretched(found, chr, size, false);
+        // Accents are drawn for x-height letters; a taller base lifts them.
+        let dy = (base.asc - self.k(st, Constants::accent_base_height)).max(0.0);
+        let dx = base_attach - attach(&acc);
         let mut b = B::ends_of(&base);
         let w = base.w;
         b.put(base, 0.0, 0.0);
@@ -1323,7 +1332,17 @@ impl<'a> Ctx<'a> {
     /// a larger variant, or an assembly of parts.
     fn stretch(&self, ch: char, target: f32, size: f32, vertical: bool) -> B {
         let gid = self.font.glyph(ch, 0);
-        match self.font.stretch(gid, target, size, vertical) {
+        self.stretched(
+            self.font.stretch(gid, target, size, vertical),
+            ch,
+            size,
+            vertical,
+        )
+    }
+
+    /// A stretched glyph or assembly as a box.
+    fn stretched(&self, s: font::Stretched, ch: char, size: f32, vertical: bool) -> B {
+        match s {
             font::Stretched::Glyph(g) => self.glyph_id(g, ch, size, None),
             font::Stretched::Assembly(parts) => {
                 // The parts' own extents, which needn't reach the baseline (a
