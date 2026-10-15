@@ -87,7 +87,7 @@ fn xmp_packet(doc: &Document, lang: &str, claims_ua: bool) -> String {
             .replace('"', "&quot;")
     };
     let mut props = format!(
-        "<pdf:Producer>docxside-pdf</pdf:Producer>\
+        "<pdf:Producer>docxide-pdf</pdf:Producer>\
          <dc:language><rdf:Bag><rdf:li>{}</rdf:li></rdf:Bag></dc:language>",
         esc(lang)
     );
@@ -565,7 +565,7 @@ pub(super) fn assemble_pdf_pages(
         if let Some(ref k) = doc.keywords {
             info.keywords(TextStr(k));
         }
-        info.producer(TextStr("docxside-pdf"));
+        info.producer(TextStr("docxide-pdf"));
     }
 
     pdf.pages(pages_id)

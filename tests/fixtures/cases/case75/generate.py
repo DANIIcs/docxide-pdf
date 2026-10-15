@@ -1,7 +1,7 @@
 """Generate case75: Section-wide footnote/endnote property bag (17.11.11 / 17.11.5)
 
 Isolates the SECTION-WIDE w:footnotePr / w:endnotePr that live in w:sectPr
-(word/document.xml), which docxside does not yet parse — src/docx/sections.rs
+(word/document.xml), which docxide does not yet parse — src/docx/sections.rs
 reads no footnote/endnote element. This is distinct from case74, which sets the
 DOCUMENT-WIDE bag in the Settings part (word/settings.xml). To keep the section
 bag the ONLY source of the note format, this fixture ships NO settings.xml
@@ -11,7 +11,7 @@ the plain-decimal default, while a renderer that honors it picks up:
   - sectPr/footnotePr/numFmt = upperRoman  -> footnote marks render  I, II, III
   - sectPr/endnotePr/numFmt  = lowerLetter -> endnote  marks render  a, b
 
-A renderer ignoring the section property bag (today's docxside) prints both as
+A renderer ignoring the section property bag (today's docxide) prints both as
 plain decimal (1, 2, 3 / 1, 2). The reference PDF reveals whether the sectPr-level
 numFmt is honored.
 

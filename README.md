@@ -178,8 +178,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Variable | Description |
 |---|---|
-| `DOCXSIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Lowest priority: used for families the system font directories don't provide. |
-| `DOCXSIDE_NO_FONT_CACHE` | Set to any value to disable the font index disk cache. Forces a full font scan on every conversion. Useful for debugging font resolution issues. |
+| `DOCXIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Lowest priority: used for families the system font directories don't provide. |
+| `DOCXIDE_NO_FONT_CACHE` | Set to any value to disable the font index disk cache. Forces a full font scan on every conversion. Useful for debugging font resolution issues. |
 
 Font scanning results are cached to disk (per-directory, invalidated by mtime). The cache is stored at:
 - **macOS**: `~/Library/Caches/docxide-pdf/font-index.tsv`
@@ -203,7 +203,7 @@ apt install mupdf-tools   # Debian/Ubuntu
 ./tools/run-tests.sh --test visual_comparison
 ```
 
-`.cargo/config.toml` points `DOCXSIDE_FONTS` at a `fonts/` directory that isn't in the repository (the fixtures' fonts can't be redistributed). Without those fonts many fixtures fall back to substitutes and score lower. The accessibility test also needs veraPDF and Poppler (`brew install verapdf poppler`) and skips without them.
+`.cargo/config.toml` points `DOCXIDE_FONTS` at a `fonts/` directory that isn't in the repository (the fixtures' fonts can't be redistributed). Without those fonts many fixtures fall back to substitutes and score lower. The accessibility test also needs veraPDF and Poppler (`brew install verapdf poppler`) and skips without them.
 
 [SCORING.md](SCORING.md) explains every score: the visual metrics, the accessibility metrics and what fails the suite.
 

@@ -1,6 +1,6 @@
 """Generate case76: Footnote placement w:pos="beneathText" (17.11.21)
 
-Isolates the footnote w:pos placement value, which docxside does not yet parse
+Isolates the footnote w:pos placement value, which docxide does not yet parse
 (footnotes are always painted at the page-bottom margin — render_page_footnotes,
 src/pdf/footnotes.rs). Sets the doc-wide footnote bag to:
 

@@ -43,7 +43,7 @@ def score(docx: Path, ref: Path, cli: str, out: Path) -> dict | None:
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     pdf = work / 'generated.pdf'
-    env = dict(os.environ, DOCXSIDE_FONTS=str(ROOT / 'fonts'), DOCXSIDE_NO_FONT_CACHE='1')
+    env = dict(os.environ, DOCXIDE_FONTS=str(ROOT / 'fonts'), DOCXIDE_NO_FONT_CACHE='1')
     try:
         subprocess.run([cli, str(docx), str(pdf)], env=env, capture_output=True, timeout=300)
     except subprocess.TimeoutExpired:

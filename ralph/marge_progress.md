@@ -1,7 +1,7 @@
 # Progress for Marge — OOXML spec coverage audit
 
 Marge walks the OOXML spec (ECMA-376 Part 1 / ISO/IEC 29500-1) one chapter per
-iteration, checking whether docxside-pdf covers each chapter's features.
+iteration, checking whether docxide-pdf covers each chapter's features.
 
 ## Scope & master checklist
 
@@ -220,7 +220,7 @@ PDF — audit it separately against the codebase's VML fallback if needed.
   pages / SDT placeholder text that is NOT part of the main document flow and is
   inserted into the body only when a user/app explicitly drops a building block.
   Word's own PDF export does not render glossary content directly. **CORRECTLY
-  IGNORED**: `grep -rni "glossary\|docPart" src/` → 0 hits — docxside never opens
+  IGNORED**: `grep -rni "glossary\|docPart" src/` → 0 hits — docxide never opens
   `word/glossary/*`, so all 16 elements are unparsed, which is the right behavior
   for a static render. The parser only ever reads `word/document.xml` as the body
   story. No implementable rendering gap exists for this chapter; see the single
@@ -333,7 +333,7 @@ PDF — audit it separately against the codebase's VML fallback if needed.
   values, etc.) because result-region `w:t` after `separate` flows to
   `pending_text` — correct for a static PDF; the 4 **dynamic** field codes
   PAGE, NUMPAGES, STYLEREF, PAGEREF (all under §17.16.5) are re-evaluated at render
-  time against docxside's own pagination (`FieldCode::Page/NumPages/StyleRef/
+  time against docxide's own pagination (`FieldCode::Page/NumPages/StyleRef/
   PageRef`, consumed in `src/pdf/header_footer.rs:31`, `src/pdf/mod.rs:1090`);
   the **`w:hyperlink` element** (§17.16.22) is fully handled — `r:id`→external
   URL and `@anchor`→`#bookmark` both parsed (`runs.rs:594`) and emitted as PDF
@@ -354,7 +354,7 @@ PDF — audit it separately against the codebase's VML fallback if needed.
   renderable elements** — every entry is a value domain (an enumeration, or a
   scalar/measure restriction) referenced by an attribute that belongs to an
   element already audited in 17.2–17.16. So this pass is a *value-domain* audit,
-  not an element audit: for each enumeration whose owning element docxside
+  not an element audit: for each enumeration whose owning element docxide
   actually parses, does the code accept the FULL set of allowed values, or does
   it truncate to a subset? **Audit method**: spot-checked the high-traffic
   enumerations against their parse sites in `src/docx/`. SCALAR/MEASURE simple
@@ -515,7 +515,7 @@ PDF — audit it separately against the codebase's VML fallback if needed.
   the bibliography list. The actual rendered output comes from the **CITATION**
   (§17.16.5.8) and **BIBLIOGRAPHY** field codes, whose results an app computes from
   the `b:Source` data + the XSL named by `@SelectedStyle` and then caches as
-  ordinary `w:p`/`w:t` runs in the body story — and docxside already renders those
+  ordinary `w:p`/`w:t` runs in the body story — and docxide already renders those
   cached results via Clause 17.16's non-dynamic-field path (CITATION/BIBLIOGRAPHY
   are NOT in `is_dynamic_field`, `src/docx/runs.rs:22`, so their post-`separate`
   result text flows to `pending_text` like any static field). Verified: the part is
@@ -576,7 +576,7 @@ PDF — audit it separately against the codebase's VML fallback if needed.
 - **Today**: attribute not read (grep `conformance` in `src/` → none); 0
   fixtures currently use it.
 - **Impact**: mostly informational, BUT `strict`-conformance documents use the
-  Strict (transitional-free) namespace URIs. If docxside matches only the
+  Strict (transitional-free) namespace URIs. If docxide matches only the
   Transitional `w:` namespace URI, a Strict DOCX could fail to parse. Low
   priority (rare in practice).
 - **Likely owner**: root/namespace handling in `src/docx/mod.rs`.
@@ -761,7 +761,7 @@ PDF — audit it separately against the codebase's VML fallback if needed.
 - **Custom-markup revision range markers** — `customXmlInsRangeStart/End`,
   `customXmlDelRangeStart/End`, `customXmlMoveFromRangeStart/End`,
   `customXmlMoveToRangeStart/End` (17.5.1.x): mark tracked-change ranges around
-  custom XML tags. No visual impact in the accepted/final view docxside renders
+  custom XML tags. No visual impact in the accepted/final view docxide renders
   (it already drops `w:del` content and shows `w:ins` content). Leave unparsed.
 
 ---
@@ -887,7 +887,7 @@ PDF — audit it separately against the codebase's VML fallback if needed.
 
 The recommended substitution priority (§17.8.2) is, in descending order:
 `sig` → `charset` → `panose1` → `pitch` → `family` → `altName` → `notTrueType`.
-docxside currently keys substitution off `altName` first, then `family`/CJK
+docxide currently keys substitution off `altName` first, then `family`/CJK
 fallback (`src/fonts/mod.rs:418`) — i.e. only the two *lowest*-priority criteria.
 `altName`-first is a deliberate pragmatic choice (it is the document's explicit
 mapping; see the comment at `fonts/mod.rs:417`) and works well, but the four
@@ -980,7 +980,7 @@ document references a font that is absent, un-embedded, and has no `altName`.
   authoring hints* (whether the app should embed fonts, embed system fonts too, and
   subset them when next saving). They have no bearing on reading + rendering: an
   embedded font present in `word/fonts/*` is used whenever it exists, irrespective
-  of these flags. Only relevant if docxside ever *writes* DOCX. Leave unparsed.
+  of these flags. Only relevant if docxide ever *writes* DOCX. Leave unparsed.
 - **17.8.1 obfuscation / 17.8.2 substitution** — prose/algorithm sections, no
   standalone elements; the algorithm (17.8.1) is implemented and the substitution
   process (17.8.2) exists (see WELL COVERED above and the priority note at the top
@@ -1161,7 +1161,7 @@ All gaps below are facets of the single §17.10.1 rule on what to show when a
 header/footer *type* is missing for a page: the appropriate type "should be
 inherited from the previous section; if this is the first section in the
 document, then a blank header/footer shall be created as needed (**another
-header/footer type shall not be used in its place**)." docxside instead falls
+header/footer type shall not be used in its place**)." docxide instead falls
 back to the section's `default` (odd) header in every missing-type case, which
 both (a) substitutes a different type, and (b) does not inherit the *same* type
 from an earlier section. All are LOW/latent: most real documents that turn on
@@ -1233,14 +1233,14 @@ Word leaves blank.
 
 ## 17.11 Footnotes and Endnotes — gaps
 
-All gaps are LATENT in the current corpus: docxside hardcodes the spec/Word
+All gaps are LATENT in the current corpus: docxide hardcodes the spec/Word
 defaults (footnotes at page bottom in decimal, endnotes at document end in
 decimal, starting at 1, never restarting), and every corpus fixture that uses
 footnotes ships an EMPTY `<w:footnotePr/>`/`<w:endnotePr/>` so no fixture forces
 a non-default value. They become real divergences the moment a document sets a
 footnote/endnote property — and Word documents authored through the UI commonly
 DO (e.g. Word's own endnote default written into settings is
-`<w:numFmt w:val="lowerRoman"/>`, which docxside would currently ignore and
+`<w:numFmt w:val="lowerRoman"/>`, which docxide would currently ignore and
 print as `1, 2, 3` instead of `i, ii, iii`).
 
 ### HIGH priority (footnote/endnote property bags entirely unparsed)
@@ -1352,7 +1352,7 @@ print as `1, 2, 3` instead of `i, ii, iii`).
   separator content is discarded. `render_page_footnotes` instead draws a
   HARDCODED separator: 0.5pt black, `min(144pt, text_width)` wide
   (`src/pdf/footnotes.rs:117-128`). The `continuationSeparator` is never drawn at
-  all, but that is moot because docxside does not split a single footnote across
+  all, but that is moot because docxide does not split a single footnote across
   pages.
 - **Impact**: low — the hardcoded line matches Word's default separator closely
   (confirmed: `uk_commercial_lease_template` ships exactly
@@ -1388,7 +1388,7 @@ print as `1, 2, 3` instead of `i, ii, iii`).
 
 - **17.11.9/.3 `w:footnote`/`w:endnote` (Special Note ID Lists)** — these lists
   inside the settings `footnotePr`/`endnotePr` merely enumerate which note IDs are
-  separator/continuation/special. docxside identifies special notes directly by
+  separator/continuation/special. docxide identifies special notes directly by
   the `w:type` attribute on each note in `word/footnotes.xml`/`endnotes.xml`
   (`src/docx/headers_footers.rs:128,240`), which is equivalent, so the ID list is
   not needed. By design; no action.
@@ -1413,7 +1413,7 @@ The whole chapter is a supplementary document story (the building-block /
 AutoText / Quick-Part store in `word/glossary/document.xml`). Its content is
 *not* part of the main document flow — Word inserts a `docPart` into the body
 only on explicit user action, and Word's own PDF export does not paint glossary
-content directly. docxside never opens `word/glossary/*` (verified: `grep -rni
+content directly. docxide never opens `word/glossary/*` (verified: `grep -rni
 "glossary\|docPart" src/` → 0), which is the correct behavior. **There is no
 rendering gap to implement for 17.12.** All 16 elements (`behavior`, `behaviors`,
 `category`, `description`, `docPart`, `docPartBody`, `docPartPr`, `docParts`,
@@ -1443,7 +1443,7 @@ unparsed" for a bug.
   `types` is `bbPlcHdr` (§17.12.15, ST_DocPartType) holds the prompt text shown
   inside an *unfilled* structured document tag (content control), referenced from
   the body SDT's `sdtPr/docPartObj`/`docPartGallery` (the §17.5.2 property bag).
-  - **Today**: docxside renders the body SDT's `sdtContent` verbatim
+  - **Today**: docxide renders the body SDT's `sdtContent` verbatim
     (`src/docx/runs.rs` / `src/docx/mod.rs` SDT descent — see 17.5 entry) and does
     NOT resolve placeholders out of the glossary. This is fine in practice because
     **Word writes the resolved placeholder text directly into the body
@@ -1454,7 +1454,7 @@ unparsed" for a bug.
     `sdtContent` (so it renders without touching the glossary).
   - **When it would matter**: a (rare/malformed) document with an empty body
     `sdtContent` but a non-empty glossary `bbPlcHdr` entry — then Word would show
-    the glossary prompt and docxside would show nothing. No corpus fixture
+    the glossary prompt and docxide would show nothing. No corpus fixture
     exercises this. This is the SAME open item already recorded under
     17.5.2.39 `w:showingPlcHdr` (LOW, record-only) — see the 17.5 gaps section.
     Owner if ever needed: SDT descent in `src/docx/runs.rs` / `src/docx/mod.rs`,
@@ -1464,7 +1464,7 @@ unparsed" for a bug.
 
 ## 17.13 Annotations — gaps
 
-The big picture: docxside renders the **Final / "accept-all" / No-Markup** view of
+The big picture: docxide renders the **Final / "accept-all" / No-Markup** view of
 revisions (insertions shown, deletions hidden) and a faithful right-margin
 **comment pane**. That is the correct default and the most common case, so every
 gap below is LATENT in the current corpus (0 fixtures exercise moves, cell
@@ -1543,11 +1543,11 @@ deleted-paragraph-mark merge); the rest are fidelity refinements.
   the document's *display-for-review* state; the visibility is gated by
   `w:revisionView` (§17.15.1.69, Settings part: `@markup`/`@comments`/`@insDel`/
   `@formatting`/`@inkAnnotations`).
-- **Today**: docxside ALWAYS renders the Final view — `ins` shown, `del` dropped
+- **Today**: docxide ALWAYS renders the Final view — `ins` shown, `del` dropped
   (`src/docx/runs.rs:615-618`) — and never renders revision marks. `w:revisionView`
   is not parsed (`grep revisionView src/` → 0; `src/docx/settings.rs`). So an
   "All Markup"-configured document that Word would export WITH visible tracked
-  changes is exported clean by docxside.
+  changes is exported clean by docxide.
 - **What exists vs missing**: Final view works and is the sensible default;
   markup view (and the setting that selects it) is absent.
 - **Likely owner**: only if markup-view fidelity is wanted — parse `revisionView`
@@ -1559,7 +1559,7 @@ deleted-paragraph-mark merge); the rest are fidelity refinements.
 - **Comment text flattened to plain string.** `collect_text`
   (`src/docx/comments.rs:56-79`) gathers only `t`/`tab`/`br`/`p` into a plain
   `String`, discarding run formatting (bold/italic/colour) and inter-paragraph
-  styling inside the comment. Word's pane preserves comment formatting; docxside
+  styling inside the comment. Word's pane preserves comment formatting; docxide
   renders it plain. Owner: `src/docx/comments.rs` (model richer comment content)
   + `src/pdf/comments.rs` (render it).
 - **`w:comment @w:date` (17.13.4.2) not parsed** — only `@author`/`@initials`/
@@ -1701,7 +1701,7 @@ correctly out of scope (record-only note at the bottom).
   layout rules, 14 = Word 2010, 12 = Word 2007). `compatibilityMode` selects
   which line-spacing / table / kerning rules the layout engine uses, so it is the
   single highest-leverage flag for matching Word's geometry.
-- **Today**: not parsed anywhere (`grep -rl "compat" src/` → 0). docxside
+- **Today**: not parsed anywhere (`grep -rl "compat" src/` → 0). docxide
   implicitly assumes one fixed set of layout rules.
 - **What exists vs missing**: nothing read. The engine has no notion of
   compatibility mode, so it cannot switch between Word-2007 and Word-2013 line
@@ -1785,7 +1785,7 @@ correctly out of scope (record-only note at the bottom).
   newly inserted tables that don't reference their own style. Affects rendering
   only for tables that genuinely carry no `tblStyle`.
 - **Today**: not parsed (`grep -rl defaultTableStyle src/` → 0). Tables without
-  an explicit `tblStyle` fall back to docxside's built-in default rather than the
+  an explicit `tblStyle` fall back to docxide's built-in default rather than the
   document-declared default table style.
 - **Likely owner**: parse in `src/docx/settings.rs`; apply as the fallback
   `tblStyle` in table-style resolution (`src/docx/tables.rs` / `src/pdf/table.rs`).
@@ -1804,7 +1804,7 @@ correctly out of scope (record-only note at the bottom).
   docs → latent; matters only for CJK justification. Owner: `src/docx/settings.rs`
   + CJK spacing in `src/pdf/layout.rs`.
 - **17.15.1.62 `w:printFractionalCharacterWidth`** — NOT parsed. Legacy flag
-  choosing fractional vs. integer (rounded-to-pixel) advance widths; docxside
+  choosing fractional vs. integer (rounded-to-pixel) advance widths; docxide
   already uses exact font metrics (effectively fractional), so honoring it is
   likely a no-op for PDF output. Owner: `src/docx/settings.rs` (record-only
   unless a reference diff shows Word rounding).
@@ -1831,7 +1831,7 @@ correctly out of scope (record-only note at the bottom).
   `w:enforcement="0"` (not even enforced). None.
 - **17.15.1.23 `w:decimalSymbol` / 17.15.1.55 `w:listSeparator`** — radix point
   and argument separator used only when *evaluating field code formulas* (= and
-  IF fields). docxside renders cached field results (per the 17.14/17.16 notes),
+  IF fields). docxide renders cached field results (per the 17.14/17.16 notes),
   so these never affect output today. Present in ~51 fixtures. Owner (only if
   live field evaluation is ever added): `src/docx/runs.rs` field handling.
 - **Spell/grammar & UI state** — 17.15.1.1 `activeWritingStyle`, .51
@@ -1854,7 +1854,7 @@ correctly out of scope (record-only note at the bottom).
   itself says saving as HTML is out of scope. Zero PDF relevance. Leave unparsed.
 - **Tracked-change *settings*** — `w:trackChanges` (17.15.1.90),
   `rsids`/`rsid` (revision-save IDs): `trackChanges` is the editor toggle, not
-  content; rsids are change-tracking bookkeeping. docxside renders the final
+  content; rsids are change-tracking bookkeeping. docxide renders the final
   (accept-all) view regardless (see 17.13). Leave unparsed.
 
 ---
@@ -1922,7 +1922,7 @@ correctly out of scope (record-only note at the bottom).
   element path at `runs.rs:594`), so the existing `LinkAnnotation` machinery
   picks it up. No new rendering code needed.
 
-### MEDIUM priority (cached-result staleness — correct only if Word's cache matches docxside layout)
+### MEDIUM priority (cached-result staleness — correct only if Word's cache matches docxide layout)
 
 #### Field results are taken verbatim from Word's cached result region (no re-evaluation except 4 codes)
 - **Spec**: §17.16.18/.19 — a field's *result* is the content between `separate`
@@ -1933,16 +1933,16 @@ correctly out of scope (record-only note at the bottom).
   (`is_dynamic_field`, `src/docx/runs.rs:22`); every other field code renders
   Word's cached result text verbatim. This is the right default for a static PDF
   and matches Word's own PDF export for most codes, BUT diverges when the cached
-  result depends on layout that docxside computes differently:
+  result depends on layout that docxide computes differently:
   - **TOC (§17.16.5.71)**: the cached TOC body renders, and its per-entry page
     numbers come from nested PAGEREF sub-fields which ARE re-evaluated (they sit
     in the TOC result region, so `visible=true`) — so page numbers track
-    docxside pagination. However the TOC entry *text/leader/indent layout* is the
-    cached run content; if docxside's heading set or pagination differs, the TOC
+    docxide pagination. However the TOC entry *text/leader/indent layout* is the
+    cached run content; if docxide's heading set or pagination differs, the TOC
     can list wrong/missing entries (it does not regenerate the entry list).
     Corpus: TOC in 3 fixtures (feminist_voice 66.5%, transition_to_work 40.1%,
     uk_commercial_lease 9.4%).
-  - **`@w:dirty="true"` fields**: docxside ignores `dirty` and shows the cached
+  - **`@w:dirty="true"` fields**: docxide ignores `dirty` and shows the cached
     result even when Word would recompute on open. No model field for it.
 - **Likely owner**: `src/docx/runs.rs` (field handling) if live evaluation of
   more codes is ever added; for TOC regeneration, a new pass in `src/pdf/` that
@@ -1972,11 +1972,11 @@ correctly out of scope (record-only note at the bottom).
   `history`/`docLocation` are viewer/browser hints with no print representation.
   Owner if tooltip alt-text is ever wanted: `src/docx/runs.rs:594` +
   `LinkAnnotation` in `src/pdf/layout.rs`/`assembly.rs`.
-- **17.16.18 `w:fldChar` `@w:fldLock`** — "do not recalculate" flag. docxside
+- **17.16.18 `w:fldChar` `@w:fldLock`** — "do not recalculate" flag. docxide
   shows cached results for all but 4 codes anyway, so honoring `fldLock` would
   only matter once broader live evaluation exists. No action.
 - **17.16.13 `w:delInstrText` (Deleted Field Code)** — instruction text inside a
-  tracked-deletion. docxside renders the final/accept-all view and already drops
+  tracked-deletion. docxide renders the final/accept-all view and already drops
   `w:del` content (`src/docx/runs.rs:617`), so deleted field instructions are
   correctly ignored. No action.
 - **17.16.14 `enabled`, 17.16.15/.16 `entryMacro`/`exitMacro`, `calcOnExit`** —
@@ -1990,14 +1990,14 @@ correctly out of scope (record-only note at the bottom).
 - **Field codes with no static representation** — e.g. ASK / FILLIN
   (§17.16.5.3/§17.16.5.19, interactive prompts), MACROBUTTON, GOTOBUTTON,
   AUTOTEXT triggers: Word's PDF export renders only their cached result (or
-  nothing), which is exactly docxside's current behavior. Leave as-is.
+  nothing), which is exactly docxide's current behavior. Leave as-is.
 
 ---
 
 ## 17.18 Simple Types — gaps
 
 17.18 defines value domains, not elements. The gaps below are *value-domain
-truncations*: docxside parses the owning element but accepts only a subset of
+truncations*: docxide parses the owning element but accepts only a subset of
 the enumeration values the spec allows; values outside the subset silently
 collapse to a default. None of these is a missing element — the rendering path
 already exists, it just ignores the distinction between enum values.
@@ -2105,7 +2105,7 @@ already documented; listed here only so the 17.18 catalog cross-references them:
   handles `0`/`false`/`off`/`1`/`true`/`on`), `ST_Guid` (§17.8.1 font-obfuscation
   decode), `ST_String`, `ST_DateTime`, `ST_PixelsMeasure`,
   `ST_MeasurementOrPercent`. Nothing to do.
-- **Enumerations on elements docxside intentionally does not render** (per the
+- **Enumerations on elements docxide intentionally does not render** (per the
   earlier chapters' record-only lists) — e.g. `ST_Proof`/`ST_ProofErr`
   (§17.18.69/.70, spell/grammar state), `ST_InfoTextType` (§17.18.43, form-field
   help text), `ST_DocProtect`/`ST_Mailmerge*` families — have no print
@@ -2474,7 +2474,7 @@ already documented; listed here only so the 17.18 catalog cross-references them:
   (§21.2.2.97), `area3DChart` (§21.2.2.4), `surfaceChart` (§21.2.2.204),
   `surface3DChart` (§21.2.2.203), `stockChart` (§21.2.2.198), `ofPieChart`
   (§21.2.2.130, pie-of-pie / bar-of-pie). Each is a sibling of the
-  `barChart`/`lineChart`/… elements docxside already detects.
+  `barChart`/`lineChart`/… elements docxide already detects.
 - **Today**: `detect_chart_type` (`src/docx/charts.rs:263`) matches only
   `barChart`, `doughnutChart`, `lineChart`, `pieChart`, `pie3DChart`, `areaChart`,
   `radarChart`, `scatterChart`, `bubbleChart`. For any other group element it
@@ -2640,7 +2640,7 @@ already documented; listed here only so the 17.18 catalog cross-references them:
   Line/stock-chart decorations (up-down bars, high-low lines, drop lines, series
   connector lines). Not drawn. Owner: `src/docx/charts.rs` + `src/pdf/charts.rs`.
 - **`c:layout` / `c:manualLayout` (§21.2.2.88 / §21.2.2.110)** — NOT parsed. Manual
-  pixel/fraction positioning of the plot area, legend, or title. docxside always
+  pixel/fraction positioning of the plot area, legend, or title. docxide always
   auto-lays-out these regions, so a chart with a manually-moved legend/plot will not
   match. Owner: `src/docx/charts.rs` (legend/plotArea layout) + `src/pdf/charts.rs`
   / `src/pdf/chart_legend.rs`.
@@ -2665,7 +2665,7 @@ already documented; listed here only so the 17.18 catalog cross-references them:
 
 ### Record-only (no print impact / not in a Word-exported chart)
 - `c:idx` / `c:order` (series index/order), `c:f` (the spreadsheet formula string
-  inside every `*Ref` — docxside correctly reads the cache, not the formula),
+  inside every `*Ref` — docxide correctly reads the cache, not the formula),
   `c:extLst`/`mc:AlternateContent` (extensions), `c:externalData`/`c:autoUpdate`
   (link to the embedded XLSX — irrelevant since caches are used), `c:date1904`,
   `c:lang`, `c:printSettings`/`c:pageMargins`/`c:pageSetup`/`c:headerFooter` (chart
@@ -2676,9 +2676,9 @@ already documented; listed here only so the 17.18 catalog cross-references them:
 
 ## 21.4 DrawingML Diagrams — gaps
 
-### Architecture note — docxside renders the *cached drawing*, not the data model
+### Architecture note — docxide renders the *cached drawing*, not the data model
 
-docxside renders SmartArt by reading the **Microsoft `dsp:` "drawing" part**
+docxide renders SmartArt by reading the **Microsoft `dsp:` "drawing" part**
 (`word/diagrams/drawingN.xml`, namespace
 `http://schemas.microsoft.com/office/drawing/2008/diagram`), NOT by interpreting
 the standardized clause-21.4 `dgm:` parts. The flow (`src/docx/smartart.rs`):
@@ -2714,7 +2714,7 @@ today and both pass the 20% threshold. Gaps below, grouped by priority.
 
 #### No fallback when the `dsp:` drawing cache is absent — diagram silently disappears
 - **Spec**: §21.4 standardizes `dgm:dataModel` + `dgm:layoutDef` (+ colors/style).
-  The `dsp:` drawing part docxside depends on is a **Microsoft extension** (note
+  The `dsp:` drawing part docxide depends on is a **Microsoft extension** (note
   the `schemas.microsoft.com` namespace), NOT part of ECMA-376 Part 1 / ISO/IEC
   29500-1. A spec-conformant producer is only required to emit the four `dgm:`
   parts; the `dsp:` cache is optional.
@@ -2806,7 +2806,7 @@ today and both pass the 20% threshold. Gaps below, grouped by priority.
 
 - **`dgm:colorsDef` / `dgm:styleDef` / `dgm:layoutDef` parts never read** — by
   design. Their resolved output (colors, quick-style, computed positions) is
-  already baked into the `dsp:` drawing cache that docxside reads, so re-parsing
+  already baked into the `dsp:` drawing cache that docxide reads, so re-parsing
   them would be redundant. These become relevant ONLY if the HIGH-priority
   data-model fallback (above) is built, at which point a fallback renderer would
   need at least `colorsDef` (for node fill colors) and `styleDef`. Owner then:
@@ -2946,7 +2946,7 @@ a scraped sample) should accompany any fix.
 
 - **22.1.2.61 `m:mathPr` (document math properties)** — NOT parsed. Lives in
   `word/settings.xml`; children incl. `m:mathFont` (§22.1.2.58, the math typeface,
-  normally Cambria Math), `m:defJc` (default display-math justification — docxside
+  normally Cambria Math), `m:defJc` (default display-math justification — docxide
   hardcodes Center, which matches the `centerGroup` default), `m:dispDef`
   (§22.1.2.25), `m:brkBin`/`m:brkBinSub` (binary-operator break placement),
   `m:smallFrac` (§22.1.2.108), `m:intLim`/`m:naryLim` (default limit location for
@@ -2992,7 +2992,7 @@ is LATENT in the current corpus.
   the `b:Sources/@SelectedStyle` (§22.6.2.60); the BIBLIOGRAPHY field emits the
   full list. A conformant producer caches the formatted result as ordinary
   `w:p`/`w:t` runs between the field's `fldChar separate` and `end`.
-- **Today**: docxside renders the cached result region of any non-dynamic field
+- **Today**: docxide renders the cached result region of any non-dynamic field
   (CITATION/BIBLIOGRAPHY are not in `is_dynamic_field`, `src/docx/runs.rs:22`), so
   documents whose citation/bibliography fields carry a cached result render
   correctly (verified: `tests/fixtures/new/covid_insomnia_mental_health`'s
@@ -3004,7 +3004,7 @@ is LATENT in the current corpus.
   `b:Source` data when the field has NO cached result — i.e. a field marked
   `w:dirty="true"` or one that was inserted but never updated by Word. In that
   case Word recomputes from `b:Sources` + the `@SelectedStyle` XSL on open/print,
-  whereas docxside (which cannot run the XSL) would emit nothing for that field.
+  whereas docxide (which cannot run the XSL) would emit nothing for that field.
 - **Corpus**: 0 fixtures exercise this — the only fixture with a real
   bibliography field (`covid_insomnia_mental_health`) ships a cached result, and
   the only other fixture with sources (`japanese_land_development_sign_form`, 1

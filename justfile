@@ -1,4 +1,4 @@
-image := "docxside-pdf"
+image := "docxide-pdf"
 
 # Build the dev container
 build:

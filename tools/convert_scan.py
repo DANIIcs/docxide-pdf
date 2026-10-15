@@ -20,7 +20,7 @@ def main() -> None:
     p.add_argument('cli', nargs='?', default=str(ROOT / 'target/release/docxide-pdf'))
     p.add_argument('--timeout', type=float, default=20)
     args = p.parse_args()
-    env = dict(os.environ, DOCXSIDE_FONTS=str(ROOT / 'fonts'), DOCXSIDE_NO_FONT_CACHE='1')
+    env = dict(os.environ, DOCXIDE_FONTS=str(ROOT / 'fonts'), DOCXIDE_NO_FONT_CACHE='1')
     out = Path(tempfile.mkdtemp())
     docs = sorted((ROOT / 'tests/fixtures').glob('*/*/input.docx'))
 

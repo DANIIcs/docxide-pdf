@@ -39,7 +39,7 @@ def main() -> None:
     # vdiff only searches the suite's fixture groups, so file documents under one.
     (root / 'tests/fixtures' / GROUP).mkdir(parents=True, exist_ok=True)
     (root / 'Cargo.toml').touch()  # vdiff looks for the project root
-    env = dict(os.environ, DOCXSIDE_FONTS=str(ROOT / 'fonts'), DOCXSIDE_NO_FONT_CACHE='1')
+    env = dict(os.environ, DOCXIDE_FONTS=str(ROOT / 'fonts'), DOCXIDE_NO_FONT_CACHE='1')
     for prefix in prefixes:
         docx = next((corpus / 'docx').glob(prefix + '*.docx'), None)
         if docx is None:

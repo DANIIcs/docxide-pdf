@@ -29,7 +29,7 @@ def main() -> None:
     (root / 'Cargo.toml').touch()  # vdiff looks for the project root
     if not (root / 'tests/fixtures').exists():
         (root / 'tests/fixtures').symlink_to(ROOT / 'tests/fixtures')
-    env = dict(os.environ, DOCXSIDE_FONTS=str(ROOT / 'fonts'), DOCXSIDE_NO_FONT_CACHE='1')
+    env = dict(os.environ, DOCXIDE_FONTS=str(ROOT / 'fonts'), DOCXIDE_NO_FONT_CACHE='1')
     for gc in cases:
         out = root / 'tests/output' / gc
         out.mkdir(parents=True, exist_ok=True)

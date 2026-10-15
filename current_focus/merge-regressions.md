@@ -29,7 +29,7 @@ Mean Jaccard went 51.2 → 63.4 and SSIM 70.9 → 80.5 over the merge.
 - Other Claude sessions work in the main checkout at the same time (one
   rebased `main` mid-session). Check `git status`, `git log` and
   `.git/rebase-merge` before writing there; prefer a worktree. A worktree needs
-  `ln -s ../../fonts <wt>/fonts` (gitignored) and `DOCXSIDE_NO_FONT_CACHE=1`,
+  `ln -s ../../fonts <wt>/fonts` (gitignored) and `DOCXIDE_NO_FONT_CACHE=1`,
   or every score collapses to Arial fallback.
 - Derive rules from Word's PDFs across many documents; never fit one fixture.
   Query the OOXML spec (`mcp__local-rag__query_documents`) before

@@ -77,13 +77,13 @@ fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, b
 fn font_directories() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
-    // DOCXSIDE_FONTS added first = LOWEST priority (LIFO stack pops these last; the
+    // DOCXIDE_FONTS added first = LOWEST priority (LIFO stack pops these last; the
     // first-scanned entry wins). This holds the vendored Word/Office fonts as a
     // fallback for families the OS lacks (Calibri, Cambria, Aptos…) and must sit
     // BELOW system fonts: for overlapping families (e.g. Times New Roman) the system
     // build matches our reference PDFs (Word's online converter), while the locally
     // bundled Word build has a different hhea lineGap — which would drift line height.
-    if let Ok(val) = env::var("DOCXSIDE_FONTS") {
+    if let Ok(val) = env::var("DOCXIDE_FONTS") {
         let sep = if cfg!(windows) { ';' } else { ':' };
         for part in val.split(sep) {
             let trimmed = part.trim();
@@ -146,7 +146,7 @@ fn scan_font_dirs() -> FontLookup {
     let mut off_weight_index = FontLookup::new();
     let dirs = font_directories();
 
-    let no_cache = env::var("DOCXSIDE_NO_FONT_CACHE").is_ok();
+    let no_cache = env::var("DOCXIDE_NO_FONT_CACHE").is_ok();
 
     let cache = if no_cache {
         FontCache::default()

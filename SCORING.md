@@ -247,7 +247,7 @@ get only `ua_fail`; the other 240 get all four scores.
   (with check counts for our PDF and Word's) and the struct and text scores.
 - `*.a11y.json` next to it: cached tool output. It's reused while it's newer
   than the PDF. Delete these files after upgrading veraPDF or Poppler.
-- `DOCXSIDE_A11Y_GEN=libreoffice.pdf` scores another engine's PDF the same
+- `DOCXIDE_A11Y_GEN=libreoffice.pdf` scores another engine's PDF the same
   way, for comparison. It doesn't write baselines.
 
 ---

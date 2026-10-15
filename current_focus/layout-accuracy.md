@@ -136,7 +136,7 @@ Diagnostics: `pdf_lines.py` (rules and baselines, y from page top),
    (hideMark, header floats, keepNext rows); probe before coding.
 2. Before editing: pin the current CLI (`cp target/release/docxide-pdf
    <local>/bin/docxide-<label>`).
-3. Implement; check the fixture with the release CLI (`DOCXSIDE_FONTS=$PWD/fonts`,
+3. Implement; check the fixture with the release CLI (`DOCXIDE_FONTS=$PWD/fonts`,
    delete the output first: the CLI never overwrites).
 4. Build a corpus subset of documents carrying the construct; A/B the two
    pinned builds; explain every document that drops (usually a second error

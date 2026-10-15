@@ -30,7 +30,7 @@ office2pdf: `office2pdf` on PATH (cargo install office2pdf-cli) or OFFICE2PDF_BI
 jubarte-redlines: `jubarte` on PATH (cargo install jubarte-redlines) or JUBARTE_BIN.
 Accessibility scores need verapdf and pdfinfo on PATH (brew install verapdf poppler); without them the column is empty.
 
-Fonts, so every engine sees the same Word fonts: ours reads DOCXSIDE_FONTS=fonts/; minipdf, rdocx,
+Fonts, so every engine sees the same Word fonts: ours reads DOCXIDE_FONTS=fonts/; minipdf, rdocx,
 office2pdf and jubarte get comparison/work/fonts_flat/, one directory of links to every file under fonts/
 (rdocx takes a single directory and does not descend into fonts/CloudFonts/*; jubarte takes it as
 JUBARTE_FONT_DIR and scans no Linux system directory at all, so without it CI would leave it with its
@@ -214,10 +214,10 @@ def convert_ours(docx: Path, pdf: Path) -> bool:
     if is_fresh(pdf, docx) and is_fresh(pdf, OURS_BIN):  # a rebuilt binary must be re-timed
         return True
     pdf.parent.mkdir(parents=True, exist_ok=True)
-    # The binary reads DOCXSIDE_FONTS at run time; `.cargo/config.toml` only sets it under cargo,
+    # The binary reads DOCXIDE_FONTS at run time; `.cargo/config.toml` only sets it under cargo,
     # so without this a local run renders with system fonts while CI renders with the Word fonts.
     env = {**os.environ}
-    env.setdefault("DOCXSIDE_FONTS", str(ROOT / "fonts"))
+    env.setdefault("DOCXIDE_FONTS", str(ROOT / "fonts"))
     # Convert to a fresh path (the CLI never overwrites; it would write generated(2).pdf next to a
     # cached PDF and leave the stale one in place) and keep the cached PDF when the output is
     # byte-identical, which it is for every case a commit does not touch, conversion being

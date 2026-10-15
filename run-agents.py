@@ -605,7 +605,7 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
         )
 
     return dedent(f"""\
-        You are working on the docxside-pdf project — a Rust library that converts DOCX files to PDF.
+        You are working on the docxide-pdf project — a Rust library that converts DOCX files to PDF.
         Your task is to improve the rendering quality for a specific test fixture: **{case_name}** (path: tests/fixtures/{case_path}/).
 
         ## Current scores
@@ -735,7 +735,7 @@ def build_discovery_prompt(case_name: str, case_path: str, progress_file: Path, 
         )
 
     return dedent(f"""\
-        You are working on the docxside-pdf project — a Rust library that converts DOCX files to PDF.
+        You are working on the docxide-pdf project — a Rust library that converts DOCX files to PDF.
         This is a **newly discovered** test fixture: **{case_name}** (path: tests/fixtures/{case_path}/).
         It has never been tested before. Your job is to analyze it thoroughly and fix any rendering issues that are caused by
         unhandled features, missing implementations, or bugs in our code.
@@ -1064,7 +1064,7 @@ def resolve_merge_conflict(case_name: str, branch: str, permission_mode: str, lo
     log_file = logs_dir / f"{case_name}.merge-resolve.log"
 
     prompt = dedent(f"""\
-        You are resolving a git merge conflict in the docxside-pdf project.
+        You are resolving a git merge conflict in the docxide-pdf project.
         Branch `{branch}` is being merged into `main`. The merge has already been started but has conflicts.
 
         Conflicted files:

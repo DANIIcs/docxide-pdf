@@ -735,7 +735,7 @@ fn scan_font_dir(dir: &Path, index: &mut FontIndex, count: &mut u32) {
 fn font_directories() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
 
-    if let Ok(val) = std::env::var("DOCXSIDE_FONTS") {
+    if let Ok(val) = std::env::var("DOCXIDE_FONTS") {
         let sep = if cfg!(windows) { ';' } else { ':' };
         for part in val.split(sep) {
             let trimmed = part.trim();

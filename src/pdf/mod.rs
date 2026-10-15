@@ -4398,7 +4398,7 @@ fn render_paragraph_block(
 }
 
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
-    let debug_wrap = std::env::var("DOCXSIDE_DEBUG_WRAP").is_ok();
+    let debug_wrap = std::env::var("DOCXIDE_DEBUG_WRAP").is_ok();
     let t0 = std::time::Instant::now();
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;

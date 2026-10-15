@@ -91,11 +91,11 @@ fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
         .then_with(|| a_name.cmp(b_name))
 }
 
-/// Discover fixtures. Filter with DOCXIDE_CASE (case name) and DOCXSIDE_GROUP (folder name).
+/// Discover fixtures. Filter with DOCXIDE_CASE (case name) and DOCXIDE_GROUP (folder name).
 pub fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");
     let case_filter = std::env::var("DOCXIDE_CASE").ok();
-    let group_filter = std::env::var("DOCXSIDE_GROUP").ok();
+    let group_filter = std::env::var("DOCXIDE_GROUP").ok();
     let skiplist = load_skiplist();
     let mut fixtures: Vec<PathBuf> = Vec::new();
     for group_entry in fs::read_dir(fixtures_dir)? {

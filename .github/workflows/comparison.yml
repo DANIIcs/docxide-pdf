@@ -2,7 +2,7 @@
 #
 # The Word fonts are not in this public repo; they come from the private sverrejb/docxide-pdf-assets repo,
 # checked out with a deploy key:
-#   assets/fonts/                           -> fonts/                   (engine_compare.py passes it as DOCXSIDE_FONTS)
+#   assets/fonts/                           -> fonts/                   (engine_compare.py passes it as DOCXIDE_FONTS)
 #   assets/fixtures/{scraped,samples}/      -> tests/fixtures/<group>/  (optional real-world corpus; only tracked
 #                                                                         cases are compared when absent)
 # Deploy key setup (public half on the assets repo, private half as a secret here):
@@ -92,7 +92,7 @@ jobs:
           mkdir -p ~/"Library/Group Containers/UBF8T346G9.Office/FontCache/4"
           ln -s "$PWD/assets/fonts/CloudFonts" ~/"Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts"
       - name: Font families the runner's own packages share with the Word fonts
-        # Our discovery ranks /usr/share/fonts above DOCXSIDE_FONTS (fonts/) and ~/.local/share/fonts is the
+        # Our discovery ranks /usr/share/fonts above DOCXIDE_FONTS (fonts/) and ~/.local/share/fonts is the
         # same files as fonts/, so the only way a system font can shadow a Word font here is a distro package
         # shipping the same family name. Anything listed below is drawn from the distro's file, not Word's.
         run: |

@@ -21,9 +21,9 @@ fn libreoffice_comparison() {
 
     // Opt-in only: spawns one soffice process per fixture, which is expensive
     // and irrelevant to the usual change-verification loop.
-    if std::env::var_os("DOCXSIDE_LO_COMPARE").is_none() {
+    if std::env::var_os("DOCXIDE_LO_COMPARE").is_none() {
         println!(
-            "libreoffice_comparison skipped — opt in with DOCXSIDE_LO_COMPARE=1 \
+            "libreoffice_comparison skipped — opt in with DOCXIDE_LO_COMPARE=1 \
              or ./tools/run-tests.sh --libreoffice"
         );
         return;

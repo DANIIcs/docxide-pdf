@@ -1,13 +1,13 @@
 """Generate case74: Document-wide footnote/endnote property bag (17.11.12 / 17.11.4)
 
 Isolates the DOCUMENT-WIDE w:footnotePr / w:endnotePr in the Settings part
-(word/settings.xml), which docxside does not yet parse. Sets a NON-DEFAULT
+(word/settings.xml), which docxide does not yet parse. Sets a NON-DEFAULT
 numbering format on each so the divergence is unmistakable in the reference:
 
   - footnotePr/numFmt = upperRoman  -> footnote marks render  I, II, III
   - endnotePr/numFmt  = lowerLetter -> endnote  marks render  a, b
 
-A renderer ignoring the doc-wide property bag (today's docxside) prints both as
+A renderer ignoring the doc-wide property bag (today's docxide) prints both as
 plain decimal (1, 2, 3 / 1, 2). The reference PDF reveals whether numFmt is honored.
 
 Note: footnotes/endnotes cannot be authored via python-docx, so this follows the

@@ -109,7 +109,7 @@ reference-relative metrics where Word's reference is tagged, all in
 Per-case detail (deficit rules with descriptions and check counts for both
 PDFs) lands in `tests/output/<group>/<case>/generated.deficit.json`; analyses
 are cached in `*.a11y.json` next to it (delete them after upgrading
-veraPDF/Poppler). `DOCXSIDE_A11Y_GEN=libreoffice.pdf` scores another engine's
+veraPDF/Poppler). `DOCXIDE_A11Y_GEN=libreoffice.pdf` scores another engine's
 PDF with the same yardstick (no baselines written).
 
 **What Word's references look like** (surveyed 2026-10-01): 174/222 are tagged
@@ -1470,11 +1470,11 @@ Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, Word-com
    the CI runner lacks, so glyphs in runs whose font was missing were dropped
    outright (east_asia_conference_form on gh-pages: title shrank to "2024 발표",
    text boundary 0%). Locally the fixture looked fine only because
-   `engine_compare.py` ran the binary without `DOCXSIDE_FONTS` (the
+   `engine_compare.py` ran the binary without `DOCXIDE_FONTS` (the
    `.cargo/config.toml` env applies only under cargo) and macOS system fonts
    covered the gap. Now one platform-independent list (`cjk_fallback_fonts`)
    leads with the vendored Word fonts, Apple/Noto faces trail, and the compare
-   script passes `DOCXSIDE_FONTS`. The per-character rescue font
+   script passes `DOCXIDE_FONTS`. The per-character rescue font
    (`cjk_rescue_fonts`) is ranked by glyph coverage of the missing characters.
 5. **Theme `a:ea typeface=""`** — `asciiTheme/hAnsiTheme="minorEastAsia"`
    (47 table-label runs in east_asia_conference_form) resolves to an empty
@@ -1491,7 +1491,7 @@ Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, Word-com
 
 ## Bundled Fallback Fonts (TODO — MEDIUM IMPACT)
 
-We rely entirely on installed fonts (tests and CI use the private assets repo's `fonts/` via `DOCXSIDE_FONTS`); a font that resolves nowhere gets Arial, Liberation Sans, Arimo, Helvetica or DejaVu Sans, then Type1 Helvetica as a last resort. This produces inconsistent output across environments (servers, Docker, CI). Should bundle metric-compatible open fonts behind a feature flag:
+We rely entirely on installed fonts (tests and CI use the private assets repo's `fonts/` via `DOCXIDE_FONTS`); a font that resolves nowhere gets Arial, Liberation Sans, Arimo, Helvetica or DejaVu Sans, then Type1 Helvetica as a last resort. This produces inconsistent output across environments (servers, Docker, CI). Should bundle metric-compatible open fonts behind a feature flag:
 - **Carlito** — metric-compatible with Calibri (the most common Word font)
 - **Caladea** — metric-compatible with Cambria
 - **Liberation Sans/Serif/Mono** — metric-compatible with Arial/Times New Roman/Courier New

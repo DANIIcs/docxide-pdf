@@ -169,7 +169,7 @@ tests/
   accessibility.rs     — PDF/UA-1 + structure-tree parity vs Word (needs verapdf, poppler)
   text_boundary.rs     — line start/end word metric (not run: no #[test], see SCORING.md)
   font_validation.rs, image_count.rs, page_geometry.rs, file_size.rs — font/image/page-size/size parity
-  libreoffice_comparison.rs — opt-in (DOCXSIDE_LO_COMPARE=1) comparison with LibreOffice
+  libreoffice_comparison.rs — opt-in (DOCXIDE_LO_COMPARE=1) comparison with LibreOffice
   speed.rs             — conversion timing (#[ignore])
   common/              — shared harness: mod.rs (fixtures, rasterization, metrics), a11y.rs, text_boundary.rs
   baselines.json, visual_hashes.json — accepted scores and page hashes
@@ -179,10 +179,10 @@ tests/
 
 ## Environment Variables
 
-- `DOCXSIDE_FONTS` — colon-separated (`;` on Windows) list of additional font directories to search (`.cargo/config.toml` points it at the repo's `fonts/` dir for cargo runs)
-- `DOCXSIDE_NO_FONT_CACHE` — set to any value to disable the font index disk cache (forces full scan every time)
-- `DOCXSIDE_DEBUG_WRAP` — set to draw the float wrap zones on the page
-- Test harness: `DOCXIDE_CASE` (one fixture by name), `DOCXSIDE_GROUP` (one fixture group), `DOCXIDE_IMAGES` (also save side-by-side comparison PNGs), `DOCXSIDE_LO_COMPARE` (opt into the LibreOffice comparison), `DOCXSIDE_A11Y_GEN` (which PDF in tests/output to score for accessibility), `LIBREOFFICE_PATH` (soffice binary)
+- `DOCXIDE_FONTS` — colon-separated (`;` on Windows) list of additional font directories to search (`.cargo/config.toml` points it at the repo's `fonts/` dir for cargo runs)
+- `DOCXIDE_NO_FONT_CACHE` — set to any value to disable the font index disk cache (forces full scan every time)
+- `DOCXIDE_DEBUG_WRAP` — set to draw the float wrap zones on the page
+- Test harness: `DOCXIDE_CASE` (one fixture by name), `DOCXIDE_GROUP` (one fixture group), `DOCXIDE_IMAGES` (also save side-by-side comparison PNGs), `DOCXIDE_LO_COMPARE` (opt into the LibreOffice comparison), `DOCXIDE_A11Y_GEN` (which PDF in tests/output to score for accessibility), `LIBREOFFICE_PATH` (soffice binary)
 - `DOCX_BIN` — CLI binary for `tools/engine_compare.py`
 
 ## Dependencies

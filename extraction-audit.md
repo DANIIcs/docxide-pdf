@@ -2,7 +2,7 @@
      13 reviewers/hunters + adversarial verification per candidate.
      71 candidates verified, 41 dropped, 30 survivors. -->
 
-# docxside-pdf Extraction/Refactor Audit
+# docxide-pdf Extraction/Refactor Audit
 
 > **Status: ALL 30 survivors applied (2026-06-21), 11 commits on `main`.** No
 > rendering regressions — 208/208 scores unchanged throughout. Two behavior

@@ -14,7 +14,7 @@ label="$1"
 prev="${2:-}"
 snap="$ROOT/tests/output/snapshots"
 mkdir -p "$snap"
-export DOCXSIDE_NO_FONT_CACHE=1
+export DOCXIDE_NO_FONT_CACHE=1
 # Cargo can reuse a stale test binary after checkouts that keep mtimes.
 touch src/lib.rs
 ./tools/run-tests.sh --test visual_comparison > "$snap/$label.log" 2>&1 || true

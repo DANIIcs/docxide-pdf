@@ -7,6 +7,7 @@ pub enum Error {
     Xml(roxmltree::Error),
     Pdf(String),
     Io(std::io::Error),
+    RenamedEnvVar(String),
 }
 
 impl fmt::Display for Error {
@@ -17,6 +18,11 @@ impl fmt::Display for Error {
             Error::Xml(e) => write!(f, "XML error: {e}"),
             Error::Pdf(e) => write!(f, "PDF error: {e}"),
             Error::Io(e) => write!(f, "IO error: {e}"),
+            Error::RenamedEnvVar(old) => write!(
+                f,
+                "{old} is no longer read; rename it to {}",
+                old.replacen("DOCXSIDE_", "DOCXIDE_", 1)
+            ),
         }
     }
 }

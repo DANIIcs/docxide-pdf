@@ -39,8 +39,8 @@ CARGO_ARGS+=("--" "--nocapture")
 
 # Set env filters
 [[ -n "$CASE_FILTER" ]] && export DOCXIDE_CASE="$CASE_FILTER"
-[[ -n "$GROUP_FILTER" ]] && export DOCXSIDE_GROUP="$GROUP_FILTER"
-[[ "$LO_COMPARE" -eq 1 ]] && export DOCXSIDE_LO_COMPARE=1
+[[ -n "$GROUP_FILTER" ]] && export DOCXIDE_GROUP="$GROUP_FILTER"
+[[ "$LO_COMPARE" -eq 1 ]] && export DOCXIDE_LO_COMPARE=1
 
 # Verbose mode: just pass through
 if [[ "$VERBOSE" -eq 1 ]]; then

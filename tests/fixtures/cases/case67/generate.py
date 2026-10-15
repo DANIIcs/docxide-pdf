@@ -4,7 +4,7 @@
 
 w:customXml wraps content to attach schema-based semantics but has NO print
 form of its own — like w:sdt, the renderer must descend through it and render
-the children. docxside has zero customXml handling today, so any content
+the children. docxide has zero customXml handling today, so any content
 wrapped *solely* in customXml is silently dropped. This fixture puts text that
 exists ONLY inside customXml wrappers at each of the four placement levels, so
 the reference PDF reveals whether each placement's content survives:

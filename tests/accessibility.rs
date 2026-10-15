@@ -18,7 +18,7 @@ struct Scored {
 /// Which PDF in tests/output/<group>/<case>/ to score; e.g. `libreoffice.pdf`
 /// scores LibreOffice's export with the same yardstick.
 fn gen_pdf_name() -> String {
-    std::env::var("DOCXSIDE_A11Y_GEN").unwrap_or_else(|_| "generated.pdf".into())
+    std::env::var("DOCXIDE_A11Y_GEN").unwrap_or_else(|_| "generated.pdf".into())
 }
 
 fn detail_json(

@@ -41,7 +41,7 @@ async def convert(docx: Path, pdf_out: Path) -> None:
     cred = DeviceCodeCredential(
         client_id=CLIENT_ID,
         cache_persistence_options=TokenCachePersistenceOptions(
-            name="docxside-graph-sdk",
+            name="docxide-graph-sdk",
             allow_unencrypted_storage=True,
         ),
     )
@@ -51,7 +51,7 @@ async def convert(docx: Path, pdf_out: Path) -> None:
     drive_id = drive.id
     items = client.drives.by_drive_id(drive_id).items
 
-    path = f"docxside-tmp/docxside-{uuid.uuid4().hex}-{docx.name}"
+    path = f"docxide-tmp/docxide-{uuid.uuid4().hex}-{docx.name}"
     path_ref = f"root:/{path}:"
 
     print(f"uploading to OneDrive:/{path}", file=sys.stderr)

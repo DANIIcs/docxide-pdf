@@ -14,7 +14,7 @@ if [ ! -f "$progress" ]; then
 # Progress for Marge — OOXML spec coverage audit
 
 Marge walks the OOXML spec (ECMA-376 Part 1 / ISO/IEC 29500-1) one chapter per
-iteration, checking whether docxside-pdf covers each chapter's features.
+iteration, checking whether docxide-pdf covers each chapter's features.
 
 ## Scope & master checklist
 
@@ -72,10 +72,10 @@ for ((i=1; i<=iterations; i++)); do
     echo "====================="
 
     result=$(claude --model claude-opus-4-8 --permission-mode acceptEdits -p "@${progress} \
-  You are auditing docxside-pdf for coverage of the OOXML spec (ECMA-376 Part 1 / ISO/IEC 29500-1), ONE chapter per run. Steps:
+  You are auditing docxide-pdf for coverage of the OOXML spec (ECMA-376 Part 1 / ISO/IEC 29500-1), ONE chapter per run. Steps:
 1. Read ${progress}. The spec is ingested in the local-rag MCP — query it via mcp__local-rag__query_documents (\`/Users/sverrejb/specs/office.pdf\`). \
 2. In the 'Scope & master checklist' section, find the FIRST item still marked '[ ]' (top to bottom). That is your chapter for this run — work on ONE and ONLY ONE. If every item is already '[x]', the audit is finished: output <promise>COMPLETE</promise> and do nothing else. \
-3. Enumerate that chapter's features/elements from the spec. For each, check whether docxside-pdf handles it — search @src for the relevant XML element/attribute names. Use the analysis tools (docx-inspect, analyze-fixtures --grep) rather than ad-hoc bash. \
+3. Enumerate that chapter's features/elements from the spec. For each, check whether docxide-pdf handles it — search @src for the relevant XML element/attribute names. Use the analysis tools (docx-inspect, analyze-fixtures --grep) rather than ad-hoc bash. \
 4. Record findings in ${progress}: change that checklist item from '[ ]' to '[x]', append the chapter under 'Chapters processed' with a timestamp, and list any unhandled or partially-handled features under 'Coverage gaps found'. This file is the ONLY deliverable — write each gap so a fresh agent with no prior context can pick it up and implement it: spec element/attribute name, spec section reference, what is missing vs. what exists today, and which src/ file would likely own the fix. \
 5. DO NOT implement, fix, or change any code, and DO NOT commit anything — this is an audit only. The progress file is the work product; another agent will act on it later. \
 6. If and ONLY IF every checklist item is now '[x]', output <promise>COMPLETE</promise>. Otherwise end the run without that marker.")

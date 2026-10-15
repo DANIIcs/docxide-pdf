@@ -12,18 +12,35 @@ use std::path::Path;
 use std::time::Instant;
 
 pub fn convert_docx_to_pdf(input: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<(), Error> {
+    reject_old_env_vars()?;
     let doc = docx::parse(input.as_ref())?;
     render_and_write(&doc, path)
 }
 
 pub fn convert_docx_bytes_to_pdf(input: &[u8], path: impl AsRef<Path>) -> Result<(), Error> {
+    reject_old_env_vars()?;
     let doc = docx::parse_bytes(input)?;
     render_and_write(&doc, path)
 }
 
 /// For callers that serve or store the PDF themselves (web handlers, databases, wasm).
 pub fn convert_docx_bytes_to_pdf_bytes(input: &[u8]) -> Result<Vec<u8>, Error> {
+    reject_old_env_vars()?;
     pdf::render(&docx::parse_bytes(input)?)
+}
+
+/// The variables lost their old `DOCXSIDE_` prefix; failing loudly beats silently
+/// dropping someone's font directories and rendering with fallbacks.
+fn reject_old_env_vars() -> Result<(), Error> {
+    match old_env_var(std::env::vars_os().map(|(key, _)| key)) {
+        Some(name) => Err(Error::RenamedEnvVar(name)),
+        None => Ok(()),
+    }
+}
+
+fn old_env_var(keys: impl Iterator<Item = std::ffi::OsString>) -> Option<String> {
+    keys.filter_map(|key| key.into_string().ok())
+        .find(|key| key.starts_with("DOCXSIDE_"))
 }
 
 fn render_and_write(doc: &model::Document, path: impl AsRef<Path>) -> Result<(), Error> {
@@ -45,4 +62,20 @@ fn render_and_write(doc: &model::Document, path: impl AsRef<Path>) -> Result<(),
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_prefix_is_reported_with_its_new_name() {
+        let keys = ["PATH", "DOCXIDE_FONTS", "DOCXSIDE_FONTS"].map(Into::into);
+        let old = old_env_var(keys.into_iter()).unwrap();
+        assert_eq!(
+            Error::RenamedEnvVar(old).to_string(),
+            "DOCXSIDE_FONTS is no longer read; rename it to DOCXIDE_FONTS"
+        );
+        assert_eq!(old_env_var(["DOCXIDE_FONTS".into()].into_iter()), None);
+    }
 }

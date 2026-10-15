@@ -467,7 +467,7 @@ impl App {
         let mut cmd = Command::new("cargo");
         cmd.args(["test", "--test", "visual_comparison", "--", "--nocapture"])
             .env("DOCXIDE_CASE", &case)
-            .env("DOCXSIDE_GROUP", &group);
+            .env("DOCXIDE_GROUP", &group);
         if let Some(root) = root {
             cmd.current_dir(root);
         }
@@ -1568,7 +1568,7 @@ fn show_compare(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
 
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("docxside-pdf").strong());
+                ui.label(egui::RichText::new("docxide-pdf").strong());
                 ui.label(egui::RichText::new(&gen_age).weak());
             });
             gen_click = show_image_clickable(

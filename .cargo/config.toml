@@ -2,4 +2,4 @@
 compare = "run  --release --manifest-path tools/Cargo.toml --bin case-browser --"
 
 [env]
-DOCXSIDE_FONTS = { value = "fonts", relative = true }
+DOCXIDE_FONTS = { value = "fonts", relative = true }
