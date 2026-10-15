@@ -151,6 +151,10 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   default) over the paragraph's `w:jc`: Word centres a `w:jc="both"` cell's
   equation.
 
+- A zone ending in an italic glyph keeps that glyph's italic correction in
+  its width: text after 𝑥̂ starts 0.36pt further on (probe `mp22_acc`;
+  pendulum's "𝑙 del" now within 0.1pt).
+
 ### Line heights
 - A line holding math is sized as if the zone were text in the math font's
   hhea box (Cambria Math: 0.95em above, 0.222em below; its win metrics are

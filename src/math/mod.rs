@@ -176,7 +176,9 @@ pub(crate) fn layout(
         display,
         wrap_indent: settings.wrap_indent,
         breaks,
-        width: w,
+        // A zone ending in an italic glyph keeps its italic correction: text
+        // after x̂ starts 0.36pt further on (probe `mp22_acc`, four zones).
+        width: w + b.ic,
         ascent,
         descent,
         items: b.items,
