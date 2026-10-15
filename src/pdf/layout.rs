@@ -321,6 +321,8 @@ pub(super) struct WordChunk {
     /// individually, so the space is drawn as an invisible glyph after the word
     /// purely so text extraction and screen readers see the word boundary.
     pub(super) space_after: bool,
+    /// Literal break spaces before this chunk, when more than one occurred.
+    pub(super) preceding_spaces: Option<usize>,
     /// From an Office Math run: its tall operator metrics never size a line.
     pub(super) is_math: bool,
     /// The math zone's spoken form, for its Formula (see `Run::formula`).
@@ -448,6 +450,7 @@ impl WordChunk {
             actual_text: None,
             lang: chunk_lang(run, word),
             space_after: false,
+            preceding_spaces: None,
             is_math: run.is_math,
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
@@ -518,6 +521,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
+            preceding_spaces: None,
         }
     }
 
@@ -581,6 +585,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
+            preceding_spaces: None,
         }
     }
 
@@ -649,6 +654,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
+            preceding_spaces: None,
         }
     }
 }
@@ -1380,7 +1386,7 @@ fn spaces_before_each(chunks: &[WordChunk]) -> Vec<usize> {
         .iter()
         .scan((0usize, None::<(f32, bool)>), |(n, prev), c| {
             if prev.is_some_and(|(end, was_space)| was_space || c.x_offset > end + 0.01) {
-                *n += 1;
+                *n += c.preceding_spaces.unwrap_or(1);
             }
             let is_space = c.inline_image_name.is_none() && c.text.chars().all(is_break_space);
             *prev = Some((c.x_offset + c.width, is_space));
@@ -1579,6 +1585,7 @@ pub(super) fn build_paragraph_lines(
     let mut current_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
+    let mut pending_space_count: usize = 0;
     // pending_space_w minus CJK auto-spacing: a space character really occurred.
     let mut pending_real_space = false;
     // Underline state of the run that emitted the pending whitespace. A space
@@ -1691,6 +1698,7 @@ pub(super) fn build_paragraph_lines(
             lines.push(line);
             current_x = 0.0;
             pending_space_w = 0.0;
+            pending_space_count = 0;
             pending_real_space = false;
             prev_last_char = None;
             continue;
@@ -1725,6 +1733,7 @@ pub(super) fn build_paragraph_lines(
                         cur_right_info = Some((current_chunks.len(), rx, rw));
                         in_right_region = true;
                         pending_space_w = 0.0;
+                        pending_space_count = 0;
                         // Retry placement in right region
                         let proposed_x2 = 0.0;
                         if proposed_x2 + img_w <= rw {
@@ -1762,6 +1771,7 @@ pub(super) fn build_paragraph_lines(
                     current_x = proposed_x;
                 }
                 pending_space_w = 0.0;
+                pending_space_count = 0;
 
                 current_chunks.push(WordChunk::image(
                     pdf_name,
@@ -1793,6 +1803,8 @@ pub(super) fn build_paragraph_lines(
         let mut prev_char = None;
         let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
         while let Some((space_count, mut source)) = words.pop_front() {
+            pending_space_count += space_count;
+            let literal_spaces = pending_space_count;
             let mut shown = caps_word(run, source);
             pending_space_w +=
                 space_count as f32 * word_space_width(run, entry, eff_fs, source, &mut prev_char);
@@ -1962,6 +1974,7 @@ pub(super) fn build_paragraph_lines(
                     &mut cur_right_info,
                 ));
                 pending_space_w = 0.0;
+                pending_space_count = 0;
                 word_start = 0;
                 push_word_chunks(
                     &mut current_chunks,
@@ -2067,6 +2080,7 @@ pub(super) fn build_paragraph_lines(
                             0.0
                         };
                         pending_space_w = 0.0;
+                        pending_space_count = 0;
                         word_start = current_chunks.len();
                         push_word_chunks(
                             &mut current_chunks,
@@ -2123,6 +2137,7 @@ pub(super) fn build_paragraph_lines(
                         cur_right_info = Some((0, rx, rw));
                         in_right_region = true;
                         pending_space_w = 0.0;
+                        pending_space_count = 0;
                         word_start = 0;
                         push_word_chunks(
                             &mut current_chunks,
@@ -2159,10 +2174,12 @@ pub(super) fn build_paragraph_lines(
                 ));
             }
             pending_space_w = 0.0;
+            pending_space_count = 0;
 
             if !is_continuation {
                 word_start = current_chunks.len();
             }
+            let chunk_start = current_chunks.len();
             push_word_chunks(
                 &mut current_chunks,
                 entry,
@@ -2176,6 +2193,11 @@ pub(super) fn build_paragraph_lines(
                 ww,
                 space_rtl,
             );
+            if literal_spaces > 1 && !pending_space_underline && chunk_start > 0 {
+                if let Some(c) = current_chunks.get_mut(chunk_start) {
+                    c.preceding_spaces = Some(literal_spaces);
+                }
+            }
             current_x += ww;
         }
 
@@ -2186,6 +2208,7 @@ pub(super) fn build_paragraph_lines(
             .take_while(|c| is_break_space(*c))
             .count();
         if trailing_spaces > 0 {
+            pending_space_count += trailing_spaces;
             pending_space_w +=
                 trailing_spaces as f32 * word_space_width(run, entry, eff_fs, "", &mut prev_char);
             pending_real_space = true;
@@ -4432,6 +4455,22 @@ mod tests {
             split_preserving_spaces("2019-2024"),
             vec![(0, "2019-"), (0, "2024")]
         );
+    }
+
+    #[test]
+    fn repeated_spaces_keep_their_justification_weight_across_runs() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = |s: &str| Run { text: s.into(), ..make_run(10.0, VertAlign::Baseline, false) };
+        for runs in [vec![run("Label  MARK tail")], vec![run("Label "), run(" "), run("MARK tail")]] {
+            let lines = build_paragraph_lines(&runs, &fonts, 200.0, 0.0,
+                &HashMap::new(), &HashMap::new(), None, None, None,
+                plain_layout(false));
+            assert_eq!(spaces_before_each(&lines[0].chunks), vec![0, 2, 3]);
+        }
+        let lines = build_paragraph_lines(&[run("Label  MARK tail")], &fonts, 35.0, 0.0,
+            &HashMap::new(), &HashMap::new(), None, None, None,
+            plain_layout(false));
+        for line in lines { assert_eq!(spaces_before_each(&line.chunks)[0], 0); }
     }
 
     #[test]
