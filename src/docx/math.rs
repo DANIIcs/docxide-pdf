@@ -35,10 +35,10 @@ impl MathParser<'_> {
         math_child(node, name).map_or_else(Vec::new, |c| self.row(c))
     }
 
+    /// An argument that may be absent; present but empty, it still keeps its
+    /// room (see `math::Ctx::row`).
     fn opt_arg(&self, node: roxmltree::Node, name: &str) -> Option<MathRow> {
-        math_child(node, name)
-            .map(|c| self.row(c))
-            .filter(|r| !r.is_empty())
+        math_child(node, name).map(|c| self.row(c))
     }
 
     fn node(&self, n: roxmltree::Node) -> Vec<MathNode> {
@@ -62,25 +62,37 @@ impl MathParser<'_> {
                 pre: n.tag_name().name() == "sPre",
             }),
             "rad" => one(MathNode::Rad {
-                degree: if flag(n, "radPr", "degHide") {
+                // Without degHide even an absent degree keeps its room
+                // (Word, probe `mp26_empty`).
+                degree: (!flag(n, "radPr", "degHide")).then(|| self.arg(n, "deg")),
+                body: self.arg(n, "e"),
+            }),
+            "nary" => {
+                // A hidden sub's content shows before the sup's, a hidden
+                // sup's at the start of the operand (probe `mp23_nary`).
+                let mut sup = self.arg(n, "sup");
+                let mut body = self.arg(n, "e");
+                let sub = if flag(n, "naryPr", "subHide") {
+                    sup.splice(0..0, self.arg(n, "sub"));
                     None
                 } else {
-                    self.opt_arg(n, "deg")
-                },
-                body: self.arg(n, "e"),
-            }),
-            "nary" => one(MathNode::Nary {
-                chr: chr(n, "naryPr", "chr", '∫').unwrap_or('∫'),
-                under_over: math_val(n, "naryPr", "limLoc").map(|v| v == "undOvr"),
-                sub: (!flag(n, "naryPr", "subHide"))
-                    .then(|| self.opt_arg(n, "sub"))
-                    .flatten(),
-                sup: (!flag(n, "naryPr", "supHide"))
-                    .then(|| self.opt_arg(n, "sup"))
-                    .flatten(),
-                grow: flag(n, "naryPr", "grow"),
-                body: self.arg(n, "e"),
-            }),
+                    Some(self.arg(n, "sub"))
+                };
+                let sup = if flag(n, "naryPr", "supHide") {
+                    body.splice(0..0, sup);
+                    None
+                } else {
+                    Some(sup)
+                };
+                one(MathNode::Nary {
+                    chr: chr(n, "naryPr", "chr", '∫').unwrap_or('∫'),
+                    under_over: math_val(n, "naryPr", "limLoc").map(|v| v == "undOvr"),
+                    sub,
+                    sup,
+                    grow: flag(n, "naryPr", "grow"),
+                    body,
+                })
+            }
             "d" => one(MathNode::Delim {
                 open: chr(n, "dPr", "begChr", '('),
                 close: chr(n, "dPr", "endChr", ')'),

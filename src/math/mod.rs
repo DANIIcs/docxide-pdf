@@ -421,7 +421,24 @@ impl<'a> Ctx<'a> {
     /// characters are atoms of the row, so a sign at a run's start can be
     /// binary.
     fn row(&self, row: &MathRow, st: St) -> B {
+        if row.is_empty() {
+            return self.placeholder(st);
+        }
         self.hbox(self.atoms(row, st), st)
+    }
+
+    /// Word keeps an empty argument's room: an invisible ⬚ at its size (an
+    /// empty numerator, script, limit, radicand, matrix cell or delimiter;
+    /// probes `mp23_nary`–`mp25_empty`).
+    fn placeholder(&self, st: St) -> B {
+        let gid = self.font.glyph('\u{2B1A}', st.script_level());
+        let (w, asc, desc) = self.font.metrics(gid, self.size(st));
+        B {
+            w,
+            asc,
+            desc,
+            ..B::empty()
+        }
     }
 
     fn atoms(&self, row: &MathRow, st: St) -> Vec<B> {
@@ -946,18 +963,27 @@ impl<'a> Ctx<'a> {
         let lo = sub.map(|r| self.row(r, st.sub()));
         let hi = sup.map(|r| self.row(r, st.sup()));
         // Inline (text style) limits always go beside the operator.
+        let mut beside = false;
         let mut op_b = if under_over.unwrap_or(default_under) && st.display() {
             self.limits(centred, lo, hi, st)
         } else if lo.is_some() || hi.is_some() {
             // The italic correction moves the lower limit left of the upper
             // one (OpenType MATH, large operators).
             let w = centred.w;
+            beside = true;
             self.attach(centred, lo, hi, (w - op_ic, w), st.display(), st)
         } else {
             centred
         };
         op_b.first = Class::Op;
         op_b.last = Class::Op;
+        // In display math the operand starts right where the limits beside
+        // the operator end, with no thin space (Word's ∫₀¹f: f at the end of
+        // the "1", probe `mp23_nary`); inline it keeps one.
+        if beside && st.display() {
+            let x = op_b.w;
+            return assemble(vec![op_b, body_b], &[0.0, x], false).0;
+        }
         self.hbox(vec![op_b, body_b], st)
     }
 

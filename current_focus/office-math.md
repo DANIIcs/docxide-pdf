@@ -99,6 +99,15 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   `m:sepChr` without a value draws no separator.
 - A typed space in a math run is the spacing: nothing is added beside it
   (the zone ", " is comma + 0.22em space).
+- An empty argument keeps its room: an invisible ⬚ (U+2B1A) at the
+  argument's size, ink height included, in place of an empty or absent
+  numerator, denominator, script, script base, n-ary limit, radicand,
+  radical degree (unless `m:degHide`), delimiter content or matrix cell
+  (probes `mp23_nary`–`mp26_empty`: within 0.45pt). A hidden n-ary limit
+  that has content shows it anyway: a hidden sub's before the sup's, a
+  hidden sup's at the start of the operand. In display math the operand of
+  an n-ary operator with limits beside it starts right where the limits
+  end, with no thin space; inline the thin space stays.
 - Display n-ary operators take the first variant at least 1.5 ×
   DisplayOperatorMinHeight: all 20 operators probed take their 1.91–2.15em
   variant, never the ∫ family's 1.35em one (the bar lies in (1.35, 1.91] em).
@@ -198,3 +207,6 @@ geometry). Online positions snap to 0.25pt, so single readings carry ±0.125pt.
   same). Not found in the MATH constants; snapping is ±0.25pt.
 - `m:wrapRight` (continuation lines flush right) is not done.
 - An `m:nor` superscript sits 0.6pt closer to its base than Word's (e^max).
+- An inline n-ary operator with placeholder limits stands 2.6pt too low; a
+  function with an empty argument is 2pt short; a sup over an empty sub
+  sits 0.5pt low.
