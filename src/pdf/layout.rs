@@ -321,8 +321,8 @@ pub(super) struct WordChunk {
     /// individually, so the space is drawn as an invisible glyph after the word
     /// purely so text extraction and screen readers see the word boundary.
     pub(super) space_after: bool,
-    /// Literal break spaces before this chunk, when more than one occurred.
-    pub(super) preceding_spaces: Option<usize>,
+    /// Literal break spaces before this chunk (more than one when typed so).
+    pub(super) preceding_spaces: usize,
     /// From an Office Math run: its tall operator metrics never size a line.
     pub(super) is_math: bool,
     /// The math zone's spoken form, for its Formula (see `Run::formula`).
@@ -450,7 +450,7 @@ impl WordChunk {
             actual_text: None,
             lang: chunk_lang(run, word),
             space_after: false,
-            preceding_spaces: None,
+            preceding_spaces: 1,
             is_math: run.is_math,
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
@@ -521,7 +521,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
-            preceding_spaces: None,
+            preceding_spaces: 1,
         }
     }
 
@@ -585,7 +585,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
-            preceding_spaces: None,
+            preceding_spaces: 1,
         }
     }
 
@@ -654,7 +654,7 @@ impl WordChunk {
             actual_text: None,
             lang: None,
             space_after: false,
-            preceding_spaces: None,
+            preceding_spaces: 1,
         }
     }
 }
@@ -1386,7 +1386,7 @@ fn spaces_before_each(chunks: &[WordChunk]) -> Vec<usize> {
         .iter()
         .scan((0usize, None::<(f32, bool)>), |(n, prev), c| {
             if prev.is_some_and(|(end, was_space)| was_space || c.x_offset > end + 0.01) {
-                *n += c.preceding_spaces.unwrap_or(1);
+                *n += c.preceding_spaces;
             }
             let is_space = c.inline_image_name.is_none() && c.text.chars().all(is_break_space);
             *prev = Some((c.x_offset + c.width, is_space));
@@ -2193,10 +2193,12 @@ pub(super) fn build_paragraph_lines(
                 ww,
                 space_rtl,
             );
-            if literal_spaces > 1 && !pending_space_underline && chunk_start > 0 {
-                if let Some(c) = current_chunks.get_mut(chunk_start) {
-                    c.preceding_spaces = Some(literal_spaces);
-                }
+            if literal_spaces > 1
+                && !pending_space_underline
+                && chunk_start > 0
+                && let Some(c) = current_chunks.get_mut(chunk_start)
+            {
+                c.preceding_spaces = literal_spaces;
             }
             current_x += ww;
         }
@@ -4460,17 +4462,43 @@ mod tests {
     #[test]
     fn repeated_spaces_keep_their_justification_weight_across_runs() {
         let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
-        let run = |s: &str| Run { text: s.into(), ..make_run(10.0, VertAlign::Baseline, false) };
-        for runs in [vec![run("Label  MARK tail")], vec![run("Label "), run(" "), run("MARK tail")]] {
-            let lines = build_paragraph_lines(&runs, &fonts, 200.0, 0.0,
-                &HashMap::new(), &HashMap::new(), None, None, None,
-                plain_layout(false));
+        let run = |s: &str| Run {
+            text: s.into(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        for runs in [
+            vec![run("Label  MARK tail")],
+            vec![run("Label "), run(" "), run("MARK tail")],
+        ] {
+            let lines = build_paragraph_lines(
+                &runs,
+                &fonts,
+                200.0,
+                0.0,
+                &HashMap::new(),
+                &HashMap::new(),
+                None,
+                None,
+                None,
+                plain_layout(false),
+            );
             assert_eq!(spaces_before_each(&lines[0].chunks), vec![0, 2, 3]);
         }
-        let lines = build_paragraph_lines(&[run("Label  MARK tail")], &fonts, 35.0, 0.0,
-            &HashMap::new(), &HashMap::new(), None, None, None,
-            plain_layout(false));
-        for line in lines { assert_eq!(spaces_before_each(&line.chunks)[0], 0); }
+        let lines = build_paragraph_lines(
+            &[run("Label  MARK tail")],
+            &fonts,
+            35.0,
+            0.0,
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+            None,
+            None,
+            plain_layout(false),
+        );
+        for line in lines {
+            assert_eq!(spaces_before_each(&line.chunks)[0], 0);
+        }
     }
 
     #[test]
