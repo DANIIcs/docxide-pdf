@@ -4760,8 +4760,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
                                 // An indented empty anchor can enter the float
                                 // through its before-spacing, before its line starts.
-                                let before = if ctx.compat_mode >= 15 && is_text_empty(&p.runs)
-                                    && (p.indent_left != 0.0 || p.indent_right != 0.0) {
+                                let before = if ctx.compat_mode >= 15
+                                    && (p.indent_left != 0.0 || p.indent_right != 0.0)
+                                    && is_text_empty(&p.runs)
+                                {
                                     state.prev_space_after.max(p.space_before)
                                 } else { 0.0 };
                                 state.pb.slot_top - before - resolve_line_h(ls, fs, lhr) < fz.top_y
@@ -4779,12 +4781,16 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         // Word 2013+ requires even an empty line's indented box
                         // to fit beside a float; legacy mode ignores its indents.
                         let (space_left, space_right) = match block {
-                            Block::Paragraph(p) if ctx.compat_mode >= 15 && is_text_empty(&p.runs) => {
+                            Block::Paragraph(p)
+                                if ctx.compat_mode >= 15 && is_text_empty(&p.runs) =>
+                            {
                                 let left = col_x + p.indent_left;
                                 let right = col_x + col_w - p.indent_right;
-                                ((ex_left - fz.left_from_text).min(right) - left,
-                                 right - (ex_right + fz.right_from_text).max(left))
-                            },
+                                (
+                                    (ex_left - fz.left_from_text).min(right) - left,
+                                    right - (ex_right + fz.right_from_text).max(left),
+                                )
+                            }
                             _ => (space_left, space_right),
                         };
                         let min_wrap_w: f32 = 72.0;
