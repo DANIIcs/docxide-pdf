@@ -686,6 +686,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) font_substituted: bool,
     pub(super) alignment: Alignment,
     pub(super) space_before: f32,
+    /// Collapsed spacing less the previous page's already consumed after gap.
+    pub(super) continuation_space_before: Option<f32>,
     pub(super) indent_left: f32,
     pub(super) indent_right: f32,
     pub(super) indent_hanging: f32,
@@ -1363,6 +1365,7 @@ pub(super) fn compute_row_layouts(
                                     font_substituted,
                                     alignment: para.alignment,
                                     space_before,
+                                    continuation_space_before: Some((space_before - prev_space_after).max(0.0)),
                                     indent_left: para.indent_left,
                                     indent_right: para.indent_right,
                                     indent_hanging: para.indent_hanging,
@@ -1871,6 +1874,9 @@ pub(super) fn partial_row_height(
 /// "Remarks" paragraph keeps its 4pt).
 pub(super) fn chunk_space_before(item: &CellContentItem, pi: usize, start: &CellCursor) -> f32 {
     match item {
+        CellContentItem::Paragraph(p) if pi == start.item && start.line == 0 && *start != CELL_START => {
+            p.continuation_space_before.unwrap_or(p.space_before)
+        }
         CellContentItem::Paragraph(p) if pi != start.item || start.line == 0 => p.space_before,
         _ => 0.0,
     }
@@ -2228,6 +2234,18 @@ mod tests {
             auto_fit_columns(&table, &fonts, None, None),
             vec![250.0, 150.0]
         );
+    }
+
+    #[test]
+    fn continued_cell_drops_previous_after_but_keeps_own_before() {
+        for own in [0.0, 4.0] {
+            let item = CellContentItem::Paragraph(CellParagraphLayout {
+                space_before: 8.0, continuation_space_before: Some(own), ..Default::default()
+            });
+            assert_eq!(chunk_space_before(&item, 1, &CELL_START), 8.0);
+            assert_eq!(chunk_space_before(&item, 1, &CellCursor::at(1, 0)), own);
+            assert_eq!(chunk_space_before(&item, 1, &CellCursor::at(1, 1)), 0.0);
+        }
     }
 
     /// stem_partnerships p4 (annotation #237): a 10-line cell paragraph after a
