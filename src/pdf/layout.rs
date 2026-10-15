@@ -1846,13 +1846,17 @@ pub(super) fn build_paragraph_lines(
             // A word continues the previous word across a run boundary when
             // there is no whitespace between runs, no leading spaces, and the
             // two characters could not break inside one run either.
-            let is_continuation = is_first_word_in_run
-                && space_count == 0
-                && pending_space_w == 0.0
-                && !current_chunks.is_empty()
-                && !prev_last_char
-                    .zip(shown.chars().next())
-                    .is_some_and(|(a, b)| breaks_between(a, b));
+            let nbsp_bridge = pending_space_w > 0.0
+                && (prev_last_char == Some('\u{00a0}') || shown.starts_with('\u{00a0}'));
+            let is_continuation = !current_chunks.is_empty()
+                && (nbsp_bridge
+                    || (is_first_word_in_run
+                        && space_count == 0
+                        && pending_space_w == 0.0
+                        && !current_chunks.is_empty()
+                        && !prev_last_char
+                            .zip(shown.chars().next())
+                            .is_some_and(|(a, b)| breaks_between(a, b))));
             is_first_word_in_run = false;
 
             let kern = run.kerns_at(eff_fs);
@@ -2017,6 +2021,20 @@ pub(super) fn build_paragraph_lines(
                     current_x -= dx;
                     word_start = 0;
                 }
+                if pending_space_underline && pending_space_w > 0.0 {
+                    current_chunks.push(WordChunk::tab_underline(
+                        entry,
+                        eff_fs,
+                        pending_space_color,
+                        pending_space_double,
+                        pending_space_border.clone(),
+                        current_x,
+                        pending_space_w,
+                    ));
+                }
+                current_x += pending_space_w;
+                pending_space_w = 0.0;
+                pending_space_count = 0;
                 let room = left_max(lines.len()) - current_x;
                 if ww > room + 0.05 {
                     let cut = fitting_prefix_len(source, room, |w| width(&caps_word(run, w)))
@@ -2036,6 +2054,7 @@ pub(super) fn build_paragraph_lines(
                         continue;
                     }
                 }
+                let chunk_start = current_chunks.len();
                 push_word_chunks(
                     &mut current_chunks,
                     entry,
@@ -2049,6 +2068,9 @@ pub(super) fn build_paragraph_lines(
                     ww,
                     space_rtl,
                 );
+                if literal_spaces > 1 && !pending_space_underline && chunk_start > 0 {
+                    current_chunks[chunk_start].preceding_spaces = literal_spaces;
+                }
                 current_x += ww;
                 continue;
             }
@@ -4456,6 +4478,67 @@ mod tests {
         assert_eq!(
             split_preserving_spaces("2019-2024"),
             vec![(0, "2019-"), (0, "2024")]
+        );
+    }
+
+    #[test]
+    fn nbsp_space_sequences_keep_words_together_across_runs() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = |s: &str| Run {
+            text: s.into(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        for pieces in [
+            vec!["aaaa bb\u{00a0} cc dd"],
+            vec!["aaaa ", "bb\u{00a0}", " ", "cc dd"],
+            vec!["aaaa ", "bb\u{00a0}", "  ", "cc dd"],
+            vec!["aaaa ", "bb ", "\u{00a0}", "cc dd"],
+        ] {
+            let runs: Vec<_> = pieces.iter().map(|s| run(s)).collect();
+            let lines = build_paragraph_lines(
+                &runs,
+                &fonts,
+                50.0,
+                0.0,
+                &HashMap::new(),
+                &HashMap::new(),
+                None,
+                None,
+                None,
+                plain_layout(false),
+            );
+            assert_eq!(lines.len(), 2, "{pieces:?}");
+            assert_eq!(
+                lines[0]
+                    .chunks
+                    .iter()
+                    .map(|c| c.text.as_str())
+                    .collect::<String>(),
+                "aaaa",
+                "{pieces:?}"
+            );
+            let second = lines[1]
+                .chunks
+                .iter()
+                .map(|c| c.text.as_str())
+                .collect::<String>();
+            assert!(
+                second.contains("bb") && second.contains("cc"),
+                "{pieces:?}: {second}"
+            );
+            let expected_spaces = if pieces.iter().any(|s| *s == "  ") {
+                3
+            } else {
+                2
+            };
+            assert_eq!(
+                spaces_before_each(&lines[1].chunks).last().copied(),
+                Some(expected_spaces)
+            );
+        }
+        assert_eq!(
+            split_preserving_spaces("bb  cc"),
+            vec![(0, "bb"), (2, "cc")]
         );
     }
 
