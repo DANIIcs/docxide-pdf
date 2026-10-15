@@ -65,6 +65,12 @@ Open, in order:
    operators, relations past the indent, `m:wrapIndent`, group alignment;
    `m:wrapRight` open).
 4. ~~`m:nor` runs in the run's own font~~ done.
+5. Also done 2026-10-15: accents (widest variant within the attachment
+   room, `flac`), empty arguments keep a ⬚'s room, fractions are inner
+   atoms, italic correction only before non-characters and at a zone's end.
+   Math corpus J 49.4 -> 57.6. Remaining corpus gaps are mostly desktop
+   (print) vs online engine differences or non-math layout; small open
+   items are listed in `current_focus/office-math.md`.
 
 ## Floating table positioning
 
