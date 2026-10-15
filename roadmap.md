@@ -11,7 +11,7 @@ paragraph mark's format (`40d7c45c`), endnotes.xml's separator paragraph
 (`4c47ec52`, replaces `01eae84e`). Suite mean J 68.25 → 71.95, no real
 regressions. Still open where WordCraft leads:
 
-- ~~**Office Math layout**~~ Done 2026-10-14 (branch `office-math`): zones
+- ~~**Office Math layout**~~ Done 2026-10-14 (merged 2026-10-16): zones
   are laid out as boxes from Cambria Math's MATH table (`src/math/`), see the
   Office Math section and `current_focus/office-math.md`. pendulum_mechanics
   J 18.3 -> 45.8, SSIM 38.1 -> 64.0; nothing else moves.
@@ -47,30 +47,32 @@ regressions. Still open where WordCraft leads:
   styles.xml. Online Word also tags case152–168's tables as paragraphs, so
   a11y_struct reads 33–37% there; our Table tagging is unchanged.
 
-## Office Math (IN PROGRESS — 2026-10-14, branch `office-math`)
+## Office Math (merged to main 2026-10-16)
 
 Rules and evidence: `current_focus/office-math.md`. Done: OMML tree parser,
 `m:mathPr`, box layout (runs, atom spacing, scripts, fractions, radicals,
 n-ary, delimiters, functions, accents, bars, group characters, limits,
 matrices, equation arrays, boxes, phantoms) from the MATH table with Word's
 half-point script sizes and `ssty` alternates; glyphs embedded by id; math
-line heights (hhea box + MathLeading stretch); zones glued to touching text.
-Open, in order:
-1. ~~Radical placement~~ done (surd drop limit, display gap, variant by
-   coverage); ~~groupChr placement~~ done (limit shifts, bracket side, empty
-   chr/vertJc); display ∫ limit positions, borderBox padding.
-2. ~~eqArr alignment points (`&`) and row spacing~~ done.
-3. ~~Breaks inside long inline zones~~ done (after operators, as Word; each
-   part as tall as its own atoms); ~~display math wrap~~ done (breaks before
-   operators, relations past the indent, `m:wrapIndent`, group alignment;
-   `m:wrapRight` open).
-4. ~~`m:nor` runs in the run's own font~~ done.
-5. Also done 2026-10-15: accents (widest variant within the attachment
-   room, `flac`), empty arguments keep a ⬚'s room, fractions are inner
-   atoms, italic correction only before non-characters and at a zone's end.
-   Math corpus J 49.4 -> 57.6. Remaining corpus gaps are mostly desktop
-   (print) vs online engine differences or non-math layout; small open
-   items are listed in `current_focus/office-math.md`.
+line heights (hhea box + MathLeading stretch); zones glued to touching text;
+radical and groupChr placement, eqArr `&` alignment and row spacing, inline
+breaks after operators, display wrap (before operators, `m:wrapIndent`,
+group alignment), `m:nor` in the run's own font, accents, ⬚ room for empty
+arguments, fractions as inner atoms, italic correction rules. Math corpus
+J 26.2 -> 57.6; pendulum_mechanics J 18.3 -> 45.8. Remaining corpus gaps
+are mostly desktop (print) vs online engine differences or non-math layout.
+
+Open (each needs a Word online probe first; corpus refs are print exports):
+1. `m:wrapRight`: continuation lines of a wrapped display equation flush
+   right.
+2. Display ∫ limit positions and `m:borderBox` padding (not yet measured).
+3. Inline radicals over tall contents (b, H, 1, ℓ, x+1): Word's surd sits
+   0.3–0.6pt lower than the half-surplus rule at every size from 10 to 72pt
+   (absolute offset, not in the MATH constants).
+4. An `m:nor` superscript sits 0.6pt closer to its base than Word's (e^max).
+5. Placeholders: an inline n-ary with placeholder limits stands 2.6pt too
+   low; a function with an empty argument is 2pt short; a sup over an empty
+   sub sits 0.5pt low.
 
 ## Floating table positioning
 
