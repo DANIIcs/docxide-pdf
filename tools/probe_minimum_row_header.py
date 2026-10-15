@@ -33,7 +33,9 @@ def main():
     root = Path(__file__).resolve().parents[1] / 'tests/fixtures/cases'
     rows = []
     for name, page in [('first-header-minimum-row', 2), ('first-header-small-control', 1),
-                       ('first-header-no-minimum-control', 1)]:
+                       ('first-header-no-minimum-control', 1),
+                       ('first-header-minimum-overflow', 2),
+                       ('first-header-no-minimum-overflow', 1)]:
         case = root / name
         output = args.out / (name + '.pdf')
         subprocess.run([str(args.engine.resolve()), str(case / 'input.docx'), str(output.resolve())],
@@ -44,7 +46,7 @@ def main():
         assert actual == expected, (name, actual, expected)
         rows.append({'case': name, 'markers': actual})
     (args.out / 'report.json').write_text(json.dumps(rows, indent=2), encoding='utf8')
-    print('Three Word controls passed')
+    print('Five Word controls passed')
 
 
 if __name__ == '__main__':

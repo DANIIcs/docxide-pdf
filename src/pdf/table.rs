@@ -2148,7 +2148,24 @@ pub(super) fn render_table(
                             ctx,
                         )
                         - row_fn_extra);
+        // Even when the content needs multiple pages, an explicit minimum
+        // must fit before the row starts. Retry at the next page top, where
+        // oversized rows can split without repeatedly moving forward.
+        let minimum_fits_later = !at_page_top
+            && layout.split_min.is_some_and(|minimum| {
+                minimum > available_h
+                    && minimum
+                        <= effective_slot_top(sp, false, pb.page_count() + 1, ctx)
+                            - super::header_footer::compute_effective_margin_bottom(
+                                sp,
+                                false,
+                                pb.page_count() + 1,
+                                ctx,
+                            )
+                            - row_fn_extra
+            });
         let must_split = (taller_than_page || keep_with_anchor)
+            && !minimum_fits_later
             && !row.cant_split
             && (at_page_top || first_chunks_fit);
         if row_h > available_h && (must_split || can_meaningfully_split) && !chain_moves {
