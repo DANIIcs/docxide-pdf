@@ -735,7 +735,7 @@ const MIN_EMPTY_STRIP: f32 = 18.0;
 
 /// The part of a collapsed paragraph gap that is the paragraph's own space
 /// before, beyond the previous paragraph's space after.
-fn own_space_before(gap: f32, prev_space_after: f32) -> f32 {
+pub(super) fn own_space_before(gap: f32, prev_space_after: f32) -> f32 {
     (gap - prev_space_after).max(0.0)
 }
 
