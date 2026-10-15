@@ -309,6 +309,33 @@ fn accent_fits_within_its_base() {
 }
 
 #[test]
+fn empty_arguments_and_fraction_spacing() {
+    // Word (probes mp24_empty/mp25_empty): an empty superscript keeps a ⬚'s
+    // room; a stacked fraction stands a thin space from its neighbours.
+    let width = |root: Vec<MathNode>| layout_at(root, false, 12.0).width;
+    let x = width(vec![run("x")]);
+    let x_empty_sup = width(vec![MathNode::Scripts {
+        base: vec![run("x")],
+        sub: None,
+        sup: Some(vec![]),
+        pre: false,
+    }]);
+    assert!(x_empty_sup - x > 7.5, "empty sup adds {}", x_empty_sup - x);
+    let frac = |kind| MathNode::Frac {
+        kind,
+        num: vec![run("1")],
+        den: vec![run("2")],
+    };
+    let stacked = width(vec![run("a"), frac(crate::model::FracKind::Bar), run("b")]);
+    let alone = width(vec![frac(crate::model::FracKind::Bar)]) + width(vec![run("ab")]);
+    assert!(
+        (stacked - alone - 4.0).abs() < 0.5,
+        "two thin spaces: {}",
+        stacked - alone
+    );
+}
+
+#[test]
 fn display_fraction_shifts() {
     // a/b on its own line at 12pt: numerator 9.05 up, denominator 7.95 down.
     let root = vec![MathNode::Frac {
