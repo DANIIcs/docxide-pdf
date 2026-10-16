@@ -15,7 +15,7 @@ use super::styles::{
     ComplexProps, ParagraphStyle, RunProps, StyleDefaults, ThemeFonts, half_points,
     parse_font_size, parse_run_props, resolve_font_from_node_opt,
 };
-use super::textbox::parse_textbox_from_vml;
+use super::textbox::{parse_connector_from_vml, parse_textbox_from_vml};
 use super::{
     MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_run_text, math_val,
     parse_hex_color, parse_pt, wml, wml_attr, wml_bool,
@@ -53,7 +53,7 @@ fn has_switch(instr: &str, switch: &str) -> bool {
 /// One open complex field while parsing runs. Word fields nest: a field that
 /// begins inside another field's *instruction* region (before its `separate`)
 /// is an argument to the parent (e.g. a `PAGE` field used inside an `IF`
-/// expression) and must never display on its own — Word substitutes the
+/// expression) and must never display on its own вЂ” Word substitutes the
 /// parent's evaluated result. A field that begins inside a parent's *result*
 /// region (after `separate`, e.g. a `PAGEREF` inside a `TOC` result) is visible
 /// content and is processed normally. `visible` records which case applies.
@@ -163,7 +163,7 @@ pub(super) struct ParsedRuns {
     pub(super) runs: Vec<Run>,
     /// True only when the break came from `<w:br w:type="page"/>` at the
     /// start of the paragraph, not from the `<w:pageBreakBefore/>` style
-    /// property. The renderer treats these differently — see
+    /// property. The renderer treats these differently вЂ” see
     /// `Paragraph.page_break_before_explicit`.
     pub(super) has_explicit_page_break_before: bool,
     pub(super) has_page_break_after: bool,
@@ -203,7 +203,7 @@ impl Run {
     }
 
     /// Build a tab run that retains underline + color so a `<w:tab/>` with
-    /// `<w:u w:val="single"/>` renders an underlined span across the tab gap —
+    /// `<w:u w:val="single"/>` renders an underlined span across the tab gap вЂ”
     /// Word uses this to draw horizontal rules in signature lines etc.
     fn tab_run(&self) -> Run {
         Run {
@@ -353,7 +353,7 @@ impl ParagraphRunDefaults {
         let cs = |f: fn(&RunProps) -> Option<bool>| char_style.and_then(f);
         let char_style_font_size = char_style.and_then(|cs| cs.font_size);
         let char_style_font_name = char_style.and_then(|cs| cs.font_name.clone());
-        // True only when font_size/name came from doc defaults — not from inline rPr,
+        // True only when font_size/name came from doc defaults вЂ” not from inline rPr,
         // character style, OR paragraph style.  Table style overrides apply only here.
         let font_size_from_default = own.font_size.is_none()
             && char_style_font_size.is_none()
@@ -362,11 +362,11 @@ impl ParagraphRunDefaults {
             && char_style_font_name.is_none()
             && self.font_name_is_doc_default;
 
-        // Legacy Word-97 run text-effect toggles (§17.3.2.23/.31/.13/.18). These
+        // Legacy Word-97 run text-effect toggles (В§17.3.2.23/.31/.13/.18). These
         // are independent of the modern w14 DrawingML effects parsed below: a
         // plain <w:outline/>/<w:shadow/>/<w:emboss/>/<w:imprint/> draws as hollow
         // / dropshadowed / raised / engraved text. `w:effect` (animated shimmer)
-        // has no print form, so we deliberately don't read it — base text only.
+        // has no print form, so we deliberately don't read it вЂ” base text only.
         let font_size = own
             .font_size
             .or(char_style_font_size)
@@ -548,7 +548,7 @@ fn legacy_text_shadow(
     // as the raised/engraved ridge. Empirically the relief reads about as heavy
     // as the plain-shadow line in Word's PDF export, so use the same offset
     // (not a reduced one).
-    // ponytail: a single offset gray copy — Word's exact multi-pass face/
+    // ponytail: a single offset gray copy вЂ” Word's exact multi-pass face/
     // highlight/shadow antialiasing isn't replicated (a rare legacy effect).
     let d = (font_size * 0.035).max(0.4);
     (shadow || emboss || imprint).then_some(TextShadow {
@@ -760,7 +760,7 @@ fn collect_run_nodes<'a>(
         } else if is_wml && name == "fldSimple" {
             // Simple field: <w:fldSimple w:instr="..."><w:r>cached</w:r></w:fldSimple>.
             // Emit the cached display runs. Dynamic field codes (PAGE/NUMPAGES/etc.)
-            // are not rewritten here — the cached text matches Word's online converter
+            // are not rewritten here вЂ” the cached text matches Word's online converter
             // output for the static-PDF case.
             collect_run_nodes(child, rels, out, active_comments);
         } else if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
@@ -1148,7 +1148,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         .descendants()
                         .filter(|n| n.has_tag_name((WML_NS, "pict")))
                     {
-                        if let Some(tb) = parse_textbox_from_vml(pict, ctx) {
+                        if let Some(connector) = parse_connector_from_vml(pict) {
+                            connectors.push(connector);
+                        } else if let Some(tb) = parse_textbox_from_vml(pict, ctx) {
                             push_textbox(&floating_images, &mut textboxes, tb);
                         }
                     }
@@ -1162,7 +1164,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 "fldChar" => match child.attribute((WML_NS, "fldCharType")) {
                     Some("begin") => {
                         // A field is visible content unless the innermost open
-                        // field is still in its instruction region — in which
+                        // field is still in its instruction region вЂ” in which
                         // case this is a field argument and never displays.
                         let parent_visible = field_stack.last().is_none_or(|f| f.seen_sep);
                         if field_stack.is_empty() {
@@ -1241,7 +1243,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         .last()
                         .is_some_and(|f| f.seen_sep && f.dynamic());
                     if dyn_result {
-                        // Cached result of a dynamic field — keep it as the
+                        // Cached result of a dynamic field вЂ” keep it as the
                         // field run's placeholder text (re-evaluated at render).
                         if let Some(t) = child.text() {
                             field_stack.last_mut().unwrap().result.push_str(t);
@@ -1319,7 +1321,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         });
                     }
                 },
-                // A carriage return breaks the line like a text-wrapping br (§17.3.3.4).
+                // A carriage return breaks the line like a text-wrapping br (В§17.3.3.4).
                 "cr" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
@@ -1355,6 +1357,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                                 ..fmt.minimal_run()
                             });
                         }
+                    } else if let Some(connector) = parse_connector_from_vml(child) {
+                        connectors.push(connector);
                     } else if let Some(tb) = parse_textbox_from_vml(child, ctx) {
                         push_textbox(&floating_images, &mut textboxes, tb);
                     }
@@ -1598,7 +1602,7 @@ mod tests {
     #[test]
     fn complex_script_letters_take_the_cs_font() {
         let split = |cs: Option<&str>| {
-            let mut r = run("rice الأرز 150 x", None, None);
+            let mut r = run("rice Ш§Щ„ШЈШ±ШІ 150 x", None, None);
             r.font_name = "Aptos".into();
             r.cs_font_name = cs.map(Into::into);
             split_run_by_script(r)
@@ -1611,7 +1615,7 @@ mod tests {
         let expect = |cs| {
             vec![
                 seg("rice ", "Aptos"),
-                seg("الأرز", cs),
+                seg("Ш§Щ„ШЈШ±ШІ", cs),
                 seg(" 150 x", "Aptos"),
             ]
         };
