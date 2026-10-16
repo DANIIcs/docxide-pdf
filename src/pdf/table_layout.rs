@@ -165,30 +165,46 @@ fn natural_widths(
 ) -> Vec<f32> {
     let ncols = table.col_widths.len();
     let mut natural = vec![0.0f32; ncols];
-    for row in &table.rows {
-        for (grid_col, span, cell) in row.grid_cells() {
-            if grid_col >= ncols || span > 1 {
-                continue;
-            }
-            let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
-            let h_pad = ecm.left + ecm.right;
-            let mut key_buf = String::new();
-            for para in cell.all_paragraphs() {
-                let mut para_w = 0.0f32;
-                for run in &para.runs {
-                    let key = font_key_buf(run, &mut key_buf);
-                    let Some(entry) = fonts.get(key) else {
-                        continue;
-                    };
-                    let fs = run.font_size;
-                    let text = if run.caps {
-                        std::borrow::Cow::Owned(run.text.to_uppercase())
-                    } else {
-                        std::borrow::Cow::Borrowed(&run.text)
-                    };
-                    para_w += word_width_for_run(entry, run, &text, fs, run.kerns_at(fs), 0.0, 1.0);
+    for spanning in [false, true] {
+        for row in &table.rows {
+            for (grid_col, span, cell) in row.grid_cells() {
+                if grid_col >= ncols || (span > 1) != spanning {
+                    continue;
                 }
-                natural[grid_col] = natural[grid_col].max(para_w + h_pad);
+                let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
+                let h_pad = ecm.left + ecm.right;
+                let mut key_buf = String::new();
+                for para in cell.all_paragraphs() {
+                    let mut para_w = 0.0f32;
+                    for run in &para.runs {
+                        let key = font_key_buf(run, &mut key_buf);
+                        let Some(entry) = fonts.get(key) else {
+                            continue;
+                        };
+                        let fs = run.font_size;
+                        let text = if run.caps {
+                            std::borrow::Cow::Owned(run.text.to_uppercase())
+                        } else {
+                            std::borrow::Cow::Borrowed(&run.text)
+                        };
+                        para_w +=
+                            word_width_for_run(entry, run, &text, fs, run.kerns_at(fs), 0.0, 1.0);
+                    }
+                    let end = (grid_col + span).min(ncols);
+                    let current: f32 = natural[grid_col..end].iter().sum();
+                    let required = para_w + h_pad;
+                    if required > current {
+                        let preferred: f32 = table.col_widths[grid_col..end].iter().sum();
+                        for col in grid_col..end {
+                            let share = if preferred > 0.0 {
+                                table.col_widths[col] / preferred
+                            } else {
+                                1.0 / (end - grid_col) as f32
+                            };
+                            natural[col] += (required - current) * share;
+                        }
+                    }
+                }
             }
         }
     }
@@ -2034,6 +2050,31 @@ pub(super) fn find_cell_split(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn natural_width_includes_merged_cell_text() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+        const W: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        let xml = format!(
+            r#"<w:document xmlns:w="{W}"><w:body><w:tbl><w:tblPr><w:tblW w:type="auto" w:w="0"/></w:tblPr><w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="2000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="6000" w:type="dxa"/><w:gridSpan w:val="3"/></w:tcPr><w:p><w:r><w:rPr><w:rFonts w:ascii="TestFont" w:hAnsi="TestFont"/><w:sz w:val="20"/></w:rPr><w:t>{}</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#,
+            "x".repeat(100)
+        );
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("word/document.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(xml.as_bytes()).unwrap();
+        let mut doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+        let Block::Table(table) = doc.sections[0].blocks.remove(0) else {
+            panic!("table")
+        };
+        let fonts = HashMap::from([("TestFont".into(), FontEntry::stub())]);
+        let widths = natural_widths(&table, &fonts, &table.cell_margins);
+        let required = 500.0 + table.cell_margins.left + table.cell_margins.right;
+        assert!((widths.iter().sum::<f32>() - required).abs() < 0.01);
+        assert!((widths[1] - widths[0] * 2.0).abs() < 0.01);
+        assert!((widths[2] - widths[0] * 3.0).abs() < 0.01);
+    }
 
     #[test]
     fn indented_autofit_word_width_is_invariant_to_run_formatting() {
