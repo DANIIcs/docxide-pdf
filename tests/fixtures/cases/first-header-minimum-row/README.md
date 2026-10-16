@@ -8,6 +8,3 @@ page's body area but fits on the next page. Word places both `Minimum` and
 all three markers on page 1. Reference PDFs were exported using Microsoft
 Word on Windows. The inputs were generated from minimal OOXML and contain no
 customer documents, certificates, or personal metadata.
-
-Run `python tools/probe_minimum_row_header.py --engine <binary> --out <folder>`
-with pypdfium2 installed to verify the marker pages against all three references.
