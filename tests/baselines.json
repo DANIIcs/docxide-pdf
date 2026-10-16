@@ -2531,6 +2531,66 @@
     "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
+  "cases/dot-numero-digit-control": {
+    "jaccard": 0.5568,
+    "ssim": 0.9438,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/dot-numero-latin-control": {
+    "jaccard": 0.5545,
+    "ssim": 0.938,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/dot-numero-number-space-control": {
+    "jaccard": 0.5425,
+    "ssim": 0.931,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/dot-numero-numero": {
+    "jaccard": 0.5546,
+    "ssim": 0.9301,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/dot-numero-space-control": {
+    "jaccard": 0.5618,
+    "ssim": 0.9471,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/dot-numero-split-run": {
+    "jaccard": 0.5546,
+    "ssim": 0.9301,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/empty-float-float-indent-0-0": {
     "jaccard": 0.5465,
     "ssim": 0.9291,
@@ -2749,6 +2809,56 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.625,
+    "a11y_text": 1.0
+  },
+  "cases/first-header-minimum-overflow": {
+    "jaccard": 0.8093,
+    "ssim": 0.9321,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9286,
+    "a11y_text": 1.0
+  },
+  "cases/first-header-minimum-row": {
+    "jaccard": 0.878,
+    "ssim": 0.9539,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/first-header-no-minimum-control": {
+    "jaccard": 0.8725,
+    "ssim": 0.9519,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/first-header-no-minimum-overflow": {
+    "jaccard": 0.7588,
+    "ssim": 0.9189,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9286,
+    "a11y_text": 1.0
+  },
+  "cases/first-header-small-control": {
+    "jaccard": 0.8001,
+    "ssim": 0.9511,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
   "cases/fullwidth-float-empty-clear": {
@@ -3239,6 +3349,66 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.4,
+    "a11y_text": 1.0
+  },
+  "cases/nbsp-space-multiple-spaces": {
+    "jaccard": 0.5627,
+    "ssim": 0.9418,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/nbsp-space-nbsp-only": {
+    "jaccard": 0.5737,
+    "ssim": 0.9556,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/nbsp-space-ordinary-control": {
+    "jaccard": 0.5688,
+    "ssim": 0.9445,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/nbsp-space-single-run": {
+    "jaccard": 0.5733,
+    "ssim": 0.9518,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/nbsp-space-space-before-nbsp": {
+    "jaccard": 0.5733,
+    "ssim": 0.9518,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/nbsp-space-split-runs": {
+    "jaccard": 0.5733,
+    "ssim": 0.9518,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
   "cases/nested-float-no-spacer-inline": {
@@ -4216,9 +4386,9 @@
     "a11y_text": 0.8976
   },
   "scraped/construction_bathroom_accessories_spec": {
-    "jaccard": 0.7087,
-    "ssim": 0.9144,
-    "text_boundary": 0.8548,
+    "jaccard": 0.7202,
+    "ssim": 0.9264,
+    "text_boundary": 0.8871,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
