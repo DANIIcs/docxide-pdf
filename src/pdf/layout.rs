@@ -129,6 +129,10 @@ fn drop_url_breaks(text: &str, breaks: &mut Vec<usize>) {
 /// characters: `Some(true)` adds a break, `Some(false)` removes one, `None`
 /// keeps UAX #14's answer. The URL rule needs more context (`drop_url_breaks`).
 fn word_pair_rule(a: char, b: char) -> Option<bool> {
+    // Word keeps an abbreviation joined to an adjacent numero sign.
+    if a == '.' && b == '№' {
+        return Some(false);
+    }
     // Word breaks after a hyphen-minus where UAX #14 does not: before another
     // hyphen (LB21 would make a dash run one unbreakable word; family_kinship's
     // 87-dash rules wrap into two columns of dashes) and before a digit (LB25
@@ -4779,6 +4783,15 @@ mod tests {
             split_preserving_spaces("bb  cc"),
             vec![(0, "bb"), (2, "cc")]
         );
+    }
+
+    #[test]
+    fn abbreviation_before_numero_sign_stays_together() {
+        assert_eq!(split_preserving_spaces("ст.№4"), vec![(0, "ст.№4")]);
+        assert_eq!(split_preserving_spaces("st.№ 4"), vec![(0, "st.№"), (1, "4")]);
+        assert_eq!(split_preserving_spaces("st. №4"), vec![(0, "st."), (1, "№4")]);
+        assert!(!breaks_between('.', '№'));
+        assert!(breaks_between(' ', '№'));
     }
 
     #[test]
