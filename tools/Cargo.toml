@@ -28,7 +28,7 @@ path = "src/bin/analyze_fixtures.rs"
 
 [[bin]]
 name = "case-browser"
-path = "src/bin/case_browser.rs"
+path = "src/bin/case_browser/main.rs"
 
 [[bin]]
 name = "generate-shapes"
