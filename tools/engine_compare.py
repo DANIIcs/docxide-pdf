@@ -20,7 +20,7 @@ Usage:
     python3 tools/engine_compare.py --skip-libreoffice --no-scores
     python3 tools/engine_compare.py --fresh         # reconvert everything, ignoring every cache
     python3 tools/engine_compare.py --html-only     # rebuild index.html from the cached manifest, no re-scoring
-    python3 tools/engine_compare.py --shard 1/4     # every 4th fixture from the 2nd: CI runs the shards in parallel ...
+    python3 tools/engine_compare.py --shard 1/4     # the 2nd of 4 shards (fixtures assigned by name hash): CI runs them in parallel ...
     python3 tools/engine_compare.py --merge comparison/manifest.*.json   # ... and builds the site from their manifests
 
 rdocx: `rdocx` on PATH (cargo install rdocx) or RDOCX_BIN.
@@ -256,6 +256,7 @@ def convert_libreoffice(soffice: Path, docx: Path, pdf: Path) -> bool:
     produced = out / (docx.stem + ".pdf")
     if produced.exists() and produced != pdf:
         produced.replace(pdf)
+    shutil.rmtree(profile, ignore_errors=True)   # throwaway, and CI would otherwise cache it forever
     return converted(r, pdf)
 
 
@@ -553,9 +554,12 @@ def scoring_fingerprint() -> str:
     # The scorer by its sources, not its binary: page-metrics links the whole library (tests/common
     # calls the converter), so the binary changes with nearly every commit while scoring does not,
     # and CI recompiles it every run (rust-cache keeps dependencies only).
-    sources = [ROOT / "tools" / "src" / "bin" / "page_metrics.rs", *sorted((ROOT / "tests" / "common").glob("*.rs")),
-               ROOT / "tools" / "Cargo.toml", ROOT / "tools" / "Cargo.lock"]
-    scorer = [file_hash(p) for p in sources] + [tool_version("rustc", "--version")]
+    sources = [ROOT / "tools" / "src" / "bin" / "page_metrics.rs", *sorted((ROOT / "tests" / "common").glob("*.rs"))]
+    # Of the lock file, only the crates the scorer runs on: a bump of the case browser's GUI crate, or
+    # of rustc, changes no score, and either used to cost a full rescore (~25 min per CI shard).
+    lock = (ROOT / "tools" / "Cargo.lock").read_text()
+    crates = re.findall(r'^name = "(image|png|rayon|roxmltree|serde_json|sha2|zip)"\nversion = "([^"]+)"', lock, re.M)
+    scorer = [file_hash(p) for p in sources] + [f"{name} {version}" for name, version in crates]
     return fingerprint(*scorer, DPI, tool_version("mutool", "-v"), a11y)
 
 
@@ -661,6 +665,25 @@ def natural_key(s: str) -> list:
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)]
 
 
+def shard_of(group: str, case: str, n: int) -> int:
+    """Which of n shards a fixture belongs to. By name hash, not round robin over the sorted list: a
+    new fixture then moves no other one to a shard whose cache has to convert and score it from scratch."""
+    # ponytail: unweighted; balance by page count if one shard keeps lagging
+    return int(hashlib.sha256(f"{group}/{case}".encode()).hexdigest(), 16) % n
+
+
+def prune_work(fixtures: list[tuple[str, Path]]) -> None:
+    """Drop cached conversions of fixtures this run does not own: deleted or renamed ones, and in a shard
+    run the other shards' (CI caches work/ per shard, and nothing else would ever empty it)."""
+    keep = {(g, d.name) for g, d in fixtures}
+    gone = [d for g in GROUPS if (WORK / g).is_dir() for d in (WORK / g).iterdir()
+            if d.is_dir() and (g, d.name) not in keep]
+    for d in gone:
+        shutil.rmtree(d, ignore_errors=True)
+    if gone:
+        print(f"pruned {len(gone)} cached cases this run does not own")
+
+
 def build_site(results: list[dict], versions: dict, fmt: str, jobs: int) -> None:
     """Deployable static site at comparison/: index.html + every page image under <group>/<case>/<engine>/.
 
@@ -746,7 +769,8 @@ def main() -> None:
     ap.add_argument("--open", action="store_true", help="open the HTML when done")
     ap.add_argument("--html-only", action="store_true",
                     help="rebuild comparison/index.html from comparison/work/manifest.json (no conversion or scoring)")
-    ap.add_argument("--shard", metavar="I/N", help="only every N-th fixture, starting at the I-th (0-based)")
+    ap.add_argument("--shard", metavar="I/N",
+                    help="only the I-th of N shards (0-based); fixtures are assigned by name hash, and the cache is pruned to the shard")
     ap.add_argument("--merge", nargs="+", metavar="MANIFEST",
                     help="build the site from these shard manifests (no conversion or scoring)")
     ap.add_argument("--format", choices=["webp", "png"], default="webp",
@@ -762,7 +786,7 @@ def main() -> None:
         if opts.case or opts.group:
             old = load_manifest()
             done = {(c["group"], c["case"]) for c in results}
-            results = [c for c in old["cases"] if (c["group"], c["case"]) not in done] + results
+            results = [c for c in old["cases"] if c["group"] in GROUPS and (c["group"], c["case"]) not in done] + results
             versions = {**old["versions"], **versions}
         results.sort(key=lambda r: (GROUPS.index(r["group"]), natural_key(r["case"])))
         WORK.mkdir(parents=True, exist_ok=True)
@@ -829,7 +853,7 @@ def main() -> None:
         fixtures = [(g, d) for g, d in fixtures if any(fnmatch(d.name, c) for c in opts.case)]
     if opts.shard:
         i, n = map(int, opts.shard.split("/"))
-        fixtures = fixtures[i::n]   # ponytail: round robin; weight by page count if one shard keeps lagging
+        fixtures = [(g, d) for g, d in fixtures if shard_of(g, d.name, n) == i]
     print(f"{len(fixtures)} fixtures, {opts.jobs} jobs" + (f", shard {opts.shard}" if opts.shard else ""))
 
     results: list[dict] = []
@@ -850,6 +874,8 @@ def main() -> None:
                 print(f"  [{i}/{len(futures)}] {g}/{name}  {sc}")
 
     print()
+    if not (opts.case or opts.group):   # a filtered run owns nothing but what it was asked for
+        prune_work(fixtures)
     report_timeouts()
     finish(results, engine_versions(tools))
 
