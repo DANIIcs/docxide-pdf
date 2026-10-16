@@ -3921,14 +3921,26 @@ pub(super) fn render_paragraph_lines(
                 } else {
                     0.0
                 };
+                // Emboss/imprint move the face off the pen position, which
+                // keeps the gray copy (see TextShadow::relief).
+                let (fx, fy) = match chunk.text_shadow {
+                    Some(ref sh) if sh.relief => (x - sh.offset_x, cy - sh.offset_y),
+                    _ => (x, cy),
+                };
                 if let Some(ref sh) = chunk.text_shadow {
-                    let (sx, sy) = (x + sh.offset_x, cy + sh.offset_y);
+                    let (sx, sy) = (fx + sh.offset_x, fy + sh.offset_y);
                     let bytes =
                         encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
+                    let (ex, ey) = (fx - sh.offset_x, fy - sh.offset_y);
                     let draw_shadow = |content: &mut Content| {
                         content.set_text_matrix([1.0, 0.0, shear, 1.0, sx, sy]);
                         fill_color_or_black(content, Some(sh.color));
                         content.show(Str(&bytes));
+                        if sh.relief {
+                            content.set_text_matrix([1.0, 0.0, shear, 1.0, ex, ey]);
+                            fill_color_or_black(content, None);
+                            content.show(Str(&bytes));
+                        }
                         fill_color_or_black(content, current_color);
                     };
                     // The gray copy is an artifact, so the word is read,
@@ -3940,7 +3952,11 @@ pub(super) fn render_paragraph_lines(
                         }
                         None => {
                             draw_shadow(content);
-                            (sx, sy, shear)
+                            if sh.relief {
+                                (ex, ey, shear)
+                            } else {
+                                (sx, sy, shear)
+                            }
                         }
                     };
                 }
@@ -3955,7 +3971,7 @@ pub(super) fn render_paragraph_lines(
                     td_y = my;
                 };
 
-                move_to(content, x, cy);
+                move_to(content, fx, fy);
 
                 // Per-character font fallback: if some chars are missing
                 // from the primary font, split into segments and render

@@ -532,30 +532,28 @@ impl ParagraphRunDefaults {
     }
 }
 
-/// Map the legacy Word-97 run toggles (mutually exclusive per spec) to a
-/// drop-shadow approximation. Word's PDF export renders all three as a
-/// down-right gray drop shadow behind the (still-colored) glyph face;
-/// emboss/imprint use a slightly smaller offset than plain shadow.
+/// Map the legacy Word-97 run toggles (mutually exclusive per spec) to the
+/// gray copies Word's PDF export draws (online export probe, Arial 10/20/40pt,
+/// and case66 at 28pt). Shadow: a C0C0C0 copy down-right by size/24 on a
+/// 0.25pt grid. Emboss/imprint: a 0.6 gray copy 1pt down-right/up-left of the
+/// face at every size, plus a black one 1pt the other way.
 fn legacy_text_shadow(
     shadow: bool,
     emboss: bool,
     imprint: bool,
     font_size: f32,
 ) -> Option<TextShadow> {
-    // Drop shadow casts down-right. Word renders both emboss (raised) and
-    // imprint (engraved) on a white page as a prominent down-right gray drop
-    // shadow behind the glyph face, with the white background showing between
-    // as the raised/engraved ridge. Empirically the relief reads about as heavy
-    // as the plain-shadow line in Word's PDF export, so use the same offset
-    // (not a reduced one).
-    // ponytail: a single offset gray copy — Word's exact multi-pass face/
-    // highlight/shadow antialiasing isn't replicated (a rare legacy effect).
-    let d = (font_size * 0.035).max(0.4);
+    let (color, d) = if emboss || imprint {
+        ([153, 153, 153], if imprint { -1.0 } else { 1.0 })
+    } else {
+        ([192, 192, 192], (font_size / 24.0 * 4.0).round() / 4.0)
+    };
     (shadow || emboss || imprint).then_some(TextShadow {
-        color: [128, 128, 128],
+        color,
         offset_x: d,
         offset_y: -d,
         alpha: 1.0,
+        relief: emboss || imprint,
     })
 }
 
@@ -1711,5 +1709,23 @@ mod tests {
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].text, "green continues");
         assert_eq!(merged[0].shading, c);
+    }
+
+    #[test]
+    fn imprint_casts_up_left_and_emboss_down_right() {
+        let imprint = legacy_text_shadow(false, false, true, 28.0).unwrap();
+        assert_eq!((imprint.offset_x, imprint.offset_y), (-1.0, 1.0));
+        assert!(imprint.relief);
+        let emboss = legacy_text_shadow(false, true, false, 28.0).unwrap();
+        assert_eq!((emboss.offset_x, emboss.offset_y), (1.0, -1.0));
+        assert!(emboss.relief);
+        // Word's shadow offsets at 10/20/28/40pt.
+        for (size, d) in [(10.0, 0.5), (20.0, 0.75), (28.0, 1.25), (40.0, 1.75)] {
+            let shadow = legacy_text_shadow(true, false, false, size).unwrap();
+            assert_eq!(
+                (shadow.offset_x, shadow.offset_y, shadow.relief),
+                (d, -d, false)
+            );
+        }
     }
 }

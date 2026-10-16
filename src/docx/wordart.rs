@@ -108,6 +108,7 @@ pub(super) fn parse_text_shadow(rpr: roxmltree::Node, theme: &ThemeFonts) -> Opt
         offset_x,
         offset_y,
         alpha,
+        relief: false,
     })
 }
 

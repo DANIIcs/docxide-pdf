@@ -1899,8 +1899,8 @@
     "a11y_missing": 0
   },
   "cases/case66": {
-    "jaccard": 0.7492,
-    "ssim": 0.7111,
+    "jaccard": 0.8989,
+    "ssim": 0.8774,
     "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,

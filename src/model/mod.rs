@@ -683,6 +683,9 @@ pub struct TextShadow {
     pub offset_x: f32,
     pub offset_y: f32,
     pub alpha: f32,
+    /// Legacy emboss/imprint: Word leaves the gray copy on the pen position,
+    /// moves the face by -offset and draws a black copy at -2 × offset.
+    pub relief: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
