@@ -10,13 +10,18 @@
 #   gh repo deploy-key add assets_key.pub -R sverrejb/docxide-pdf-assets -t docxide-pdf-ci
 #   gh secret set ASSETS_DEPLOY_KEY -R sverrejb/docxide-pdf < assets_key && rm assets_key assets_key.pub
 #
-# Shards: the fixtures are split round-robin over SHARDS parallel jobs (engine_compare.py --shard i/n), each
-# with its own comparison/ cache; `publish` joins their site images and manifests and deploys. A cold run
-# took ~110 min on one runner (scoring is 3/4 of it: veraPDF + pdfinfo + SSIM per competitor PDF), which
-# is over the job limit once anything cold-starts the cache.
+# Shards: each fixture goes to one of SHARDS parallel jobs by a hash of its name (engine_compare.py
+# --shard i/n), so adding a fixture moves no other one; each job keeps its own comparison/work cache and
+# `publish` joins their site images and manifests and deploys. A cold run took ~110 min on one runner
+# (scoring is 3/4 of it: veraPDF + pdfinfo + SSIM per competitor PDF), which is over the job limit once
+# anything cold-starts the cache.
 #
-# Caching: Rust deps (rust-cache), competitor binaries (keyed by the version resolved at run time, so a
-# new release is built once and then reused), and comparison/ itself (PDFs, screenshots, WebP pages).
+# Caching: Rust deps (rust-cache, one key shared by the shards), competitor binaries (keyed by the version
+# resolved at run time, so a new release is built once and then reused), and comparison/work (PDFs,
+# screenshots, scores; the WebP site is re-encoded from them each run, ~1 min). Each shard saves its cache
+# under a new key every run and then deletes the key it restored from: the repository's 10 GB cache limit
+# evicts the least recently used entries, and with two generations of every shard around that used to be
+# the competitor binaries (14 min to rebuild) or a whole shard (45 min cold instead of 15).
 # engine_compare.py skips work whose output is newer than its input, so tools/restore_mtime.py gives
 # checked-out files their commit times and only changed fixtures are reconverted. (Not the
 # git-restore-mtime package: it is built on `git whatchanged`, which the runner's Git refuses, and
