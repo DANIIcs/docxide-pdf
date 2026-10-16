@@ -5,6 +5,7 @@
 use crate::annotations::{Annotation, ImageSource};
 use crate::cases::CaseInfo;
 use std::fs::File;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Instant;
@@ -13,6 +14,13 @@ use std::time::Instant;
 pub enum JobKind {
     Regen,
     Fix(u64),
+}
+
+#[derive(Clone, Copy)]
+pub enum FixOutcome {
+    Done,
+    Failed,
+    Stopped,
 }
 
 pub struct Job {
@@ -32,6 +40,14 @@ impl Job {
             JobKind::Fix(id) => Some(id),
             JobKind::Regen => None,
         }
+    }
+
+    /// Kill the job and everything it started. Fixes run as their own process
+    /// group, so a negative pid reaches the cargo test Claude may be inside.
+    pub fn stop(mut self) {
+        let _ = Command::new("kill").arg("--").arg(format!("-{}", self.child.id())).status();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -123,6 +139,7 @@ pub fn fix(root: &Path, log: &Path, case: &CaseInfo, ann: &Annotation) -> std::i
         .arg(worktree_path(root, ann.id))
         .arg(fix_branch(ann.id))
         .arg(&prompt)
+        .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::from(log.try_clone()?))
         .stderr(Stdio::from(log))

@@ -3,7 +3,7 @@
 use crate::App;
 use crate::annotations::{Annotation, ImageSource, source_color};
 use crate::cases::{baseline_key, normalize_name, snapshot_acknowledged};
-use crate::jobs;
+use crate::jobs::{self, FixOutcome};
 use crate::views::{VIEW_MODE_KEYS, ViewMode};
 use eframe::egui;
 use std::collections::HashMap;
@@ -303,6 +303,7 @@ pub fn top_bar(app: &mut App, ctx: &egui::Context) {
     // Top bar: case name and view mode
     let mut acknowledge_current = false;
     let mut start_regen = false;
+    let mut stop_fix = None;
     egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
         ui.horizontal(|ui| {
             let case = &app.cases[app.current_case];
@@ -323,6 +324,11 @@ pub fn top_bar(app: &mut App, ctx: &egui::Context) {
                         egui::Color32::from_rgb(220, 180, 0),
                         format!("{what} {}", job.elapsed()),
                     );
+                    if let Some(id) = job.fixing()
+                        && ui.small_button("stop").clicked()
+                    {
+                        stop_fix = Some(id);
+                    }
                 }
             }
             ui.separator();
@@ -380,6 +386,9 @@ pub fn top_bar(app: &mut App, ctx: &egui::Context) {
     if start_regen {
         app.start_regen();
     }
+    if let Some(id) = stop_fix {
+        app.stop_fix(id);
+    }
 
     if acknowledge_current {
         let key = baseline_key(&app.cases[app.current_case].name);
@@ -433,6 +442,7 @@ pub fn notes_panel(app: &mut App, ctx: &egui::Context) {
         let mut clear_id = None;
         let mut toggle_fixed_id = None;
         let mut start_fix_id = None;
+        let mut stop_fix_id = None;
         egui::SidePanel::left("notes_panel")
             .default_width(220.0)
             .show(ctx, |ui| {
@@ -474,6 +484,9 @@ pub fn notes_panel(app: &mut App, ctx: &egui::Context) {
                             if let Some(job) = fixing {
                                 ui.spinner();
                                 ui.weak(job.elapsed());
+                                if ui.small_button("Stop").clicked() {
+                                    stop_fix_id = Some(*ann_id);
+                                }
                             } else if !ann.fixed
                                 && ui
                                     .small_button("Fix")
@@ -485,14 +498,18 @@ pub fn notes_panel(app: &mut App, ctx: &egui::Context) {
                                 start_fix_id = Some(*ann_id);
                             }
                         });
-                        if let Some(&ok) = app.fix_results.get(ann_id) {
-                            let (color, text) = if ok {
-                                (
+                        if let Some(outcome) = app.fix_results.get(ann_id) {
+                            let (color, text) = match outcome {
+                                FixOutcome::Done => (
                                     egui::Color32::from_rgb(0, 180, 0),
                                     format!("Claude finished on {}", jobs::fix_branch(*ann_id)),
-                                )
-                            } else {
-                                (egui::Color32::from_rgb(220, 40, 40), "Claude failed".to_string())
+                                ),
+                                FixOutcome::Failed => {
+                                    (egui::Color32::from_rgb(220, 40, 40), "Claude failed".to_string())
+                                }
+                                FixOutcome::Stopped => {
+                                    (egui::Color32::from_gray(140), "Stopped".to_string())
+                                }
                             };
                             ui.colored_label(color, text).on_hover_text(format!(
                                 "log: {}",
@@ -526,6 +543,9 @@ pub fn notes_panel(app: &mut App, ctx: &egui::Context) {
         }
         if let Some(id) = start_fix_id {
             app.start_fix(id);
+        }
+        if let Some(id) = stop_fix_id {
+            app.stop_fix(id);
         }
     }
 }

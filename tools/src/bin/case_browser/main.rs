@@ -13,7 +13,7 @@ use cases::{
     load_baselines, load_hashes,
 };
 use eframe::egui;
-use jobs::{Job, JobKind};
+use jobs::{FixOutcome, Job, JobKind};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -73,8 +73,8 @@ pub struct App {
     pub filter_changed: bool,
     /// Running background processes: at most one re-generate, any number of Claude fixes.
     pub jobs: Vec<Job>,
-    /// Outcome of fixes finished this session, by annotation id (true = claude exited 0).
-    pub fix_results: HashMap<u64, bool>,
+    /// Outcome of fixes finished this session, by annotation id.
+    pub fix_results: HashMap<u64, FixOutcome>,
 }
 
 impl App {
@@ -157,6 +157,13 @@ impl App {
         }
     }
 
+    pub fn stop_fix(&mut self, ann_id: u64) {
+        if let Some(i) = self.jobs.iter().position(|j| j.fixing() == Some(ann_id)) {
+            self.jobs.remove(i).stop();
+            self.fix_results.insert(ann_id, FixOutcome::Stopped);
+        }
+    }
+
     /// Reap finished jobs. A re-generate rewrote tests/output, so reload it. A fix
     /// ran in its own worktree and reaches the main tree only through the `fixed`
     /// flag in that worktree's copy of annotations.json, mirrored here.
@@ -186,7 +193,8 @@ impl App {
                         a.fixed = true;
                         self.save_annotations();
                     }
-                    self.fix_results.insert(id, succeeded);
+                    let outcome = if succeeded { FixOutcome::Done } else { FixOutcome::Failed };
+                    self.fix_results.insert(id, outcome);
                 }
             }
         }

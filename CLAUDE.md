@@ -242,7 +242,7 @@ The case browser (`tools/src/bin/case_browser/`) supports click-to-annotate. All
 3. Use the overlay view (key `O`) in the case browser to see exactly what differs between reference and generated output at the annotated location
 4. Annotations with `"fixed": true` have been resolved — focus on unfixed ones
 
-**Keyboard shortcuts:** `A` toggle markers, `N` toggle notes panel, click image to add note, `Cmd+Enter` to save, `Escape` to cancel. The **Fix** button next to a note hands it to a headless `claude -p` run in its own worktree (`.worktrees/fix-<id>`, branch `fix/ann-<id>`, log in `tests/output/fix-<id>.log`), so several can run at once; the top bar shows each run, and when one exits the GUI mirrors the `fixed` flag Claude set in the worktree. Merge the branch and press Re-generate to see the result.
+**Keyboard shortcuts:** `A` toggle markers, `N` toggle notes panel, click image to add note, `Cmd+Enter` to save, `Escape` to cancel. The **Fix** button next to a note hands it to a headless `claude -p` run in its own worktree (`.worktrees/fix-<id>`, branch `fix/ann-<id>`, log in `tests/output/fix-<id>.log`), so several can run at once; the top bar shows each run, **Stop** kills one (with any cargo run it started, the worktree is kept), and when one exits the GUI mirrors the `fixed` flag Claude set in the worktree. Merge the branch and press Re-generate to see the result.
 
 ### pdf-writer Patterns
 Object IDs must be written exactly once. Build the content stream first, then write the page object:
