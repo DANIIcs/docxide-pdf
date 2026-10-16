@@ -33,6 +33,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write   # force-push gh-pages
+  actions: read     # shard durations for the run summary
 concurrency:
   group: engine-comparison   # deploy is a force-push; a queued run starts warm from the cache the running one saves
 env:
@@ -156,6 +157,19 @@ jobs:
         run: |
           python3 tools/engine_compare.py --merge comparison/manifest.*.json
           rm comparison/manifest.*.json
+      - name: Run summary
+        # The previous run's report.json comes from the published site; the new one is published with it.
+        continue-on-error: true   # a report bug must not block the deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -sfL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/gh-pages/report.json" -o "$RUNNER_TEMP/prev.json" || true
+          python3 tools/ci_report.py "$RUNNER_TEMP/prev.json" comparison/work/manifest.json comparison/report.json >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo; echo "| Shard | Minutes (limit 120) |"; echo "|---|---|"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs" \
+              --jq '.jobs[] | select(.name | startswith("compare")) | "| \(.name) | \(((.completed_at | fromdate) - (.started_at | fromdate)) / 60 | floor) |"'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to gh-pages
         env:
           GH_TOKEN: ${{ github.token }}
