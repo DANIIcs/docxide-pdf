@@ -949,6 +949,17 @@ pub(super) fn compute_row_layouts(
                     let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
                     let block_count = cell.content.len();
+                    // Modern Word drops the relocated anchor line only when
+                    // its empty paragraph has expanded automatic line spacing.
+                    // Single/exact/at-least spacing and legacy modes retain it.
+                    let suppress_negative_mark = |idx: usize, offset: Option<f32>| {
+                        ctx.compat_mode >= 15 && offset.is_some_and(|y| y < 0.0)
+                            && idx.checked_sub(1).and_then(|i| cell.content.get(i))
+                                .is_some_and(|b| matches!(b, Block::Paragraph(p)
+                                    if is_text_empty(&p.runs)
+                                        && matches!(p.line_spacing.unwrap_or(ctx.doc_line_spacing),
+                                            crate::model::LineSpacing::Auto(factor) if factor > 1.0)))
+                    };
                     for (block_idx, block) in cell.content.iter().enumerate() {
                         match block {
                             Block::Paragraph(para) => {
@@ -1500,7 +1511,8 @@ pub(super) fn compute_row_layouts(
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
                                 // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
-                                prev_was_nested_table = floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0));
+                                prev_was_nested_table = floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                    || suppress_negative_mark(block_idx, floating_offset);
                                 para_idx += 1;
                             }
                         }
@@ -1513,7 +1525,8 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0)))
+                            if floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
