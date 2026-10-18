@@ -50,13 +50,13 @@ pub(super) struct EmbeddedImages {
     pub(super) effect_table_names: HashMap<usize, EffectXObjs>,
 }
 
-// Word's PDF export keeps the picture's own pixels: a 1706×1279 photo shown
-// at 269×201pt (457 DPI) stays 1706×1279 in the reference PDF. Downsampling
-// is therefore off; `DOWNSAMPLE_DPI_TARGET` stays for an explicit
-// "compress pictures" path (not implemented), and `downscale_target` keeps
-// working for callers that pass their own threshold later.
-const DOWNSAMPLE_DPI_THRESHOLD: f32 = f32::INFINITY;
-const DOWNSAMPLE_DPI_TARGET: f32 = 220.0;
+// Word's online export resamples any picture shown above ~192 ppi down to
+// 192 ppi (measured over the fixture references: 88 of 100 resampled images
+// land at 189–192 ppi, the largest kept one is at 184; case27's 1800×1200
+// photo becomes 479×320). A desktop export with picture compression off keeps
+// the source pixels instead, which is where "never downsample" came from.
+const DOWNSAMPLE_DPI_THRESHOLD: f32 = 192.0;
+const DOWNSAMPLE_DPI_TARGET: f32 = 192.0;
 const JPEG_QUALITY: u8 = 85;
 
 /// If pixel dimensions far exceed what's needed at the display size, return

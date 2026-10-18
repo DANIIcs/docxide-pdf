@@ -1594,6 +1594,16 @@ fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRul
 mod tests {
     use super::*;
 
+    #[test]
+    fn eq_overstrike_checkbox_and_other_fields() {
+        assert_eq!(parse_eq_overstrike(r"EQ \o\ac(□,√)").as_deref(), Some("☑"));
+        assert_eq!(parse_eq_overstrike(r" eq \O\ac( ☐ , √ )").as_deref(), Some("☑"));
+        assert_eq!(parse_eq_overstrike(r"EQ \o(a,´)").as_deref(), Some("a"));
+        assert_eq!(parse_eq_overstrike(r"EQ \f(1,2)"), None);
+        assert_eq!(parse_eq_overstrike(r"PAGE \* MERGEFORMAT"), None);
+        assert_eq!(parse_eq_overstrike(r"EQ \o()"), None);
+    }
+
     fn run(text: &str, shading: Option<[u8; 3]>, highlight: Option<[u8; 3]>) -> Run {
         Run {
             text: text.to_string(),
