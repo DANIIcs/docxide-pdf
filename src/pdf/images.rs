@@ -57,7 +57,10 @@ pub(super) struct EmbeddedImages {
 // the source pixels instead, which is where "never downsample" came from.
 const DOWNSAMPLE_DPI_THRESHOLD: f32 = 192.0;
 const DOWNSAMPLE_DPI_TARGET: f32 = 192.0;
-const JPEG_QUALITY: u8 = 85;
+// Word's online export writes every JPEG at libjpeg quality 75 (all 30 across
+// six references); at 85 our files outgrew Word's once re-encoding became
+// unconditional.
+const JPEG_QUALITY: u8 = 75;
 
 /// If pixel dimensions far exceed what's needed at the display size, return
 /// target pixel dimensions for downscaling. Returns `None` if no downscaling needed.
