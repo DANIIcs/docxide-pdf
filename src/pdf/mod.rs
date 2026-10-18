@@ -312,9 +312,22 @@ impl<'a> OpenFrame<'a> {
     }
 
     fn close(self, state: &mut LayoutState, sp: &SectionProperties) {
-        if self.props.text_below {
-            let bottom = sp.page_height - state.pb.slot_top;
-            state.pb.frame_bands.push((self.top, bottom));
+        let bottom = sp.page_height - state.pb.slot_top;
+        // A full-width wrapping frame blocks body lines even if a previous
+        // table already owns float_zone. Its overflowing content must not be
+        // lost when restoring that table's exclusion zone below.
+        let full_width = side_room(
+            WrapText::BothSides,
+            self.geometry.0 - sp.margin_left,
+            sp.page_width - sp.margin_right - self.geometry.0 - self.geometry.1,
+        ) < MIN_EMPTY_STRIP;
+        if self.props.text_below || full_width
+        {
+            let wrap_bottom = if full_width && self.props.height_exact && self.props.height > 0.0 {
+                self.top + self.props.height
+            } else if full_width { self.top + self.props.height.max(bottom - self.top) }
+            else { bottom };
+            state.pb.frame_bands.push((self.top, wrap_bottom));
         }
         let flow = self.flow;
         state.pb.slot_top = flow.slot_top;
@@ -322,7 +335,7 @@ impl<'a> OpenFrame<'a> {
         state.prev_space_after = flow.prev_space_after;
         state.current_col = flow.current_col;
         state.pb.float_zone = flow.float_zone;
-        if paragraph_offset_frame(self.props) {
+        if paragraph_offset_frame(self.props) && !full_width {
             let top = sp.page_height - self.top;
             state.pb.float_zone.get_or_insert(FloatZone {
                 top_y: top + self.props.v_space,

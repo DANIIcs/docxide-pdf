@@ -416,6 +416,8 @@ pub struct FrameProperties {
     pub width: f32,
     /// Frame height `w:h` in points (0 = auto/unspecified).
     pub height: f32,
+    /// `w:hRule="exact"`: fixed exclusion height even when text overflows.
+    pub height_exact: bool,
     /// `w:wrap` none/notBeside: body text may not flow beside the frame, so
     /// in-flow text starts below its bottom edge.
     pub text_below: bool,
