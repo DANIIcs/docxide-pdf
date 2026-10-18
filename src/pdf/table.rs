@@ -2118,6 +2118,17 @@ pub(super) fn render_table(
                     <= available_h
             })
         });
+        // A nested table may split within its first row. Requiring that whole
+        // row above would reject a fitting first paragraph and move the outer
+        // row early. Use the same recursive cursors as the actual split, and
+        // retain the overflow guard for force-included first items.
+        let first_chunks_fit = first_chunks_fit || (layout.cells.iter().any(|c|
+            matches!(c.items.first(), Some(CellContentItem::NestedTable { rows, .. })
+                if rows.first().is_some_and(|r| r.split_min.is_some()))) && {
+            let ends: Vec<CellCursor> = layout.cells.iter()
+                .map(|c| find_cell_split(c, &CELL_START, available_h)).collect();
+            partial_row_height(layout, &[], &ends) <= available_h
+        });
         // Word splits with one line of room: nabl's "Remarks" row breaks
         // between its paragraphs with 30pt left. ponytail: 14pt (a line) guard
         // so a near-boundary rounding error can't split off nothing; drop it
