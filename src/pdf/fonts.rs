@@ -602,12 +602,12 @@ pub(super) fn collect_and_register_fonts(
     // shared CJK fallback font so the rendering code can substitute per-character.
     let mut all_missing_cjk: HashSet<char> = HashSet::new();
     for entry in seen_fonts.values() {
-        all_missing_cjk.extend(&entry.missing_cjk_chars);
+        all_missing_cjk.extend(&entry.missing_chars);
     }
     if !all_missing_cjk.is_empty() {
-        let fallback_key = "__cjk_fallback".to_string();
+        let fallback_key = "__glyph_fallback".to_string();
         let pdf_name = format!("F{}", font_order.len() + 1);
-        let fallback_font_name = crate::fonts::cjk_rescue_fonts(&all_missing_cjk);
+        let fallback_font_name = crate::fonts::rescue_fonts(&all_missing_cjk);
         let ctx = FontContext {
             embedded_fonts: &doc.embedded_fonts,
             font_table: &doc.font_table,
@@ -629,15 +629,15 @@ pub(super) fn collect_and_register_fonts(
 
         // Copy fallback char widths into each primary font so layout uses correct widths
         if let Some(fb_widths) = seen_fonts
-            .get("__cjk_fallback")
+            .get("__glyph_fallback")
             .and_then(|e| e.char_widths_1000.clone())
         {
             for entry in seen_fonts.values_mut() {
-                if entry.missing_cjk_chars.is_empty() {
+                if entry.missing_chars.is_empty() {
                     continue;
                 }
                 let widths = entry.char_widths_1000.get_or_insert_with(HashMap::new);
-                for &ch in &entry.missing_cjk_chars {
+                for &ch in &entry.missing_chars {
                     if let Some(&w) = fb_widths.get(&ch) {
                         widths.insert(ch, w);
                     }

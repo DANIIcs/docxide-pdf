@@ -1182,8 +1182,18 @@ pub(super) fn render_header_footer(
                                             &tp.runs,
                                             ctx.textbox_image_names,
                                         );
-                                        let tb_lines = build_lines(
+                                        // Footer page numbers live in text boxes as often
+                                        // as in plain paragraphs; without this the box
+                                        // kept the template's cached PAGE/NUMPAGES text.
+                                        let hf_runs = substitute_hf_runs(
                                             &tp.runs,
+                                            page_num,
+                                            total_pages,
+                                            styleref_values,
+                                            page_num_format,
+                                        );
+                                        let tb_lines = build_lines(
+                                            &hf_runs,
                                             ctx,
                                             tp_text_w,
                                             ctx.cjk(true, tp),
@@ -1196,7 +1206,7 @@ pub(super) fn render_header_footer(
                                                 ..Default::default()
                                             },
                                         );
-                                        let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
+                                        let (fs, lhr, _) = tallest_run_metrics(&hf_runs, ctx.fonts);
                                         let line_h = resolve_line_h(tp_ls, fs, lhr);
                                         tp.space_before
                                             + tb_lines.len().max(1) as f32 * line_h
@@ -1262,8 +1272,18 @@ pub(super) fn render_header_footer(
 
                                 let inline_imgs =
                                     super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
-                                let tb_lines = build_lines(
+                                // Same substitution as the height pass above: the
+                                // footer text box's PAGE/NUMPAGES must be evaluated
+                                // for this page, not left at the cached value.
+                                let hf_runs = substitute_hf_runs(
                                     &tp.runs,
+                                    page_num,
+                                    total_pages,
+                                    styleref_values,
+                                    page_num_format,
+                                );
+                                let tb_lines = build_lines(
+                                    &hf_runs,
                                     ctx,
                                     tp_text_w,
                                     ctx.cjk(true, tp),
@@ -1277,7 +1297,7 @@ pub(super) fn render_header_footer(
                                     },
                                 );
                                 let (tb_fs, tb_lhr, tb_ar) =
-                                    tallest_run_metrics(&tp.runs, ctx.fonts);
+                                    tallest_run_metrics(&hf_runs, ctx.fonts);
                                 let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
                                 if tb_lines.is_empty() {
                                     tb_cursor -= tp.space_before + tb_line_h + tp.space_after;

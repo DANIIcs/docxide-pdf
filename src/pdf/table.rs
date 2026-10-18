@@ -460,6 +460,7 @@ fn render_cell_content(
     gradient_specs: &mut Vec<super::GradientSpec>,
     links: &mut Vec<LinkAnnotation>,
     mut tagger: Option<CellTagger<'_>>,
+    hf_sub: Option<&HfSubstitution>,
 ) {
     let mut cursor_y = cursor_y_start;
     let mut block_idx = 0;
@@ -623,6 +624,7 @@ fn render_cell_content(
                         gradient_specs,
                         links,
                         &mut tagger,
+                        hf_sub,
                     );
                 }
                 for fi in para.floating_images.iter().filter(above_shapes) {
@@ -745,6 +747,7 @@ fn render_cell_floating_shapes(
     gradient_specs: &mut Vec<super::GradientSpec>,
     links: &mut Vec<LinkAnnotation>,
     tagger: &mut Option<CellTagger<'_>>,
+    hf_sub: Option<&HfSubstitution>,
 ) {
     use super::positioning::render_connector;
     use crate::model::HorizontalPosition;
@@ -776,7 +779,17 @@ fn render_cell_floating_shapes(
                 let sect = t.sect();
                 (&mut *t.tags, t.page, sect)
             });
-        render_simple_textbox(content, tb, tb_x, tb_y_top, ctx, gradient_specs, links, tag);
+        render_simple_textbox(
+            content,
+            tb,
+            tb_x,
+            tb_y_top,
+            ctx,
+            gradient_specs,
+            links,
+            tag,
+            hf_sub,
+        );
     }
 }
 
@@ -792,6 +805,7 @@ fn render_simple_textbox(
     links: &mut Vec<LinkAnnotation>,
     // As in `render_textbox_paragraphs`: the Sect the text is tagged in.
     tag: Option<(&mut Tags, usize, usize)>,
+    hf_sub: Option<&HfSubstitution>,
 ) {
     use super::smartart::{draw_shape_path, draw_shape_stroke_path};
     use super::textbox_render::render_textbox_paragraphs;
@@ -857,6 +871,7 @@ fn render_simple_textbox(
         None,
         gradient_specs,
         tag,
+        hf_sub,
     );
 }
 
@@ -878,6 +893,7 @@ fn render_table_rows(
     // cell; header/footer tables stay artifacts.
     mut tag: Option<(&mut Tags, &mut TableTags, usize)>,
     rows: std::ops::Range<usize>,
+    hf_sub: Option<&HfSubstitution>,
 ) {
     for (ri, (row, layout)) in table
         .rows
@@ -946,6 +962,7 @@ fn render_table_rows(
                     gradient_specs,
                     links,
                     tagger,
+                    hf_sub,
                 );
             } else if let Some(t) = tagger {
                 t.empty_para(content);
@@ -1028,6 +1045,7 @@ fn render_nested_table(
                 links,
                 reborrow(&mut tag),
                 range,
+                None,
             ),
             RowPiece::Partial { row, starts, ends } => render_partial_row(
                 &table.rows[row],
@@ -1387,6 +1405,7 @@ fn render_table_row(
                     &mut no_links
                 },
                 tagger,
+                None,
             );
             move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
         }
@@ -2420,6 +2439,7 @@ pub(super) fn render_header_footer_table(
         links,
         None,
         0..usize::MAX,
+        Some(&hf_sub),
     );
     // ponytail: header/footer cells get no balloons (the pane anchors body text only).
     ctx.cell_comment_anchors.borrow_mut().clear();

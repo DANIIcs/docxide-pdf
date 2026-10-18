@@ -50,8 +50,13 @@ pub(super) struct EmbeddedImages {
     pub(super) effect_table_names: HashMap<usize, EffectXObjs>,
 }
 
-const DOWNSAMPLE_DPI_THRESHOLD: f32 = 200.0;
-const DOWNSAMPLE_DPI_TARGET: f32 = 150.0;
+// Word's PDF export keeps the picture's own pixels: a 1706×1279 photo shown
+// at 269×201pt (457 DPI) stays 1706×1279 in the reference PDF. Downsampling
+// is therefore off; `DOWNSAMPLE_DPI_TARGET` stays for an explicit
+// "compress pictures" path (not implemented), and `downscale_target` keeps
+// working for callers that pass their own threshold later.
+const DOWNSAMPLE_DPI_THRESHOLD: f32 = f32::INFINITY;
+const DOWNSAMPLE_DPI_TARGET: f32 = 220.0;
 const JPEG_QUALITY: u8 = 85;
 
 /// If pixel dimensions far exceed what's needed at the display size, return
@@ -343,9 +348,12 @@ fn embed_image_xobject(
 
     match img.format {
         ImageFormat::Jpeg => {
-            // Decode -> resize / recolour -> re-encode as JPEG. A plain
-            // full-resolution JPEG is passed through untouched below.
-            if target.is_some() || img.lum.is_some() {
+            // Decode -> resize / recolour -> re-encode as JPEG. Word always
+            // re-encodes at the picture's own pixel size (a 1706×1279 photo
+            // shrinks 1371 KB → 374 KB with no pixel loss), so take this path
+            // even when no resize is needed; `target` only decides the size.
+            // A decode failure falls through to embedding the original bytes.
+            {
                 let cursor = std::io::Cursor::new(img.data.as_slice());
                 let reader = image::ImageReader::with_format(
                     std::io::BufReader::new(cursor),
