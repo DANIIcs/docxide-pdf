@@ -425,3 +425,180 @@ mod tests {
         assert!((x - 6.0).abs() < 1e-3 && (y - 6.0).abs() < 1e-3);
     }
 }
+
+/// Flatten legacy VML groups, whose children use coordorigin/coordsize units.
+/// The leaf renderers still receive ordinary point-based anchors.
+pub(super) fn parse_vml_group<R: Read + Seek>(
+    pict: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+) -> Option<RunDrawingResult> {
+    use super::OFFICE_NS;
+    use super::textbox::{parse_vml_box_style, parse_vml_color};
+    use super::{VML_NS, parse_pt};
+    use crate::model::{ArrowEnd, ConnectorShape};
+    fn parse_connector_from_vml(shape: roxmltree::Node) -> Option<ConnectorShape> {
+        let kind = shape
+            .attribute((OFFICE_NS, "spt"))
+            .and_then(|v| v.parse::<u32>().ok())
+            .or_else(|| shape.attribute("type")?.rsplit_once('t')?.1.parse().ok());
+        if kind != Some(32) || matches!(shape.attribute("stroked"), Some("f" | "false")) {
+            return None;
+        }
+        let style = shape.attribute("style").unwrap_or("");
+        let b = parse_vml_box_style(style);
+        Some(ConnectorShape {
+            behind_doc: false,
+            h_position: HorizontalPosition::Offset(0.0),
+            h_relative_from: b.h_relative,
+            v_position: VerticalPosition::Offset(0.0),
+            v_relative_from: b.v_relative,
+            width: b.width,
+            height: b.height,
+            stroke_color: shape
+                .attribute("strokecolor")
+                .and_then(parse_vml_color)
+                .unwrap_or([0, 0, 0]),
+            stroke_width: shape
+                .attribute("strokeweight")
+                .and_then(parse_pt)
+                .filter(|v| v.is_finite() && *v > 0.0)
+                .unwrap_or(0.75),
+            connector_type: ConnectorType::Line {
+                flip_h: false,
+                flip_v: false,
+            },
+            head_end: ArrowEnd::None,
+            tail_end: ArrowEnd::None,
+            z_index: 0,
+        })
+    }
+    fn property<'a>(style: &'a str, key: &str) -> Option<&'a str> {
+        style
+            .split(';')
+            .filter_map(|p| p.trim().split_once(':'))
+            .find_map(|(k, v)| (k.trim() == key).then_some(v.trim()))
+    }
+    fn pair(value: &str) -> Option<(f32, f32)> {
+        let (x, y) = value.split_once(',')?;
+        Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+    }
+    fn walk<R: Read + Seek>(
+        node: roxmltree::Node,
+        parent: GroupTransform,
+        base: &BaseAnchor,
+        depth: usize,
+        ctx: &mut ParseContext<'_, R>,
+        out: &mut Vec<RunDrawingResult>,
+    ) {
+        if depth > 32 {
+            return;
+        }
+        let style = node.attribute("style").unwrap_or("");
+        if property(style, "visibility") == Some("hidden")
+            || property(style, "rotation").is_some()
+            || property(style, "flip").is_some()
+        {
+            return;
+        }
+        let number = |key: &str| property(style, key).and_then(parse_pt).unwrap_or(0.0);
+        let x = number("left") + number("margin-left");
+        let y = number("top") + number("margin-top");
+        let w = number("width");
+        let h = number("height");
+        if ![x, y, w, h].iter().all(|v| v.is_finite()) || w < 0.0 || h < 0.0 {
+            return;
+        }
+        if node.has_tag_name((VML_NS, "group")) {
+            let Some((cw, ch)) = node.attribute("coordsize").and_then(pair) else {
+                return;
+            };
+            if !cw.is_finite() || !ch.is_finite() || cw <= 0.0 || ch <= 0.0 {
+                return;
+            }
+            let (ox, oy) = node
+                .attribute("coordorigin")
+                .and_then(pair)
+                .unwrap_or((0.0, 0.0));
+            if !ox.is_finite() || !oy.is_finite() {
+                return;
+            }
+            let sx = parent.sx * w / cw;
+            let sy = parent.sy * h / ch;
+            let (tx, ty) = parent.apply(x, y);
+            let transform = GroupTransform {
+                sx,
+                sy,
+                tx: tx - sx * ox,
+                ty: ty - sy * oy,
+                connector_sx: sx,
+                connector_sy: sy,
+                connector_tx: tx - sx * ox,
+                connector_ty: ty - sy * oy,
+            };
+            for child in node.children().filter(|n| n.is_element()) {
+                walk(child, transform, base, depth + 1, ctx, out);
+            }
+        } else if node.has_tag_name((VML_NS, "shape")) || node.has_tag_name((VML_NS, "rect")) {
+            let (x, y) = parent.apply(x, y);
+            let (w, h) = parent.scale(w, h);
+            if let Some(mut connector) = parse_connector_from_vml(node) {
+                connector.h_position = HorizontalPosition::Offset(base.x + x);
+                connector.v_position = VerticalPosition::Offset(base.y + y);
+                connector.h_relative_from = base.h_rel;
+                connector.v_relative_from = base.v_rel;
+                connector.width = w;
+                connector.height = h;
+                connector.behind_doc = base.behind_doc;
+                connector.z_index = base.z_index;
+                out.push(RunDrawingResult::Connector(connector));
+            } else if let Some(data) = node
+                .children()
+                .find(|n| n.has_tag_name((VML_NS, "imagedata")))
+            {
+                let Some(id) = data.attribute((super::REL_NS, "id")) else {
+                    return;
+                };
+                if let Some(image) = read_image_from_zip(id, ctx.rels, ctx.zip, w, h) {
+                    out.push(RunDrawingResult::Floating(FloatingImage {
+                        image,
+                        h_position: HorizontalPosition::Offset(base.x + x),
+                        h_relative_from: base.h_rel,
+                        v_position: VerticalPosition::Offset(base.y + y),
+                        v_relative_from: base.v_rel,
+                        wrap_type: WrapType::None,
+                        wrap_text: WrapText::BothSides,
+                        wrap_polygon: None,
+                        behind_doc: base.behind_doc,
+                        dist_top: 0.0,
+                        dist_bottom: 0.0,
+                        dist_left: 0.0,
+                        dist_right: 0.0,
+                        z_index: base.z_index,
+                        anchor_seq: 0,
+                        on_line: false,
+                    }));
+                }
+            }
+        }
+    }
+    let group = pict
+        .children()
+        .find(|n| n.has_tag_name((VML_NS, "group")))?;
+    let style = group.attribute("style").unwrap_or("");
+    let box_style = parse_vml_box_style(style);
+    let z = property(style, "z-index")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0);
+    let base = BaseAnchor {
+        x: 0.0,
+        y: 0.0,
+        h_rel: box_style.h_relative,
+        v_rel: box_style.v_relative,
+        behind_doc: z < 0,
+        z_index: u32::try_from(z).unwrap_or(0),
+        on_line: false,
+    };
+    let mut out = Vec::new();
+    walk(group, GroupTransform::IDENTITY, &base, 0, ctx, &mut out);
+    (!out.is_empty()).then_some(RunDrawingResult::Group(out))
+}
