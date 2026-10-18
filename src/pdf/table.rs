@@ -2150,6 +2150,10 @@ pub(super) fn render_table(
                             ctx,
                         )
                         - row_fn_extra);
+        // Modern Word retries cantSplit rows at a fresh page, then splits
+        // content taller than that page. Legacy Word clips such rows instead.
+        let oversized_cant_split = ctx.compat_mode >= 15
+            && taller_than_page && !row.height_exact;
         // Even when the content needs multiple pages, an explicit minimum
         // must fit before the row starts. Retry at the next page top, where
         // oversized rows can split without repeatedly moving forward.
@@ -2168,7 +2172,7 @@ pub(super) fn render_table(
             });
         let must_split = (taller_than_page || keep_with_anchor)
             && !minimum_fits_later
-            && !row.cant_split
+            && (!row.cant_split || (oversized_cant_split && at_page_top))
             && (at_page_top || first_chunks_fit);
         if row_h > available_h && (must_split || can_meaningfully_split) && !chain_moves {
             split_row_across_pages(
@@ -2208,7 +2212,8 @@ pub(super) fn render_table(
             let new_eff_bot = *effective_margin_bottom;
             let new_available = pb.slot_top - new_eff_bot;
             let new_page_h = new_eff_top - new_eff_bot;
-            if row_h > new_available && (row_h > new_page_h || keep_with_anchor) && !row.cant_split
+            if row_h > new_available && (row_h > new_page_h || keep_with_anchor)
+                && (!row.cant_split || oversized_cant_split)
             {
                 split_row_across_pages(
                     row,
