@@ -87,7 +87,7 @@ pub(crate) struct FontEntry {
     /// (CJK/family/standard-14) was used — altName/alias mappings don't count.
     pub(crate) is_substituted: bool,
     /// CJK chars requested but not present in this font (need fallback rendering).
-    pub(crate) missing_cjk_chars: HashSet<char>,
+    pub(crate) missing_chars: HashSet<char>,
     /// Set when text was encoded with a character the font lacks, which draws
     /// the .notdef glyph (PDF/UA 7.21.8); the document then can't claim PDF/UA.
     pub(crate) drew_notdef: std::cell::Cell<bool>,
@@ -127,7 +127,7 @@ impl FontEntry {
             synthetic_bold: false,
             synthetic_italic: false,
             is_substituted: false,
-            missing_cjk_chars: Default::default(),
+            missing_chars: Default::default(),
             drew_notdef: Default::default(),
             font_path: None,
             face_index: 0,
@@ -339,6 +339,22 @@ const LAST_RESORT_FONTS: &[&str] = &[
     "Liberation Sans",
     "Arimo",
     "Helvetica",
+    "DejaVu Sans",
+];
+
+/// Faces Windows' font linking uses for glyphs the run's font lacks.
+///
+/// `cjk_fallback_fonts` only lists CJK faces, and a CJK face can lack symbols
+/// that Word still draws: SimSun has U+25A1 (□) but not U+2611 (☑), so a
+/// checkbox run in 宋体 came out with a blank where Word shows a checked box.
+/// The rescue path (`rescue_fonts`) appends these for every gap and lets glyph
+/// coverage pick the leader, so pure-CJK gaps still resolve to the CJK list.
+const SYMBOL_FALLBACK_FONTS: &[&str] = &[
+    "Segoe UI Symbol",
+    "Segoe UI Emoji",
+    "Arial Unicode MS",
+    "MS Gothic",
+    "Noto Sans Symbols 2",
     "DejaVu Sans",
 ];
 
@@ -664,13 +680,24 @@ fn glyph_coverage(name: &str, chars: &HashSet<char>) -> usize {
 
 /// Font for characters the resolved fonts lack, shared by the whole document
 /// (Word rescues per character too: kanji missing from Batang came out in
-/// MS Mincho). The best-covering candidate leads and the rest follow in list
-/// order, semicolon-separated so `register_font` tries each in turn.
-pub(crate) fn cjk_rescue_fonts(missing: &HashSet<char>) -> String {
+/// MS Mincho, and a missing ☑ comes from the linked symbol face). The
+/// best-covering candidate leads and the rest follow in list order,
+/// semicolon-separated so `register_font` tries each in turn.
+pub(crate) fn rescue_fonts(missing: &HashSet<char>) -> String {
     let script = script_of_chars(missing.iter().copied());
-    // Hangul/kana gaps take the sans default (맑은 고딕 / MS Gothic); Han-only
-    // gaps lead with MS Mincho, see `cjk_fallback_fonts`.
-    let candidates = cjk_fallback_fonts(script, script == CjkScript::Unknown);
+    let has_cjk = missing
+        .iter()
+        .any(|&ch| crate::docx::is_east_asian_char(ch));
+    let mut candidates: Vec<&str> = Vec::new();
+    if has_cjk || script != CjkScript::Unknown {
+        // Hangul/kana gaps take the sans default (맑은 고딕 / MS Gothic); Han-only
+        // gaps lead with MS Mincho, see `cjk_fallback_fonts`.
+        candidates.extend(cjk_fallback_fonts(script, script == CjkScript::Unknown));
+    }
+    // Symbols (☑, □, ✓) are not CJK: Word draws them from the linked symbol
+    // face, so give them their own candidates instead of the Han list.
+    candidates.extend(SYMBOL_FALLBACK_FONTS);
+
     let mut best = (0usize, 0usize);
     for (i, name) in candidates.iter().enumerate() {
         let coverage = glyph_coverage(name, missing);
@@ -718,7 +745,7 @@ pub(crate) fn register_font(
     let serif = table_entry.is_some_and(|e| e.family == FontFamily::Roman);
     let substituted = std::cell::Cell::new(false);
     // List order, not glyph coverage: Word substitutes the whole run by script and
-    // family and rescues single missing glyphs per character (`cjk_rescue_fonts`).
+    // family and rescues single missing glyphs per character (`rescue_fonts`).
     let try_list =
         |label: &str, names: &[&str], tc: &mut dyn FnMut(&str) -> Option<ResolvedFont>| {
             names.iter().find_map(|&name| {
@@ -804,20 +831,20 @@ pub(crate) fn register_font(
         // unknown font Arial: case60's SmartArt "Futura Medium" embeds ArialMT.
         .or_else(|| try_list("last resort", LAST_RESORT_FONTS, &mut try_candidate));
 
-    // Compute which CJK chars are missing from the resolved font
-    let missing_cjk = if needs_cjk {
-        let covered = result.as_ref().map(|r| &r.metrics.char_to_gid);
-        ctx.used_chars
-            .iter()
-            .copied()
-            .filter(|ch| {
-                crate::docx::is_east_asian_char(*ch)
-                    && !covered.is_some_and(|map| map.contains_key(ch))
-            })
-            .collect()
-    } else {
-        HashSet::new()
-    };
+    // Every char the resolved font lacks, not just CJK: Word's font linking
+    // rescues any missing glyph per character, and a CJK face can lack a
+    // symbol the document uses (SimSun has □ but not ☑), which used to render
+    // as a blank. When no face resolved at all, only CJK is rescued: the
+    // standard-14 Helvetica fallback can draw Latin but not Han.
+    let missing_chars: HashSet<char> = ctx
+        .used_chars
+        .iter()
+        .copied()
+        .filter(|ch| match result.as_ref() {
+            Some(r) => !r.metrics.char_to_gid.contains_key(ch),
+            None => crate::docx::is_east_asian_char(*ch),
+        })
+        .collect();
 
     let entry = match result {
         Some(r) => FontEntry {
@@ -846,7 +873,7 @@ pub(crate) fn register_font(
             synthetic_bold: r.synthetic_bold,
             synthetic_italic: r.synthetic_italic,
             is_substituted: substituted.get(),
-            missing_cjk_chars: missing_cjk,
+            missing_chars,
             drew_notdef: Default::default(),
             font_path: r.font_path,
             face_index: r.face_index,
@@ -892,7 +919,7 @@ pub(crate) fn register_font(
                 synthetic_bold: false,
                 synthetic_italic: false,
                 is_substituted: true,
-                missing_cjk_chars: missing_cjk,
+                missing_chars,
                 drew_notdef: Default::default(),
                 font_path: None,
                 face_index: 0,

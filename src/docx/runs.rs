@@ -44,6 +44,37 @@ fn parse_field_code(instr: &str) -> Option<FieldCode> {
     }
 }
 
+/// `EQ \o\ac(□,√)` — Word's overstrike equation, how 方案模板 draw a checked
+/// checkbox: the arguments are painted on top of each other and the first sets
+/// the advance. The field carries **no cached result** (Word computes it when
+/// the document is laid out), so without this the whole checkbox disappeared.
+///
+/// Only the overstrike switch (`\o`) is understood — fractions (`\f`), radicals
+/// (`\r`) and the rest keep no result, same as before. Checkbox shapes map to
+/// their precomposed characters (`□`/`☐` + `√` → `☑`); any other overstrike
+/// keeps the base character, which is the part that stays legible when the
+/// accent is dropped.
+fn parse_eq_overstrike(instr: &str) -> Option<String> {
+    let keyword = instr.split_whitespace().next()?;
+    if !keyword.eq_ignore_ascii_case("EQ") {
+        return None;
+    }
+    let lower = instr.to_ascii_lowercase();
+    let over = lower.find("\\o")?;
+    let open = instr[over..].find('(')? + over;
+    let close = instr.rfind(')')?;
+    if close <= open {
+        return None;
+    }
+    let parts: Vec<&str> = instr[open + 1..close].split(',').map(str::trim).collect();
+    let base = parts.first().copied().unwrap_or("");
+    let marks: String = parts.iter().skip(1).copied().collect();
+    if base.chars().count() == 1 && matches!(base, "□" | "☐") && marks.contains('√') {
+        return Some("☑".to_string());
+    }
+    (!base.is_empty()).then(|| base.to_string())
+}
+
 fn has_switch(instr: &str, switch: &str) -> bool {
     instr
         .split_whitespace()
@@ -1217,6 +1248,17 @@ pub(super) fn parse_runs<R: Read + Seek>(
                                 text: f.result,
                                 field_code: Some(code),
                                 hyperlink_url: url,
+                                ..fmt.styled_run()
+                            });
+                        } else if f.result.is_empty()
+                            && let Some(text) = parse_eq_overstrike(&f.instr)
+                        {
+                            // EQ fields cache no result — Word computes them at
+                            // layout time. Derive the visible text from the
+                            // instruction so a checkbox does not vanish.
+                            runs.push(Run {
+                                text,
+                                hyperlink_url: hyperlink_url.clone(),
                                 ..fmt.styled_run()
                             });
                         }

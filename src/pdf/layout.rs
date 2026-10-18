@@ -3976,9 +3976,9 @@ pub(super) fn render_paragraph_lines(
                 // Per-character font fallback: if some chars are missing
                 // from the primary font, split into segments and render
                 // missing chars with the CJK fallback font.
-                let has_missing = primary_entry.is_some_and(|e| !e.missing_cjk_chars.is_empty());
+                let has_missing = primary_entry.is_some_and(|e| !e.missing_chars.is_empty());
                 let fallback_entry = has_missing
-                    .then(|| seen_fonts.get("__cjk_fallback"))
+                    .then(|| seen_fonts.get("__glyph_fallback"))
                     .flatten();
 
                 if let Some(entry) = primary_entry.filter(|_| chunk.rtl_glyphs) {
@@ -4015,7 +4015,7 @@ pub(super) fn render_paragraph_lines(
                     let mut in_fallback = false;
                     let chars: Vec<char> = chunk.text.chars().collect();
                     for (i, &ch) in chars.iter().enumerate() {
-                        let needs_fb = primary.missing_cjk_chars.contains(&ch);
+                        let needs_fb = primary.missing_chars.contains(&ch);
                         if i == 0 {
                             in_fallback = needs_fb;
                         } else if needs_fb != in_fallback {

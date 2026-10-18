@@ -290,6 +290,7 @@ pub(super) fn render_single_textbox(
             clip_bottom,
             gradient_specs,
             None,
+            None,
         );
         content.restore_state();
     }
@@ -320,6 +321,7 @@ pub(super) fn render_single_textbox(
             clip_bottom,
             gradient_specs,
             None,
+            None,
         );
         content.restore_state();
     }
@@ -340,6 +342,7 @@ pub(super) fn render_single_textbox(
         clip_bottom,
         gradient_specs,
         Some((tags, page, sect)),
+        None,
     );
 
     if needs_clip {
@@ -368,6 +371,7 @@ pub(super) fn render_textbox_paragraphs(
     // As in `render_single_textbox`; each paragraph becomes a P or H1–H6
     // (a list paragraph an LI) in the Sect.
     mut tag: Option<(&mut Tags, usize, usize)>,
+    hf_sub: Option<&super::table_layout::HfSubstitution>,
 ) {
     let mut cursor_y = start_y;
     let mut prev_space_after = 0.0f32;
@@ -447,9 +451,26 @@ pub(super) fn render_textbox_paragraphs(
             continue;
         }
 
-        let inline_imgs = super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
+        // Header/footer page numbers may sit in a text box: evaluate the
+        // field runs for this page before laying them out. The substituted
+        // vector lives for the rest of the iteration.
+        let hf_runs: Vec<crate::model::Run>;
+        let runs: &[crate::model::Run] = match hf_sub {
+            Some(sub) => {
+                hf_runs = super::header_footer::substitute_hf_runs(
+                    &tp.runs,
+                    sub.page_num,
+                    sub.total_pages,
+                    sub.styleref_values,
+                    sub.page_num_format,
+                );
+                &hf_runs
+            }
+            None => &tp.runs,
+        };
+        let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
         let tb_lines = build_lines(
-            &tp.runs,
+            runs,
             ctx,
             tp_text_w,
             ctx.cjk(true, tp),
@@ -463,16 +484,16 @@ pub(super) fn render_textbox_paragraphs(
             },
         );
         if tb_lines.is_empty() {
-            let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
+            let (fs, lhr, _) = tallest_run_metrics(runs, ctx.fonts);
             let lh = resolve_line_h(tp_ls, fs, lhr);
             cursor_y -= inter_gap + lh;
             prev_space_after = tp.space_after;
             continue;
         }
-        let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(&tp.runs, ctx.fonts);
+        let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(runs, ctx.fonts);
         let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
         let tb_ascent = super::layout::boxed_line_ascent(
-            tp_ls, tb_line_h, tb_fs, tb_lhr, tb_ar, &tp.runs, ctx.fonts,
+            tp_ls, tb_line_h, tb_fs, tb_lhr, tb_ar, runs, ctx.fonts,
         )
         .unwrap_or(tb_fs * tb_ar.unwrap_or(0.75));
         let tb_baseline = cursor_y - inter_gap - tb_ascent - y_offset;
@@ -481,7 +502,7 @@ pub(super) fn render_textbox_paragraphs(
             if inline_imgs.is_empty() {
                 0.0
             } else {
-                picture_line_bottom(&tp.runs, tp, ctx.fonts, tp_ls)
+                picture_line_bottom(runs, tp, ctx.fonts, tp_ls)
             },
         );
         let tp_text_x = content_x + tp.indent_left + x_offset;
