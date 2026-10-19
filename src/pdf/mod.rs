@@ -1205,6 +1205,7 @@ pub(super) struct PageBuilder {
     /// though the flow cursor stays below the table so following text doesn't
     /// overlap it. Without this the shapes drop by the table's height.
     pub(super) pending_float_anchor: Option<f32>,
+    next_text_below_picture: Option<f32>,
     /// Anchored shapes for this page, painted above the text layer sorted by
     /// relativeHeight: Word stacks floating shapes in z order regardless of
     /// which paragraph anchors them.
@@ -1287,6 +1288,7 @@ impl PageBuilder {
             float_table_extent: None,
             frame_bands: Vec::new(),
             pending_float_anchor: None,
+            next_text_below_picture: None,
             deferred_shapes: Vec::new(),
             all_contents: Vec::new(),
             all_content_bottom: Vec::new(),
@@ -1435,6 +1437,7 @@ impl PageBuilder {
         self.frame_bands.clear();
         // An anchor measured on the old page must not place a float on this one
         self.pending_float_anchor = None;
+        self.next_text_below_picture = None;
         // After flush, the new page starts with the current section
         self.page_hf_section = sect_idx;
     }
@@ -1684,6 +1687,7 @@ impl LayoutState {
         pb.page_hf_section = self.pb.page_hf_section;
         pb.float_zone = self.pb.float_zone.clone();
         pb.pending_float_anchor = self.pb.pending_float_anchor;
+        pb.next_text_below_picture = self.pb.next_text_below_picture;
         pb.footnote_ids_set = self.pb.footnote_ids_set.clone();
         pb.col_fn_reserved = self.pb.col_fn_reserved;
         // Page-top rules look at whether a page was already flushed.
@@ -2378,6 +2382,11 @@ fn render_paragraph_block(
             .get(&crate::fonts::font_key_for(&ln.font_name, false, false))
             .map(|e| (e.pdf_name.clone(), ln.font_size))
     });
+    if para.frame_props.is_none() && para.runs.iter().any(|run| !run.text.trim().is_empty()) {
+        if let Some(bottom) = state.pb.next_text_below_picture.take() {
+            state.pb.slot_top = state.pb.slot_top.min(bottom);
+        }
+    }
     let adjacent_para = |idx: usize| block_para(section_blocks, idx);
 
     // Skip empty section-break paragraphs — Word gives these zero height, also
@@ -3728,6 +3737,44 @@ fn render_paragraph_block(
                 let rest_text_x = rest_col_x + para.indent_left;
                 let rest_text_width = (rest_col_w - para.indent_left - para.indent_right).max(1.0);
 
+                // The trailing picture of a split paragraph belongs to its
+                // final fragment; the ordinary float-rendering path is skipped.
+                // Full-width pictures also keep following visible text below
+                // them, while intervening empty marks may occupy the space above.
+                let trailing_images_fit = fit >= remaining.len()
+                    && !para.floating_images.is_empty()
+                    && para.floating_images.iter().all(|fi| {
+                        fi.v_relative_from == VRelativeFrom::Paragraph
+                            && matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
+                            && fi.wrap_type.wraps_beside()
+                            && {
+                                let x = resolve_fi_x(fi, sp, rest_col_x, rest_col_w, text_width);
+                                (x - fi.dist_left - rest_col_x).max(
+                                    rest_col_x + rest_col_w - x - fi.image.display_width - fi.dist_right
+                                ) < MIN_EMPTY_STRIP
+                            }
+                            && resolve_fi_y_top(fi, sp, state.pb.slot_top)
+                                - fi.image.display_height - fi.dist_bottom >= state.effective_margin_bottom
+                    });
+                if trailing_images_fit {
+                    let anchor = ParaAnchor::new(None, state.pb.slot_top, 0.0, sp, ctx);
+                    let page = state.pb.all_contents.len();
+                    render_floating_images(&para.floating_images, true, state.global_block_idx,
+                        floating_image_pdf_names, effect_floating_names, sp, rest_col_x, rest_col_w,
+                        text_width, anchor, &mut state.pb.content, &mut state.pb.tags, page);
+                    render_foreground_floating_images_deferred(&para.floating_images,
+                        state.global_block_idx, floating_image_pdf_names, effect_floating_names,
+                        sp, rest_col_x, rest_col_w, text_width, anchor,
+                        &mut state.pb.deferred_shapes, &mut state.pb.tags, page);
+                    for fi in &para.floating_images {
+                        let x = resolve_fi_x(fi, sp, rest_col_x, rest_col_w, text_width);
+                        let top = resolve_fi_y_top(fi, sp, anchor.top(fi.on_line));
+                        state.pb.float_zone = Some(FloatZone::for_float(fi, x, top));
+                        let bottom = top - fi.image.display_height - fi.dist_bottom;
+                        state.pb.next_text_below_picture = Some(
+                            state.pb.next_text_below_picture.map_or(bottom, |old| old.min(bottom)));
+                    }
+                }
                 state.pb.begin_tag(tag);
                 render_paragraph_lines(
                     &mut state.pb.content,
