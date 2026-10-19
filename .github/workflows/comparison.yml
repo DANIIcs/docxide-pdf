@@ -98,14 +98,14 @@ jobs:
           mkdir -p ~/"Library/Group Containers/UBF8T346G9.Office/FontCache/4"
           ln -s "$PWD/assets/fonts/CloudFonts" ~/"Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts"
       - name: Font families the runner's own packages share with the Word fonts
-        # Our discovery ranks /usr/share/fonts above DOCXIDE_FONTS (fonts/) and ~/.local/share/fonts is the
-        # same files as fonts/, so the only way a system font can shadow a Word font here is a distro package
-        # shipping the same family name. Anything listed below is drawn from the distro's file, not Word's.
+        # Our discovery ranks DOCXIDE_FONTS (fonts/) above /usr/share/fonts, so a distro package shipping one
+        # of these family names cannot shadow the Word font for our engine. Anything listed below is a family
+        # both provide; the other engines resolve it through fontconfig and may draw the distro's file.
         run: |
           fc-list --format '%{file}|%{family[0]}\n' | awk -F'|' '
             /^\/usr\/share\/fonts/ {sys[tolower($2)]=$1}
             /\.local\/share\/fonts/ {ours[tolower($2)]=1}
-            END {n=0; for (f in ours) if (f in sys) {print "  SHADOWED: " f " <- " sys[f]; n++}; print n " shared family names"}'
+            END {n=0; for (f in ours) if (f in sys) {print "  SHARED: " f " also in " sys[f]; n++}; print n " shared family names"}'
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

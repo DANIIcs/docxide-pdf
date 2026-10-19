@@ -178,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Variable | Description |
 |---|---|
-| `DOCXIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Lowest priority: used for families the system font directories don't provide. |
+| `DOCXIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Highest priority: a face found there wins over the system's copy of the same family and style, and the first directory listed wins over the ones after it. System fonts still fill in the families and styles the directories lack. |
 | `DOCXIDE_NO_FONT_CACHE` | Set to any value to disable the font index disk cache. Forces a full font scan on every conversion. Useful for debugging font resolution issues. |
 
 Font scanning results are cached to disk (per-directory, invalidated by mtime). The cache is stored at:
