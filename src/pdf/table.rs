@@ -568,7 +568,8 @@ fn render_cell_content(
                     para.text_hanging
                 } else {
                     let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging
-                        + para.indent_first_line;
+                        + para.indent_first_line
+                        + cell_label_alignment_offset(para, col_w - cm.left - cm.right);
                     draw_tagged_cell_label(
                         content,
                         &mut tagger,
@@ -1149,7 +1150,8 @@ fn render_partial_cell_content(
                 } else {
                     if l0 == 0 {
                         let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging
-                            + para.indent_first_line;
+                            + para.indent_first_line
+                            + cell_label_alignment_offset(para, col_w - cm.left - cm.right);
                         draw_tagged_cell_label(
                             content,
                             &mut tagger,
@@ -1258,6 +1260,16 @@ fn render_partial_cell_content(
             }
         }
     }
+}
+
+// A separately painted label follows the alignment of its first text line,
+// including an empty numbered paragraph whose suffix still occupies a tab.
+fn cell_label_alignment_offset(para: &CellParagraphLayout, inner_w: f32) -> f32 {
+    // Preserve signed remaining width when indents exceed a narrow cell.
+    let text_w = inner_w - para.indent_left - para.indent_right - para.float_indent_left;
+    let first_width = para.lines.first().map_or(0.0, |line| line.total_width);
+    let slack = (text_w + para.text_hanging - first_width).max(0.0);
+    super::helpers::align_offset(para.alignment, slack)
 }
 
 fn draw_cell_label(
