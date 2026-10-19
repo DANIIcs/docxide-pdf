@@ -654,6 +654,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     dist_right: emu_attr(container, "distR"),
                     z_index,
                     anchor_seq: 0,
+                    anchor_at_start: false,
                     on_line: false,
                 }));
             }
@@ -971,6 +972,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         // Word writes the DrawingML relativeHeight here, negated when behind.
         z_index: z_index.unsigned_abs().min(u32::MAX as u64) as u32,
         anchor_seq: 0,
+        anchor_at_start: false,
         on_line: false,
     })
 }
