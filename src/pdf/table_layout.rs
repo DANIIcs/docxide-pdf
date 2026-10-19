@@ -1055,7 +1055,7 @@ pub(super) fn compute_row_layouts(
                                         grid_pitch,
                                     )
                                 } else if is_text_empty(runs) && para.content_height == 0.0 {
-                                    line_h + super::mark_position_stretch(para, effective_ls, false)
+                                    line_h + super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
                                 } else {
                                     line_h
                                 };
