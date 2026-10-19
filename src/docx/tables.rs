@@ -752,6 +752,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             .map(|i| i.display_height + i.layout_extra_height)
                             .unwrap_or(0.0);
                         (img, h)
+                    } else if !has_text {
+                        (None, super::images::inline_drawing_height(p))
                     } else {
                         (None, 0.0)
                     };
