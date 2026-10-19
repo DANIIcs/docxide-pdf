@@ -1763,6 +1763,7 @@ pub(super) fn render_table(
         .as_ref()
         .filter(|p| !p.allow_overlap)
         .and_then(|_| pb.float_zone.clone());
+    let mut displaced_text_anchor = None;
     if table.position.as_ref().is_some_and(|p| !p.allow_overlap)
         && let Some(ref zone) = pb.float_zone
         && let Some(ref mut fp) = override_pos
@@ -1775,6 +1776,17 @@ pub(super) fn render_table(
             && fp.y - height < zone.top_y
         {
             fp.y = zone.bottom_y - fp.top_from_text;
+            let (column_left, column_width) = column_bounds.unwrap_or((sp.margin_left, fit_w));
+            let side_room = (zone.obj_left - zone.left_from_text - column_left)
+                .max(column_left + column_width - zone.obj_right - zone.right_from_text);
+            if zone.from_table && fp.v_anchor_text && fp.v_offset_pt >= 0.0
+                && side_room < super::MIN_EMPTY_STRIP
+            {
+                // The preceding wide float blocks the anchor paragraph too.
+                // Keep the relocated anchor rather than restoring it above both
+                // tables; otherwise a later clearing break loses occupied lines.
+                displaced_text_anchor = Some(fp.y + fp.v_offset_pt);
+            }
             if let Some(pos) = table.position.as_ref() {
                 fp.constrain_nonoverlap_left(
                     pos,
@@ -1800,7 +1812,10 @@ pub(super) fn render_table(
     let (table_left, saved_slot_top, text_margins) = if let Some(ref fp) = override_pos {
         // The float zone starts at the table's drawn top, which sits below fp.y
         // by the space after the previous paragraph (see below).
-        let saved = Some((pb.slot_top - prev_space_after, fp.y - prev_space_after));
+        let saved = Some((
+            displaced_text_anchor.unwrap_or(pb.slot_top - prev_space_after),
+            fp.y - prev_space_after,
+        ));
         pb.slot_top = fp.y;
         (fp.x, saved, (fp.top_from_text, fp.bottom_from_text))
     } else {
@@ -2304,7 +2319,8 @@ pub(super) fn render_table(
             let (top_margin, bottom_margin) = text_margins;
             let table_bottom = pb.slot_top;
 
-            // Always restore cursor to body text position — the float zone lets
+            // Restore the anchor's body position, relocated with the table
+            // when a preceding wide float blocked it. The float zone lets
             // paragraph layout decide whether to wrap beside or push below.
             pb.slot_top = saved;
 
