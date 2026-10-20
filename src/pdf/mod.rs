@@ -2478,12 +2478,30 @@ fn render_paragraph_block(
         None
     };
 
-    let effective_space_before = if drops_contextual_spacing(para, prev_para) {
+    // A continuous section boundary does not interrupt contextual spacing.
+    // Border grouping still uses the section-local neighbours above.
+    let context_prev = prev_para.or_else(|| {
+        (block_idx == 0 && sp.break_type == SectionBreakType::Continuous)
+            .then(|| sect_idx.checked_sub(1).and_then(|i| doc.sections.get(i)))
+            .flatten()
+            .and_then(|section| section.blocks.last())
+            .and_then(leading_para)
+    });
+    let context_next = next_para.or_else(|| {
+        (block_idx + 1 == section_blocks.len())
+            .then(|| doc.sections.get(sect_idx + 1))
+            .flatten()
+            .filter(|section| section.properties.break_type == SectionBreakType::Continuous)
+            .and_then(|section| section.blocks.first())
+            .and_then(leading_para)
+    });
+
+    let effective_space_before = if drops_contextual_spacing(para, context_prev) {
         0.0
     } else {
         para.space_before
     };
-    let effective_space_after = if drops_contextual_spacing(para, next_para) {
+    let effective_space_after = if drops_contextual_spacing(para, context_next) {
         0.0
     } else {
         para.space_after
