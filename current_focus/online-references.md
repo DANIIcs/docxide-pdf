@@ -62,12 +62,12 @@ Biggest movers (baseline → now, J):
 | slovak_misdemeanor_amendment | 88.3 → 57.5 | glyph widths |
 | greek_history_lecture_press_release | 79.1 → 49.0 | fonts (real Comic Sans italic online) |
 | czech_census_2021_instructions | 80.2 → 51.2 | glyph widths |
-| samples/sample500kB | 38.4 → 14.6 | fonts (DejaVu Sans → Sylfaen online) |
+| scraped/sample500kB | 38.4 → 14.6 | fonts (DejaVu Sans → Sylfaen online) |
 | welsh_palliative_care_abstract_form | 77.3 → 54.4 | not investigated (mean word drift 4.2pt) |
 | lithuanian_food_quality_order | 84.9 → 63.0 | glyph widths |
 | family_kinship_lesson_plan | 91.3 → 71.2 | glyph widths + one rewrap |
 | mandated_reporter_child_abuse | 79.4 → 59.3 | glyph widths |
-| samples/double-underline | 68.7 → 50.4 | not investigated |
+| scraped/double-underline | 68.7 → 50.4 | not investigated |
 | feminist_voice_dissertation | 78.7 → 61.6 | TOC differs (not investigated) |
 | usep_handbook | 87.7 → 79.5 | was 41.1 before `a9746f5f` |
 | stem_partnerships_guide | 50.1 → 66.6 | was 23.9 before `8e7d5782` |

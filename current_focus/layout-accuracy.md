@@ -279,7 +279,7 @@ Ordered roughly by expected gain. Corpus counts are clean documents.
     vertical squash (6 Mac references).
 
 **Undiagnosed low fixtures** (J now; scraped/ unless noted):
-samples/sample500kB 14.7, pendulum_mechanics_oscillation_lab 18.3,
+scraped/sample500kB 14.7, pendulum_mechanics_oscillation_lab 18.3,
 chinese_costume_design_course 20.5, cases/case82 21.2 (3 vs 4 pages),
 slovak_pedagogical_practice_agreement 21.6, cases/case37 23.2,
 indonesian_school_admission_checklist 27.3, dutch_government_budget_letter

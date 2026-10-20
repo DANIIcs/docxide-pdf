@@ -56,7 +56,7 @@ fn main() {
 fn collect_all_fixtures() -> Vec<PathBuf> {
     let base = Path::new("tests/fixtures");
     let mut fixtures = Vec::new();
-    for subdir in &["cases", "scraped", "samples"] {
+    for subdir in &["cases", "scraped"] {
         let dir = base.join(subdir);
         if !dir.is_dir() {
             continue;

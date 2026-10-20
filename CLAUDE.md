@@ -173,7 +173,7 @@ tests/
   speed.rs             — conversion timing (#[ignore])
   common/              — shared harness: mod.rs (fixtures, conversion, baselines), metrics.rs (rasterization, Jaccard/SSIM; also tools/page-metrics), a11y.rs, text_boundary.rs
   baselines.json, visual_hashes.json — accepted scores and page hashes
-  fixtures/<group>/<case>/ — input.docx + reference.pdf; groups: cases/ (79 handcrafted), fonts/ (7), hyphenation/ (8), samples/ (5), scraped/ (138); SKIPLIST
+  fixtures/<group>/<case>/ — input.docx + reference.pdf; groups: cases/ (79 handcrafted), fonts/ (7), hyphenation/ (8), scraped/ (164); SKIPLIST
   output/<group>/<case>/ — generated.pdf, reference/, generated/, diff/ screenshots (gitignored)
 ```
 
@@ -201,7 +201,7 @@ tests/
 - Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink) and **SSIM** with spatial tolerance (±8px). Run tests with `cargo test -- --nocapture` to see scores.
 - Jaccard threshold: **20.5%**, SSIM threshold: **75%** (defined in `tests/visual_comparison.rs`)
 - Accessibility (`tests/accessibility.rs`, `tests/common/a11y.rs`): `ua_deficit` (veraPDF PDF/UA-1 rules we fail worse than Word; 0 = as good as Word), `a11y_struct` (tag sequence vs Word's), `a11y_text` (block text in structure order vs Word's), `a11y_missing` (DOCX letters and digits that never reach our structure tree; needs no reference, any increase fails). Untagged references score N/A on the Word-relative three. See the Accessibility section of `roadmap.md`
-- 79 handcrafted test cases (`tests/fixtures/cases/`) covering text, tables, images, charts, shapes, SmartArt, and more, plus the fonts/, hyphenation/, samples/ and scraped/ groups
+- 79 handcrafted test cases (`tests/fixtures/cases/`) covering text, tables, images, charts, shapes, SmartArt, and more, plus the fonts/, hyphenation/ and scraped/ groups
 
 ## Word Layout Learnings
 

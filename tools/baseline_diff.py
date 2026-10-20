@@ -62,7 +62,7 @@ def fmt_delta(d: float) -> str:
 
 
 def short_name(name: str, max_len: int = 38) -> str:
-    name = name.replace("scraped/", "").replace("cases/", "").replace("samples/", "s/")
+    name = name.replace("scraped/", "").replace("cases/", "")
     if len(name) > max_len:
         name = name[:max_len - 2] + ".."
     return name

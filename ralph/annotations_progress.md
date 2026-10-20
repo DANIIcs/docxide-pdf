@@ -383,7 +383,7 @@ Additionally, when a merge group extended to the table edge, the restart cell's 
 
 ---
 
-## Annotation #76 — List label font size boosting line height (samples/samtale) — 2026-03-31
+## Annotation #76 — List label font size boosting line height (scraped/samtale) — 2026-03-31
 
 **Problem**: In paragraphs with large list labels (e.g., 20pt numbered "6." on 10pt text), "I stor grad." answer text floated ~17pt above the grey paragraph bottom border instead of the correct ~5pt gap.
 

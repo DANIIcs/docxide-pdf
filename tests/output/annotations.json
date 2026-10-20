@@ -1,5 +1,5 @@
 {
-  "next_id": 265,
+  "next_id": 267,
   "annotations": [
     {
       "id": 208,
@@ -54,7 +54,7 @@
       "y_pt": 744.497,
       "note": "Too much space below \"header\" with image and text and above numbered list.\n\nSYSTEMIC (triage 2026-07-03): page-1 line/row heights accumulate ~28pt short, so the 2-line intro paragraph Word pushes to page 2 (it carries lastRenderedPageBreak) fits on our page 1 — page-2 content then sits ~26pt high. No page-2 spacing knob; boundary-sensitive pagination flip from line-height fidelity.\n\nUPDATE (2026-10-03): two causes. (1) The header's narrow wrapSquare logo (posV -2pt, 48.7pt tall) extends our header to its bottom, so page 1's body starts 5.5pt low; Word starts the body at the header text. Dropping that extent (compute_header_height's float_bottom_h) puts french_sexual_health within 0.25pt (+18.6 J), but here Word pushes page 2's first line below the logo (body wraps around the header float), which we don't model, so the change regressed this case and was not kept. (2) Normal has w:position=-1 (text lowered 0.5pt) and each spacer paragraph/row here comes out ~0.5pt taller in Word, which is the per-row shortfall that lets the intro paragraph fit on our page 1.\n\nFIXED (2026-10-05, branch annot/french-logo): three causes, all fixed. Empty paragraphs now stretch by their mark's w:position like text lines (de28189b); header lines too, and the narrow wrapSquare header logo no longer extends the header (1956b952, 0f33757e); and even pages lay out around the even header, which here has one more empty paragraph (eae1ae1d; that was the 'page-2 regression' of the 2026-10-03 try, not body wrapping). Both pages now within 1.5pt of Word; czech_municipal J 13.6 -> 34.6, SSIM 48.8 -> 89.7.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 93,
@@ -102,7 +102,7 @@
     },
     {
       "id": 121,
-      "case": "samples/samtale",
+      "case": "scraped/samtale",
       "page": 0,
       "source": "Generated",
       "x_pt": 449.4558,
@@ -201,7 +201,7 @@
     },
     {
       "id": 193,
-      "case": "samples/samtale",
+      "case": "scraped/samtale",
       "page": 1,
       "source": "Generated",
       "x_pt": 517.35547,
@@ -432,7 +432,7 @@
     },
     {
       "id": 224,
-      "case": "samples/samtale",
+      "case": "scraped/samtale",
       "page": 0,
       "source": "Generated",
       "x_pt": 573.86115,
@@ -791,7 +791,7 @@
       "y_pt": 392.90082,
       "note": "Heading for next page?\n\nCHECKED (2026-10-03): same as #256: a fresh render breaks before \"Přílohy\" like Word, nothing heading-like is left at the bottom of page 4.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 258,
@@ -802,7 +802,7 @@
       "y_pt": 549.62573,
       "note": "missing checkboxes\n\nFIXED (2026-10-05, branch annot/french-logo dbabec2f): legacy FORMCHECKBOX fields are drawn: a square sized from w:size and the run font's line height (Word probes); all 14 boxes within 0.2pt of the reference.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 259,
@@ -846,7 +846,7 @@
       "y_pt": 680.44305,
       "note": "Spurious white lines at the left and right inside the blue \"Section N\" - bars\n\nFIXED (2026-10-05, branch annot/french-logo d46ae4d3): paragraph shading reaches the side borders' inner edges (the 1.47/1.73pt border shift had left a white seam).",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 263,
@@ -857,7 +857,7 @@
       "y_pt": 392.99667,
       "note": "(if applicable) should come directly below Faculty/Department, not atth bottom of the cell\n\nFIXED (2026-10-05, branch annot/french-logo 7addc6f8): table-cell paragraphs parse and apply contextualSpacing; Normal's 12pt after was kept between same-style cell paragraphs.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 264,
@@ -868,6 +868,28 @@
       "y_pt": 86.37262,
       "note": "Image is suddenly wrong place.\n\nFIXED (2026-10-05, branch annot/french-logo 8ff40fad): broken by fa4db3fa, whose shorter header let the look-ahead fire on page 1; the keep-with-next chain then moved the logo paragraph to page 2 with its page-1 anchor. The one-shot float anchor now resets on page flush and column advance.",
       "fixed": true,
+      "cleared": false
+    },
+    {
+      "id": 265,
+      "case": "case64",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 510.16046,
+      "y_pt": 526.26086,
+      "note": "We are missing the blue and purple colors on some of the comments here, as well as the spacing is all wrong.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 266,
+      "case": "empty-margin-frame-14-two-space-only",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 151.8285,
+      "y_pt": 643.805,
+      "note": "Greeting should be right aligned here.",
+      "fixed": false,
       "cleared": false
     }
   ]
