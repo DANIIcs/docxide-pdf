@@ -3931,6 +3931,78 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "continuous-context/a-s0-c0": {
+    "jaccard": 0.8429,
+    "ssim": 0.941,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/a-s0-c1": {
+    "jaccard": 0.8429,
+    "ssim": 0.941,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/a-s1-c0": {
+    "jaccard": 0.8429,
+    "ssim": 0.941,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/a-s1-c1": {
+    "jaccard": 0.8429,
+    "ssim": 0.9439,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f0-s0-c0": {
+    "jaccard": 0.8429,
+    "ssim": 0.941,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f0-s0-c1": {
+    "jaccard": 0.8429,
+    "ssim": 0.941,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f0-s1-c0": {
+    "jaccard": 0.8429,
+    "ssim": 0.941,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f0-s1-c1": {
+    "jaccard": 0.8429,
+    "ssim": 0.9439,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f1-s0-c0": {
+    "jaccard": 0.8267,
+    "ssim": 0.939,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f1-s0-c1": {
+    "jaccard": 0.8267,
+    "ssim": 0.939,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f1-s1-c0": {
+    "jaccard": 0.8267,
+    "ssim": 0.939,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "continuous-context/f1-s1-c1": {
+    "jaccard": 0.8267,
+    "ssim": 0.9393,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
   "fonts/arial": {
     "jaccard": 0.8374,
     "ssim": 0.9466,
