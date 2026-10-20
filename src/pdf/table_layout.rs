@@ -975,6 +975,7 @@ pub(super) fn compute_row_layouts(
                     let mut prev_space_after = 0.0f32;
                     let mut para_idx = 0usize;
                     let mut prev_was_nested_table = false;
+                    let mut negative_anchor_shift = 0.0f32;
                     let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
                     let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
@@ -1497,6 +1498,28 @@ pub(super) fn compute_row_layouts(
                                 para_idx += 1;
                             }
                             Block::Table(nested_table) => {
+                                // Adjacent text-relative floats share the flow anchor.
+                                // A preceding negative float displaces its empty
+                                // anchor below the table before the next float's
+                                // own offset is applied (not just to the table edge).
+                                if nested_table.position.as_ref().is_some_and(|p| p.v_anchor == "text")
+                                    && left_float_right_gap < MIN_NESTED_FLOAT_STRIP
+                                    // Modern expanded anchors are not relocated (Word 15).
+                                    && !(ctx.compat_mode >= 15
+                                        && cell.content.get(block_idx.saturating_sub(2))
+                                            .is_some_and(|b| matches!(b, Block::Paragraph(p)
+                                                if matches!(p.line_spacing.unwrap_or(ctx.doc_line_spacing),
+                                                    crate::model::LineSpacing::Auto(factor) if factor > 1.0))))
+                                    && matches!(items.last(), Some(CellContentItem::NestedTable {
+                                        floating_offset: Some(offset), ..
+                                    }) if *offset < 0.0)
+                                    && let Some(CellContentItem::Paragraph(anchor)) = items.get(items.len().saturating_sub(2))
+                                    && block_idx.checked_sub(2).and_then(|i| cell.content.get(i))
+                                        .is_some_and(|b| matches!(b, Block::Paragraph(p) if is_text_empty(&p.runs)))
+                                    && anchor.image_name.is_none() && anchor.floating_images.is_empty()
+                                {
+                                    negative_anchor_shift = (left_float_bottom + anchor.line_h - total_h).max(0.0);
+                                }
                                 // The widths the nested table is drawn at, so a split's
                                 // line cursors index the lines it draws.
                                 let mut nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w), None);
@@ -1527,7 +1550,8 @@ pub(super) fn compute_row_layouts(
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
-                                    .map(|pos| if block_idx == 0 { pos.v_offset_pt.max(0.0) } else { pos.v_offset_pt });
+                                    .map(|pos| if block_idx == 0 { pos.v_offset_pt.max(0.0) } else { pos.v_offset_pt })
+                                    .map(|offset| offset + negative_anchor_shift);
                                 let space_before = prev_space_after;
                                 let mut floating_x_offset = None;
                                 let auto_left_float = nested_table.position.as_ref().is_some_and(|p|
@@ -1561,7 +1585,8 @@ pub(super) fn compute_row_layouts(
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
                                 // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
                                 prev_was_nested_table = floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
-                                    || suppress_negative_mark(block_idx, floating_offset);
+                                    || suppress_negative_mark(block_idx, floating_offset)
+                                    || (negative_anchor_shift > 0.0 && floating_offset.is_some());
                                 para_idx += 1;
                             }
                         }
@@ -1575,7 +1600,8 @@ pub(super) fn compute_row_layouts(
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
                             if floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
-                                || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset))
+                                || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset)
+                                || (negative_anchor_shift > 0.0 && floating_offset.is_some()))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
