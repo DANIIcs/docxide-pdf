@@ -978,6 +978,15 @@
   "cases/full-width-float-empty-anchor": [
     "5acf32b47ef294fcb7d4c9fbd14cd05de70c8928f9eda2bc6da63dd053723546"
   ],
+  "cases/full-width-frame-after-table-exact": [
+    "66be96765ea7aed3ab80c15ad53020211d8f1ca24280c7686d8841dbc67f53b1"
+  ],
+  "cases/full-width-frame-after-table-minimum": [
+    "99cf008213f244a34412a68c1ec67879b2bdfe26ffb1be83ab075c7286180b83"
+  ],
+  "cases/full-width-frame-exact": [
+    "4906be5a8a53bf063da09f12d66eb5b6174d9a36dfdd8496bdc231f5fcff2404"
+  ],
   "cases/fullwidth-float-empty-clear": [
     "1b93d74607c4e47c5e9265bcbe252e69e8d033db49e5579f0539c530ad1af047"
   ],
@@ -1143,6 +1152,33 @@
   "cases/min-width-run-whole": [
     "1e50c470d1e6231b157399f8bdeb588e8925dfba4b8d222ef810626bee813608"
   ],
+  "cases/modern-oversized-lines5-cant1-prefix0": [
+    "afb7d0df6da8f1513d676870be4f083b2c14ba5a0ded2affb49f3c8c724cf484"
+  ],
+  "cases/modern-oversized-lines5-cant1-prefix160": [
+    "749faee75eb410884a005747c41b4d8384c97f8bcf738eea1f728cfaadc18689"
+  ],
+  "cases/modern-oversized-lines5-cant1-prefix330": [
+    "2619bebf1b9c6ce8a1f70534db6a3c978a4555a327015c65029304b9aba2b02c",
+    "afb7d0df6da8f1513d676870be4f083b2c14ba5a0ded2affb49f3c8c724cf484"
+  ],
+  "cases/modern-oversized-lines55-cant1-prefix0": [
+    "9f3f5b9e11aaf8b3021f320f8e006958a6c329f98304378bdc09436ac9926af1",
+    "ee091b995ee1e3752eceb8daca5dec627aedae4a7ca84ebd98184bf623597910",
+    "d10917d762663c168f965bcef8fac44449b77dab84e01b05bd7ae082738ef875"
+  ],
+  "cases/modern-oversized-lines55-cant1-prefix160": [
+    "2619bebf1b9c6ce8a1f70534db6a3c978a4555a327015c65029304b9aba2b02c",
+    "9f3f5b9e11aaf8b3021f320f8e006958a6c329f98304378bdc09436ac9926af1",
+    "ee091b995ee1e3752eceb8daca5dec627aedae4a7ca84ebd98184bf623597910",
+    "d10917d762663c168f965bcef8fac44449b77dab84e01b05bd7ae082738ef875"
+  ],
+  "cases/modern-oversized-lines55-cant1-prefix330": [
+    "2619bebf1b9c6ce8a1f70534db6a3c978a4555a327015c65029304b9aba2b02c",
+    "9f3f5b9e11aaf8b3021f320f8e006958a6c329f98304378bdc09436ac9926af1",
+    "ee091b995ee1e3752eceb8daca5dec627aedae4a7ca84ebd98184bf623597910",
+    "d10917d762663c168f965bcef8fac44449b77dab84e01b05bd7ae082738ef875"
+  ],
   "cases/nbsp-space-multiple-spaces": [
     "7e21ff05f9f158ff0526f1f0655d4a6f4ba6ffb334691f21654ae4ce40c88c06"
   ],
@@ -1160,6 +1196,31 @@
   ],
   "cases/nbsp-space-split-runs": [
     "d73efe864bf809f3723d6c96f8a69cb2b8cc95c1e8181cbfe81123f6ed2b8f1b"
+  ],
+  "cases/nested-adjacent-expanded-anchor": [
+    "5276f01a875f9da8095cc1bb2fe7ad579ced3c60aad447bf8753bf726981e8e7"
+  ],
+  "cases/nested-adjacent-negative-large-offset": [
+    "66b4fe7d0d89208a77e33445799c8e008720cdae4b030a31efda3a760aaebd29"
+  ],
+  "cases/nested-adjacent-negative-positive": [
+    "09d1b6840f2d6252e025dd65263c331055da1af8bf6a31d3b5ac5eeb9448e232"
+  ],
+  "cases/nested-first-row-prefix300-cant0": [
+    "248678541d4a2ca3ea254fc02e54febf6169f0e23b33a5f7b94562fa109f349b",
+    "17b65dfd43e1c0186981f4fbe19f3fffbfbe246deb41a2f36a60d1d1abe11182"
+  ],
+  "cases/nested-first-row-prefix300-cant1": [
+    "2619bebf1b9c6ce8a1f70534db6a3c978a4555a327015c65029304b9aba2b02c",
+    "bd81bd80377085dada43aed16dfa4d0974f398d872d74a891637e162b34de8aa"
+  ],
+  "cases/nested-first-row-prefix330-cant0": [
+    "ba01045a7291b773bc1241fa1635b05f13a0f74542ac7ca994a14d79c9ca28e2",
+    "a3c81318ec06fe5e5cbe7ab5b26e711405a815ec4b8d622d30351551ba79b3dd"
+  ],
+  "cases/nested-first-row-prefix330-cant1": [
+    "2619bebf1b9c6ce8a1f70534db6a3c978a4555a327015c65029304b9aba2b02c",
+    "bd81bd80377085dada43aed16dfa4d0974f398d872d74a891637e162b34de8aa"
   ],
   "cases/nested-float-no-spacer-inline": [
     "75366b047dc690d4c95b216a8d2ee325a9a0f3aca11ddf40b3e0780399a7d2c6"
@@ -1308,6 +1369,30 @@
   "cases/repeated-spaces-justify-5-split1": [
     "1771b14c3490337e15f82694ac7bf75583d2fdf8544459c5af5c79600a043278"
   ],
+  "cases/row-margin-hide0-center-top0": [
+    "112d11926e8ddbb084d47e4a3a6d9dca00070a92f39530db966ab7924c7650af"
+  ],
+  "cases/row-margin-hide0-center-top75": [
+    "b4ac37502443facd5160f2ed9cb2c94ecb0b13cec862c7831b7567331da01580"
+  ],
+  "cases/row-margin-hide0-top-top0": [
+    "112d11926e8ddbb084d47e4a3a6d9dca00070a92f39530db966ab7924c7650af"
+  ],
+  "cases/row-margin-hide0-top-top75": [
+    "b4ac37502443facd5160f2ed9cb2c94ecb0b13cec862c7831b7567331da01580"
+  ],
+  "cases/row-margin-hide1-center-top0": [
+    "112d11926e8ddbb084d47e4a3a6d9dca00070a92f39530db966ab7924c7650af"
+  ],
+  "cases/row-margin-hide1-center-top75": [
+    "b4ac37502443facd5160f2ed9cb2c94ecb0b13cec862c7831b7567331da01580"
+  ],
+  "cases/row-margin-hide1-top-top0": [
+    "112d11926e8ddbb084d47e4a3a6d9dca00070a92f39530db966ab7924c7650af"
+  ],
+  "cases/row-margin-hide1-top-top75": [
+    "b4ac37502443facd5160f2ed9cb2c94ecb0b13cec862c7831b7567331da01580"
+  ],
   "cases/section-clear-mark-continuous": [
     "cc067436bbcb697d1bddb5d447aa7827c9cb3e81ab9bbd7704642950c14bd25c"
   ],
@@ -1401,7 +1486,7 @@
     "edb79e17221cf18080e3ee104d43136832d39ab3ca5b463948d552b3f6c17f20"
   ],
   "fonts/multi_font": [
-    "528149d2b7ee18878f80eb2963af24b536d873fccf3628c29cf69ccea72a13f6",
+    "7533b580acccdf16051f8791fdb6fadf76bece4d06a7290bdafd2491c1cecf3f",
     "9b2dfe9e376d2b1f2649fbf1595d8e4a334176defeacb0a9124e7619ec32e94b"
   ],
   "fonts/times_new_roman": [
@@ -1584,7 +1669,7 @@
     "454f6d9b51df03a46f14ff5a0ef1a776ebf3125e442b7c4ee5f3b2639cdfbab5",
     "add630f5622be84f5ba9a3d7284f79a8a7757b56ee214e643dcfcc0100bd7df8",
     "0b7562e8744efa81157a557b9195156301880830f6594c78fcbbeb215174f86c",
-    "5319c5fe83d3858a33d2417a9c55eb7c2d006d4b2cad3d6833fa8cf5358dfd8d",
+    "704e4d4b653494226a97709bd44220dd84b295d27a1ca1daf7e4feda7cdb7012",
     "7580d4ecd6fc7394b6931cd0abccd74c5726d5e5de4d07088bab0add6d2e9f5c",
     "d436beeea556bea5fa04d7b901b208e894b34441e6b62ee8122afbdfc3fd5640",
     "c0d92c8eebd46239c9c9f433233cf957d16ccf4536a5104187a735e45bd34d93",
@@ -2735,14 +2820,14 @@
     "a058132f3897675ced97b99056b637cf214667c97bbb08986e970849841e1a25"
   ],
   "scraped/mongolian_human_rights_law": [
-    "38d60b6441b5ca20bd78a41494cf4be358af2288a484ab1e843d5cec3e8ac5cc",
-    "a398c00316c9241ba7489dedb311377562e342f2a9cb195c51be7e61de81354f",
-    "496dd1ebabb9424beae8ba7f9f61535cc670de50af81d2c39a596bc3b6c716e8",
-    "a46e94a6a88de40bd7ffceeba49d3309ba9af9ae63982c8c7e0bd4166c01de9b",
-    "9e0f2a34db9768e7164e5bbf333b21ed98f34a961abe368c359dcaffdb19a5e3",
-    "e5f83419f4f4bbcba74352707c21c71b9a562184fa5fa533ebf0ec5820b85f72",
-    "184c355cf1d5b00103b33f33a91b74fc44853953f778734051f06c15ecc38c5e",
-    "a895c0c5acc60d6eddd91312f17f6364f9f8daed1214778a5aa300e3bf4f2989"
+    "a54e3c22bcc69e55f97b764f90439f8fda67755ef1b7ec17477896af4aba4429",
+    "a4e3486ac576124cf55b0ad8b1334bae434e11046584f3c4775d3dc8b57f0e21",
+    "f27901b32ec1fe613a8afea5ba931128b935cc132435afed011ba19745bb09cd",
+    "e1630701d9b7e0b672f53150c7d3e2802cd2c3380f38566043e9d877f3f8af28",
+    "0e9f04b735ed86195aba52ace9b04b7209aa042ad9b23dbc99b758177021e60a",
+    "392313cf6d6fa4e05589a21233ec6b5a58df3477661c91d18086ed35c636b120",
+    "a897ffc4e7e176e834a4b22acb0b4be885af2202a6cd8e91854e019d988b9643",
+    "97f1943d2b66ae6d25d1d4f24dc07549f629d65c0d24a210b1c2a88b3e6cc1ce"
   ],
   "scraped/nabl_lab_preassessment_guidelines": [
     "3fc3c8b144ae19ea9ea76e5c731c86b2ac43700b93a4f1fc4f8cc96d6e0b9d2f",
@@ -2814,12 +2899,12 @@
     "549a73f23a64e5e89a4a4e9dc1071a635e7d3865304df32bde2c04f559ec62e6"
   ],
   "scraped/polish_ministry_accessibility_report": [
-    "452363a78c253a7fc3fab1a9bf521cb3eb80c14f00e7c70c0da24ef347fecabe",
-    "120ff2c94b32927a0b0dd4be778c961726b8a2d2d543023a906e8c81893de765",
-    "aabebe465b4e4b218d68dbcb37505234d01c9c41c9fa28f35f1b944ac54898ed",
-    "e1a233899ed1f773b026fc9e70568da5ec36621fb0db324bb786fdd41da875ce",
-    "1b5be7a1b93ccd8e33a91a2fb5b619e0814b2e7543da38af7bbc2398bfeeafd5",
-    "777fe9dce4388958538c7db41e1e5fc9fb7df86df964a9c0f34fea453f1628cc",
+    "690ec4a9484a0069eca7761686aeb551e8eef3c8219c49f2d95085be2a7a2eff",
+    "fe858ed35c13f95af2bc93fc81247df5462830447177af5468f3fa60f75b2848",
+    "e9dac16a3fe730b0f1822e26945278cd748c3bab3c5b6084ed8109346f103ad1",
+    "42c805eb18b636fecaf0a91bd9e1d820c22a356ed8e6b1b12fb2e05495ae8536",
+    "220201b4a6e0522cbe26875e9cb7173ac52c96a0d67cb6c8f7fac8629bdbb2d4",
+    "738a11ac8d42eaa4cd6c23f4d3f0e454d9423a01f3be0ee60ee097db49a8424a",
     "9b76c5dd47bf77c819a278c7f58f3a529a71086442140034014bd90633c08067",
     "fbb9d6fac9aa5b1767ae53c28b1e81632012dbe769609f8a1c0ddae801908fda",
     "9be751fb593ca6876bbca9def99ed5c41b434174d1114ede8846a098a88071d3",
@@ -2922,7 +3007,7 @@
   ],
   "scraped/russian_university_proceedings": [
     "db3f18ac4f9c0999e13c91fd3e6bddc8ecc23cd90a32070f5fd1214da0060b90",
-    "0eed1af77a87faced37ee7ca7ba3612609d0f07fe07078d688acbfe93e133322",
+    "206940d7b2126bc277636ca6aa1ecc5f5774359f581afb69f8dc2d290ee92bbb",
     "8b2235015a7226805386578c8bbfcd2d970529895cd6b0c523ca7ba98cf9a103"
   ],
   "scraped/russian_volunteerism_essay": [

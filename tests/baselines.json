@@ -2911,6 +2911,36 @@
     "a11y_struct": 0.5429,
     "a11y_text": 1.0
   },
+  "cases/full-width-frame-after-table-exact": {
+    "jaccard": 0.8001,
+    "ssim": 0.9663,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/full-width-frame-after-table-minimum": {
+    "jaccard": 0.8001,
+    "ssim": 0.9674,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/full-width-frame-exact": {
+    "jaccard": 0.7829,
+    "ssim": 0.9741,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.7105
+  },
   "cases/fullwidth-float-empty-clear": {
     "jaccard": 0.9061,
     "ssim": 0.9776,
@@ -3461,6 +3491,66 @@
     "a11y_struct": 0.4,
     "a11y_text": 1.0
   },
+  "cases/modern-oversized-lines5-cant1-prefix0": {
+    "jaccard": 0.7441,
+    "ssim": 0.9224,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5833,
+    "a11y_text": 1.0
+  },
+  "cases/modern-oversized-lines5-cant1-prefix160": {
+    "jaccard": 0.6414,
+    "ssim": 0.9256,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/modern-oversized-lines5-cant1-prefix330": {
+    "jaccard": 0.872,
+    "ssim": 0.9612,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6154,
+    "a11y_text": 1.0
+  },
+  "cases/modern-oversized-lines55-cant1-prefix0": {
+    "jaccard": 0.7564,
+    "ssim": 0.9258,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9194,
+    "a11y_text": 1.0
+  },
+  "cases/modern-oversized-lines55-cant1-prefix160": {
+    "jaccard": 0.8173,
+    "ssim": 0.9443,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9206,
+    "a11y_text": 1.0
+  },
+  "cases/modern-oversized-lines55-cant1-prefix330": {
+    "jaccard": 0.8173,
+    "ssim": 0.9443,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9206,
+    "a11y_text": 1.0
+  },
   "cases/nbsp-space-multiple-spaces": {
     "jaccard": 0.5627,
     "ssim": 0.9418,
@@ -3519,6 +3609,76 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/nested-adjacent-expanded-anchor": {
+    "jaccard": 0.8846,
+    "ssim": 0.9513,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6087,
+    "a11y_text": 1.0
+  },
+  "cases/nested-adjacent-negative-large-offset": {
+    "jaccard": 0.8695,
+    "ssim": 0.943,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6087,
+    "a11y_text": 1.0
+  },
+  "cases/nested-adjacent-negative-positive": {
+    "jaccard": 0.7725,
+    "ssim": 0.942,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6087,
+    "a11y_text": 1.0
+  },
+  "cases/nested-first-row-prefix300-cant0": {
+    "jaccard": 0.5084,
+    "ssim": 0.7056,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4706,
+    "a11y_text": 1.0
+  },
+  "cases/nested-first-row-prefix300-cant1": {
+    "jaccard": 0.9239,
+    "ssim": 0.963,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5294,
+    "a11y_text": 1.0
+  },
+  "cases/nested-first-row-prefix330-cant0": {
+    "jaccard": 0.607,
+    "ssim": 0.7826,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5294,
+    "a11y_text": 1.0
+  },
+  "cases/nested-first-row-prefix330-cant1": {
+    "jaccard": 0.9239,
+    "ssim": 0.963,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7059,
     "a11y_text": 1.0
   },
   "cases/nested-float-no-spacer-inline": {
@@ -4011,6 +4171,86 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/row-margin-hide0-center-top0": {
+    "jaccard": 0.7405,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/row-margin-hide0-center-top75": {
+    "jaccard": 0.6538,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/row-margin-hide0-top-top0": {
+    "jaccard": 0.7405,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/row-margin-hide0-top-top75": {
+    "jaccard": 0.6538,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/row-margin-hide1-center-top0": {
+    "jaccard": 0.7405,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/row-margin-hide1-center-top75": {
+    "jaccard": 0.6538,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/row-margin-hide1-top-top0": {
+    "jaccard": 0.7405,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/row-margin-hide1-top-top75": {
+    "jaccard": 0.6538,
+    "ssim": 0.9208,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
   "cases/section-clear-mark-continuous": {
     "jaccard": 0.56,
     "ssim": 0.9467,
@@ -4299,8 +4539,8 @@
     "a11y_missing": 0
   },
   "fonts/multi_font": {
-    "jaccard": 0.3493,
-    "ssim": 0.5182,
+    "jaccard": 0.3731,
+    "ssim": 0.5299,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -4522,8 +4762,8 @@
     "a11y_text": 0.9879
   },
   "scraped/australian_higher_education_guidelines": {
-    "jaccard": 0.6556,
-    "ssim": 0.834,
+    "jaccard": 0.6557,
+    "ssim": 0.8344,
     "text_boundary": 0.8786,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -5383,8 +5623,8 @@
     "a11y_text": 1.0
   },
   "scraped/mongolian_human_rights_law": {
-    "jaccard": 0.7629,
-    "ssim": 0.9152,
+    "jaccard": 0.7637,
+    "ssim": 0.9154,
     "text_boundary": 1.0,
     "convert_ms": 32.0,
     "ua_fail": 3,
@@ -5508,9 +5748,9 @@
     "a11y_text": 0.9562
   },
   "scraped/polish_ministry_accessibility_report": {
-    "jaccard": 0.3879,
-    "ssim": 0.7065,
-    "text_boundary": 0.693,
+    "jaccard": 0.5538,
+    "ssim": 0.8612,
+    "text_boundary": 0.8146,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -5672,7 +5912,7 @@
     "a11y_text": 1.0
   },
   "scraped/russian_university_proceedings": {
-    "jaccard": 0.7782,
+    "jaccard": 0.7783,
     "ssim": 0.9222,
     "text_boundary": 1.0,
     "convert_ms": 23.3,
