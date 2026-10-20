@@ -244,6 +244,9 @@ Then run from the project root:
 
 # Fixture features and scores, e.g. only the failing ones
 ./tools/target/debug/analyze-fixtures --failing
+
+# Are our font files the builds Word embedded in these references? (needs mutool)
+python3 tools/font_builds.py tests/fixtures/fonts/multi_font/reference.pdf -- fonts
 ```
 
 ## Contributing
