@@ -4078,6 +4078,42 @@
     "a11y_struct": 1.0,
     "a11y_text": 0.5636
   },
+  "nested-side-text/s0-w4681-y1": {
+    "jaccard": 0.6567,
+    "ssim": 0.7925,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-side-text/s0-w4681-y600": {
+    "jaccard": 0.8437,
+    "ssim": 0.9452,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-side-text/s0-w9000-y1": {
+    "jaccard": 0.752,
+    "ssim": 0.9484,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-side-text/s42-w4681-y1": {
+    "jaccard": 0.6556,
+    "ssim": 0.7977,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-side-text/s42-w4681-y600": {
+    "jaccard": 0.8411,
+    "ssim": 0.9486,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-side-text/s42-w9000-y1": {
+    "jaccard": 0.7543,
+    "ssim": 0.9546,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
   "samples/CV": {
     "jaccard": 0.8569,
     "ssim": 0.954,
