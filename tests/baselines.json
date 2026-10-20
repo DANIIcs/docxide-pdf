@@ -4078,6 +4078,42 @@
     "a11y_struct": 1.0,
     "a11y_text": 0.5636
   },
+  "picture-mark-leading/c14-l480": {
+    "jaccard": 0.7919,
+    "ssim": 0.5925,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "picture-mark-leading/c15-l480": {
+    "jaccard": 0.793,
+    "ssim": 0.6703,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "picture-mark-leading/s22-l360": {
+    "jaccard": 0.7919,
+    "ssim": 0.5964,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "picture-mark-leading/s28-l480": {
+    "jaccard": 0.7919,
+    "ssim": 0.5925,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "picture-mark-leading/same-l-l480": {
+    "jaccard": 0.7411,
+    "ssim": 0.7671,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "picture-mark-leading/three-ls-l480": {
+    "jaccard": 0.7914,
+    "ssim": 0.611,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
   "samples/CV": {
     "jaccard": 0.8569,
     "ssim": 0.954,
