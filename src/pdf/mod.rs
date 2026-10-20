@@ -4966,14 +4966,26 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     } else {
                         0
                     };
-                    if state.pb.slot_top > fz.bottom_y || (fz.from_table && extra_breaks > 0) {
+                    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+                    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                    let mark_pitch = resolve_line_h(ls, fs, lhr);
+                    // Clear the line after a trailing break even when its end
+                    // already extends below the table: its start can still be
+                    // inside the table's vertical band.
+                    let trailing_clear = fz.from_table
+                        && !empty_clear
+                        && p.runs.last().is_some_and(|r| r.is_line_break)
+                        && p.runs.iter().filter(|r| r.is_line_break).count() == 1
+                        && p.runs.iter().all(|r| r.inline_image.is_none())
+                        && p.image.is_none();
+                    if state.pb.slot_top > fz.bottom_y
+                        || (fz.from_table && extra_breaks > 0)
+                        || (trailing_clear && state.pb.slot_top + mark_pitch > fz.bottom_y)
+                    {
                         // The line following the break resumes below the
                         // float and still occupies its full line height
                         // there (the break paragraph's mark line).
-                        let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-                        let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        state.pb.slot_top =
-                            fz.bottom_y - resolve_line_h(ls, fs, lhr) * (1 + extra_breaks) as f32;
+                        state.pb.slot_top = fz.bottom_y - mark_pitch * (1 + extra_breaks) as f32;
                     }
                     state.pb.float_zone = None;
                 }
