@@ -5763,5 +5763,53 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "trailing-table-clear/s20-h200-y0": {
+    "jaccard": 0.4971,
+    "ssim": 0.8195,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "trailing-table-clear/s20-h400-y0": {
+    "jaccard": 0.4971,
+    "ssim": 0.8086,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "trailing-table-clear/s20-h400-y1": {
+    "jaccard": 0.5688,
+    "ssim": 0.8086,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "trailing-table-clear/s28-h400-y0": {
+    "jaccard": 0.6609,
+    "ssim": 0.7746,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "trailing-table-clear/s28-h400-y1": {
+    "jaccard": 0.6609,
+    "ssim": 0.7746,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "trailing-table-clear/s28-h600-y0": {
+    "jaccard": 0.6609,
+    "ssim": 0.7877,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "trailing-table-clear/s28-h600-y1": {
+    "jaccard": 0.6609,
+    "ssim": 0.7877,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "trailing-table-clear/s28-h800-y1": {
+    "jaccard": 0.6609,
+    "ssim": 0.776,
+    "ref_pages": 1,
+    "gen_pages": 1
   }
 }
