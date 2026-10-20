@@ -4078,6 +4078,78 @@
     "a11y_struct": 1.0,
     "a11y_text": 0.5636
   },
+  "leading-picture-anchor/l-p0-y80-b0": {
+    "jaccard": 0.9982,
+    "ssim": 0.9976,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "leading-picture-anchor/l-p0-y80-b1": {
+    "jaccard": 0.9982,
+    "ssim": 0.9976,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "leading-picture-anchor/l-p330-y80-b0": {
+    "jaccard": 0.9991,
+    "ssim": 0.9988,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
+  "leading-picture-anchor/l-p330-y80-b1": {
+    "jaccard": 0.9991,
+    "ssim": 0.9988,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
+  "leading-picture-anchor/s-p300-sq": {
+    "jaccard": 0.9959,
+    "ssim": 0.9937,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
+  "leading-picture-anchor/s-p300-ti": {
+    "jaccard": 0.9959,
+    "ssim": 0.9937,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
+  "leading-picture-anchor/s-p330-sq": {
+    "jaccard": 0.9193,
+    "ssim": 0.9937,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
+  "leading-picture-anchor/s-p330-ti": {
+    "jaccard": 0.9193,
+    "ssim": 0.9937,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
+  "leading-picture-anchor/t-p0-y80-b0": {
+    "jaccard": 0.9982,
+    "ssim": 0.9976,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "leading-picture-anchor/t-p0-y80-b1": {
+    "jaccard": 0.9982,
+    "ssim": 0.9976,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "leading-picture-anchor/t-p330-y80-b0": {
+    "jaccard": 0.9004,
+    "ssim": 0.9823,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
+  "leading-picture-anchor/t-p330-y80-b1": {
+    "jaccard": 0.9004,
+    "ssim": 0.9823,
+    "ref_pages": 2,
+    "gen_pages": 2
+  },
   "samples/CV": {
     "jaccard": 0.8569,
     "ssim": 0.954,

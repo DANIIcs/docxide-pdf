@@ -2027,7 +2027,7 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
         && !para.column_break_after
 }
 
-/// Compute effective first-line hanging indent for a paragraph.
+/// Whether a leading picture leaves no usable text strip on either side.
 fn leading_full_width_picture(
     fi: &crate::model::FloatingImage,
     sp: &SectionProperties,
@@ -2047,6 +2047,7 @@ fn leading_full_width_picture(
         < MIN_EMPTY_STRIP
 }
 
+/// Compute effective first-line hanging indent for a paragraph.
 fn compute_text_hanging(
     para: &Paragraph,
     default_tab_stop: f32,
