@@ -186,6 +186,15 @@ Font scanning results are cached to disk (per-directory, invalidated by mtime). 
 - **Linux**: `$XDG_CACHE_HOME/docxide-pdf/font-index.tsv` (default `~/.cache/`)
 - **Windows**: `%LOCALAPPDATA%\docxide-pdf\cache\font-index.tsv`
 
+### Fonts
+
+docxide-pdf lays text out with the fonts it finds. The PDF can only match Word's if the font files match too.
+
+- **Where fonts come from**: first fonts embedded in the DOCX, then the directories in `DOCXIDE_FONTS` (the first one listed wins), then the system font directories. Lookup is by family plus bold and italic, so a Regular you supply does not block the system's Bold.
+- **Same name, different file, different pages.** Line height comes from numbers inside the font file, and two files of the same family can carry different numbers. For example, the Arial and Times New Roman that ship with Office for Mac give 13.4pt lines at 12pt, while the files Word itself exports with give 13.8pt. That is enough to move every page break in a long document. The version number does not tell you which one you have.
+- **A font missing some characters is still used.** If the Bold has no Greek letters, say, the Greek comes from another font, one letter at a time, with no warning.
+- **To get the same PDF everywhere**, embed the fonts in the DOCX (Word: "Embed fonts in the file"), or put a checked set of font files in one directory and point `DOCXIDE_FONTS` at it. Run with `RUST_LOG=info` to see which fonts were substituted.
+
 ## Testing
 
 Tests require `mutool` on `PATH` for PDF-to-PNG rendering:
