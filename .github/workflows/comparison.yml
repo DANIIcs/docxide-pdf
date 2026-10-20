@@ -19,7 +19,7 @@
 # Caching: Rust deps (rust-cache, one key shared by the shards), competitor binaries (keyed by the version
 # resolved at run time, so a new release is built once and then reused), and comparison/ (PDFs,
 # screenshots, scores and the WebP site, so only new or changed pages are encoded). Each shard saves its cache
-# under a new key every run and then deletes the key it restored from: the repository's 10 GB cache limit
+# under a new key every run and then deletes its other caches: the repository's 10 GB cache limit
 # evicts the least recently used entries, and with two generations of every shard around that used to be
 # the competitor binaries (14 min to rebuild) or a whole shard (45 min cold instead of 15).
 # engine_compare.py skips work whose output is newer than its input, so tools/restore_mtime.py gives
@@ -138,20 +138,21 @@ jobs:
         with:
           path: comparison
           key: comparison-${{ matrix.shard }}of${{ env.SHARDS }}-fonts${{ hashFiles('assets/fonts/**') }}-${{ github.run_id }}
-      - name: Drop the cache this run superseded
-        if: always() && steps.save.outcome == 'success' && steps.restore.outputs.cache-matched-key != ''
+      - name: Drop the caches this run superseded
+        # Every other cache of this shard, not just the one restored from: a font change (new key) or a
+        # change of the cached path (new cache version, which no restore can see) leaves ones behind too.
+        if: always() && steps.save.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-          OLD: ${{ steps.restore.outputs.cache-matched-key }}
+          PREFIX: comparison-${{ matrix.shard }}of${{ env.SHARDS }}-
           NEW: comparison-${{ matrix.shard }}of${{ env.SHARDS }}-fonts${{ hashFiles('assets/fonts/**') }}-${{ github.run_id }}
         run: |
-          [ "$OLD" != "$NEW" ] || exit 0   # a re-run of this run restored its own key
+          keys=$(gh cache list --key "$PREFIX" --limit 100 --json key --jq '.[].key' | sort -u)
           # Only once the new key is really there: a save that failed to upload is just a warning.
-          if gh cache list --key "$NEW" --json key --jq '.[].key' | grep -qx "$NEW"; then
-            gh cache delete "$OLD" || echo "could not delete $OLD"
-          else
-            echo "new cache not saved, keeping $OLD"
-          fi
+          echo "$keys" | grep -qx "$NEW" || { echo "new cache not saved, keeping the old ones"; exit 0; }
+          echo "$keys" | grep -vx "$NEW" | while read -r k; do
+            [ -z "$k" ] || gh cache delete "$k" || echo "could not delete $k"
+          done
       - name: Hand the shard's site and manifest to publish
         run: cp comparison/work/manifest.json "comparison/manifest.${{ matrix.shard }}.json"
       - uses: actions/upload-artifact@v7
