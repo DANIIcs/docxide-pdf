@@ -529,15 +529,20 @@ fn compute_line_metrics(face: &Face, units: f32) -> LineMetrics {
     }
 }
 
-/// The leading Word adds above the win box: what the hhea ascent plus lineGap
-/// reaches past usWinAscent. Candara and Consolas (win box over hhea + lineGap
-/// 452/350) get none, so multi_font's lines are no longer 2-3pt too tall; Arial
-/// Narrow's taller hhea ascent adds 28 units (1.5-spaced 11pt lines step 18.94 in
-/// indonesian_school_admission_checklist). The descents never count: Book Antiqua
-/// Bold (hhea descent 578, win 543) steps like the win box in slovak_constitution.
+/// The leading Word adds above the win box: what the hhea box plus lineGap
+/// reaches past the win box, never negative (the OpenType OS/2 definition of
+/// GDI's tmExternalLeading). Arial and Times New Roman get their whole lineGap
+/// (67, 87); Calibri, Constantia, Candara and Palatino Linotype, whose hhea is
+/// the typo box plus a gap that exactly fills the win box, get none. Measured
+/// 2026-10-21 on 13 faces exported through Word's online service, with the
+/// builds it embeds. An earlier form ignored the descents to fit a local Book
+/// Antiqua Bold whose hhea descent exceeds its win descent; the build Word uses
+/// has no such excess, and that form was wrong for Constantia.
 fn external_leading(face: &Face, os2: ttf_parser::os2::Table) -> i16 {
-    let above = face.ascender() as i32 + face.line_gap() as i32 - os2.windows_ascender() as i32;
-    above.max(0) as i16
+    let hhea_box = face.ascender() as i32 - face.descender() as i32 + face.line_gap() as i32;
+    // ttf-parser hands back usWinDescent negated, like hhea's descender.
+    let win_box = os2.windows_ascender() as i32 - os2.windows_descender() as i32;
+    (hhea_box - win_box).max(0) as i16
 }
 
 /// Returns (line_h_ratio, ascender_ratio, typo_line_ratio) by the Latin rules.
