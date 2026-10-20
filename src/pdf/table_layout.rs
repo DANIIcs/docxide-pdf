@@ -691,6 +691,8 @@ impl CellFloatingImageLayout {
 
 #[derive(Default)]
 pub(super) struct CellParagraphLayout {
+    /// One-line fragments are enabled only for short paragraphs.
+    pub(super) allow_single_line_split: bool,
     pub(super) lines: Vec<TextLine>,
     pub(super) line_h: f32,
     pub(super) font_size: f32,
@@ -920,6 +922,8 @@ pub(super) fn compute_row_layouts(
         .iter()
         .map(|row| {
             let mut max_h: f32 = 0.0;
+            let row_keeps_next = row.cells.iter().flat_map(|cell| &cell.content)
+                .any(|block| matches!(block, Block::Paragraph(p) if p.keep_next));
             let cells: Vec<CellLayout> = row
                 .grid_cells()
                 .map(|(grid_col, span, cell)| {
@@ -1352,6 +1356,8 @@ pub(super) fn compute_row_layouts(
                                     .collect();
 
                                 items.push(CellContentItem::Paragraph(CellParagraphLayout {
+                                    allow_single_line_split: lines.len() <= 3 && (ctx.compat_mode < 15
+                                        || (!para.widow_control && !para.keep_lines && !row_keeps_next)),
                                     lines,
                                     line_h,
                                     font_size,
@@ -1986,8 +1992,9 @@ pub(super) fn find_cell_split(
                     used <= available_h
                 })
                 .count();
-            let fit = room.min(remaining.saturating_sub(2));
-            if fit >= 2 {
+            let minimum = if p.allow_single_line_split { 1 } else { 2 };
+            let fit = room.min(remaining.saturating_sub(minimum));
+            if fit >= minimum {
                 return CellCursor::at(pi, l0 + fit);
             }
         }
@@ -2334,6 +2341,53 @@ mod tests {
             .map(|c| (c.item, c.l0, c.l1))
             .collect();
         assert_eq!(chunks, vec![(0, 0, None), (1, 0, Some(4))]);
+    }
+
+    #[test]
+    fn short_cell_paragraph_can_leave_one_line_only_when_allowed() {
+        for allow_single_line_split in [false, true] {
+            let para = |count, allow_single_line_split| {
+                CellContentItem::Paragraph(CellParagraphLayout {
+                    lines: (0..count)
+                        .map(|_| TextLine {
+                            pitch: Some(10.0),
+                            ..Default::default()
+                        })
+                        .collect(),
+                    line_h: 10.0,
+                    allow_single_line_split,
+                    ..Default::default()
+                })
+            };
+            let cell = CellLayout {
+                items: vec![para(1, false), para(2, allow_single_line_split)],
+                cm: CellMargins {
+                    top: 0.0,
+                    left: 0.0,
+                    bottom: 0.0,
+                    right: 0.0,
+                },
+                total_height: 30.0,
+                trailing_space_after: 0.0,
+                text_direction: TextDirection::default(),
+            };
+            let expected = CellCursor::at(1, usize::from(allow_single_line_split));
+            assert_eq!(find_cell_split(&cell, &CELL_START, 20.0), expected);
+            assert_eq!(
+                find_cell_split(&cell, &CELL_START, 19.0),
+                CellCursor::at(1, 0)
+            );
+            assert_eq!(
+                find_cell_split(&cell, &CELL_START, 30.0),
+                CellCursor::at(2, 0)
+            );
+            if allow_single_line_split {
+                assert_eq!(
+                    find_cell_split(&cell, &expected, 10.0),
+                    CellCursor::at(2, 0)
+                );
+            }
+        }
     }
 
     #[test]

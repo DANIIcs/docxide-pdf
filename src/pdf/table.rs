@@ -2086,7 +2086,9 @@ pub(super) fn render_table(
         let any_cell_multi_item = layout.cells.iter().any(|c| {
             c.items.len() > 1
                 || c.items.iter().any(|it| match it {
-                    CellContentItem::Paragraph(p) => p.lines.len() >= 4,
+                    CellContentItem::Paragraph(p) => {
+                        p.lines.len() >= if p.allow_single_line_split { 2 } else { 4 }
+                    }
                     CellContentItem::NestedTable { rows, .. } => {
                         rows.len() >= 2 || rows.iter().any(|r| r.split_min.is_some())
                     }
@@ -2098,7 +2100,11 @@ pub(super) fn render_table(
         let first_chunks_fit = layout.cells.iter().all(|c| {
             c.items.first().is_none_or(|it| {
                 let end = match it {
-                    CellContentItem::Paragraph(p) if p.lines.len() >= 4 => Some(2),
+                    CellContentItem::Paragraph(p)
+                        if p.lines.len() >= if p.allow_single_line_split { 2 } else { 4 } =>
+                    {
+                        Some(if p.allow_single_line_split { 1 } else { 2 })
+                    }
                     CellContentItem::Paragraph(_) => None,
                     CellContentItem::NestedTable { .. } => Some(1),
                 };

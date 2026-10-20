@@ -841,6 +841,14 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     }
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
                     cell_blocks.push(Block::Paragraph(Paragraph {
+                        widow_control: ppr
+                            .and_then(|ppr| super::wml_bool(ppr, "widowControl"))
+                            .or_else(|| para_style.and_then(|s| s.widow_control))
+                            .unwrap_or(ctx.styles.defaults.widow_control),
+                        keep_lines: ppr
+                            .and_then(|ppr| super::wml_bool(ppr, "keepLines"))
+                            .or_else(|| para_style.and_then(|s| s.keep_lines))
+                            .unwrap_or(false),
                         runs,
                         alignment,
                         space_before_auto,
