@@ -171,7 +171,7 @@ tests/
   font_validation.rs, image_count.rs, page_geometry.rs, file_size.rs — font/image/page-size/size parity
   libreoffice_comparison.rs — opt-in (DOCXIDE_LO_COMPARE=1) comparison with LibreOffice
   speed.rs             — conversion timing (#[ignore])
-  common/              — shared harness: mod.rs (fixtures, rasterization, metrics), a11y.rs, text_boundary.rs
+  common/              — shared harness: mod.rs (fixtures, conversion, baselines), metrics.rs (rasterization, Jaccard/SSIM; also tools/page-metrics), a11y.rs, text_boundary.rs
   baselines.json, visual_hashes.json — accepted scores and page hashes
   fixtures/<group>/<case>/ — input.docx + reference.pdf; groups: cases/ (79 handcrafted), fonts/ (7), hyphenation/ (8), samples/ (5), scraped/ (138); SKIPLIST
   output/<group>/<case>/ — generated.pdf, reference/, generated/, diff/ screenshots (gitignored)

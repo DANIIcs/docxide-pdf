@@ -100,12 +100,14 @@ A11Y_SRC = ROOT / "tests" / "common" / "a11y.rs"
 # Seconds spent per phase, summed over the worker threads, so a CI log says where a run's time went.
 SPENT: Counter = Counter()
 _SPENT_LOCK = threading.Lock()
+# (phase, reason) → engine-cases this run rendered or scored again, for the summary line.
+REDONE: Counter = Counter()
 
 
-def spent(phase: str, fn, *args):
+def spent(phase: str, fn, *args, **kwargs):
     t = time.perf_counter()
     try:
-        return fn(*args)
+        return fn(*args, **kwargs)
     finally:
         with _SPENT_LOCK:
             SPENT[phase] += time.perf_counter() - t
@@ -124,6 +126,16 @@ def report_timeouts() -> None:
 def report_spent() -> None:
     if SPENT:
         print("time spent (thread-seconds): " + ", ".join(f"{k} {v:.0f}" for k, v in SPENT.most_common()))
+
+
+def report_redone() -> None:
+    """What this run rendered or scored again, and why: a slow run should be readable from its log."""
+    by_phase: dict[str, Counter] = {}
+    for (phase, reason), n in REDONE.items():
+        by_phase.setdefault(phase, Counter())[reason] += n
+    if by_phase:
+        print("redone: " + "; ".join(f"{phase} {sum(c.values())} ({', '.join(f'{r} {n}' for r, n in c.most_common())})"
+                                     for phase, c in by_phase.items()))
 
 
 def find_soffice() -> Path | None:
@@ -185,12 +197,18 @@ def is_fresh(target: Path, source: Path) -> bool:
     return target.exists() and target.stat().st_mtime >= source.stat().st_mtime
 
 
-def screenshot(pdf: Path, out_dir: Path) -> list[Path]:
-    """Render every page to out_dir/page_NNN.png. Skips when PNGs are newer than the PDF and RENDER_EPOCH."""
+def screenshot(pdf: Path, out_dir: Path) -> tuple[list[Path], str | None]:
+    """Render every page to out_dir/page_NNN.png, unless the PNGs are newer than the PDF and
+    RENDER_EPOCH. Returns the pages and why they were rendered (None: reused)."""
     existing = sorted(out_dir.glob("page_*.png"))
-    fresh_after = max(pdf.stat().st_mtime, RENDER_EPOCH)
-    if existing and all(p.stat().st_mtime >= fresh_after for p in existing):
-        return existing
+    pdf_time = pdf.stat().st_mtime
+    if existing:
+        oldest = min(p.stat().st_mtime for p in existing)
+        if oldest >= max(pdf_time, RENDER_EPOCH):
+            return existing, None
+        why = "pdf changed" if oldest < pdf_time else "render tools changed"
+    else:
+        why = "new"
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in existing:
         old.unlink()
@@ -198,7 +216,7 @@ def screenshot(pdf: Path, out_dir: Path) -> list[Path]:
         ["mutool", "draw", "-F", "png", "-r", DPI, "-o", str(out_dir / "page_%03d.png"), str(pdf)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
     )
-    return sorted(out_dir.glob("page_*.png"))
+    return sorted(out_dir.glob("page_*.png")), why
 
 
 def converted(r: subprocess.CompletedProcess, pdf: Path) -> bool:
@@ -564,22 +582,28 @@ def scoring_fingerprint() -> str:
 
 
 def cached_metrics(engine: str, mine: Path, ref_pdf: Path, ref_hash: str, pdf: Path,
-                   ref_dir: Path, other_dir: Path) -> dict:
-    """engine_metrics, reused while both PDFs and the scoring fingerprint are unchanged."""
-    key = f"{SCORING_FP}:{ref_hash}:{file_hash(pdf)}" if SCORING_FP else None
+                   ref_dir: Path, other_dir: Path) -> tuple[dict, str | None]:
+    """engine_metrics, reused while both PDFs and the scoring fingerprint are unchanged. Returns the
+    scores and why they were computed (None: reused)."""
+    pdf_hash = file_hash(pdf)
+    key = f"{SCORING_FP}:{ref_hash}:{pdf_hash}" if SCORING_FP else None
     cache = mine / f"{engine}.score.json"
+    why = "new"
     if key:
         try:
             c = json.loads(cache.read_text())
             if c["key"] == key:
-                return c["scores"]
-        except (OSError, ValueError, KeyError):
+                return c["scores"], None
+            old = c["key"].split(":")
+            why = ("scorer changed" if old[0] != SCORING_FP else "reference changed" if old[1] != ref_hash
+                   else "pdf changed")
+        except (OSError, ValueError, KeyError, IndexError):
             pass
     m = spent("score", engine_metrics, ref_pdf, pdf, ref_dir, other_dir)
     if m and key:  # an empty result is a failed run of page-metrics, not a score
         mine.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps({"key": key, "scores": m}))
-    return m
+    return m, why
 
 
 def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None:
@@ -592,10 +616,13 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
     mine = WORK / group / case
     pages: dict[str, list[Path]] = {}
     pdfs: dict[str, Path] = {}
+    redone: list[tuple[str, str, str]] = []   # (phase, engine, reason): what this case had done again
 
     def add(key: str, pdf: Path, png_dir: Path) -> None:
         pdfs[key] = pdf
-        pages[key] = spent("screenshot", screenshot, pdf, png_dir)
+        pages[key], why = spent("screenshot", screenshot, pdf, png_dir)
+        if why:
+            redone.append(("render", key, why))
 
     # Word reference
     ref_dir = harness / "reference" if any((harness / "reference").glob("page_*.png")) else mine / "reference"
@@ -641,10 +668,15 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
         ref_hash = file_hash(ref_pdf)
         for key in COMPETITORS:
             if pages.get(key):
-                m = cached_metrics(key, mine, ref_pdf, ref_hash, pdfs[key], ref_dir, pages[key][0].parent)
+                m, why = cached_metrics(key, mine, ref_pdf, ref_hash, pdfs[key], ref_dir, pages[key][0].parent)
                 if m:
                     scores[key] = m
+                    if why:
+                        redone.append(("score", key, why))
 
+    with _SPENT_LOCK:
+        for phase, _, why in redone:
+            REDONE[(phase, why)] += 1
     rel = lambda p: os.path.relpath(p, WORK)  # noqa: E731
     return {
         "group": group,
@@ -653,6 +685,7 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
         "scores": scores,
         "times": {k: v for k, v in times.items() if v is not None},
         "reference_app": pdf_creator(ref_pdf),
+        "redone": redone,   # for the log line only; main() drops it before the manifest
     }
 
 
@@ -673,15 +706,16 @@ def shard_of(group: str, case: str, n: int) -> int:
 
 
 def prune_work(fixtures: list[tuple[str, Path]]) -> None:
-    """Drop cached conversions of fixtures this run does not own: deleted or renamed ones, and in a shard
-    run the other shards' (CI caches work/ per shard, and nothing else would ever empty it)."""
+    """Drop cached conversions and site pages of fixtures this run does not own: deleted or renamed ones,
+    and in a shard run the other shards' (CI caches comparison/ per shard, and nothing else would ever
+    empty it; a stale site page would even be deployed)."""
     keep = {(g, d.name) for g, d in fixtures}
-    gone = [d for g in GROUPS if (WORK / g).is_dir() for d in (WORK / g).iterdir()
+    gone = [d for base in (WORK, SITE) for g in GROUPS if (base / g).is_dir() for d in (base / g).iterdir()
             if d.is_dir() and (g, d.name) not in keep]
     for d in gone:
         shutil.rmtree(d, ignore_errors=True)
     if gone:
-        print(f"pruned {len(gone)} cached cases this run does not own")
+        print(f"pruned {len(gone)} case directories this run does not own")
 
 
 def build_site(results: list[dict], versions: dict, fmt: str, jobs: int) -> None:
@@ -720,12 +754,12 @@ def build_site(results: list[dict], versions: dict, fmt: str, jobs: int) -> None
         if fmt == "png":
             shutil.copy2(src, dst)
         else:
-            subprocess.run(["cwebp", "-quiet", "-lossless", str(src), "-o", str(dst)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            spent("encode", subprocess.run, ["cwebp", "-quiet", "-lossless", str(src), "-o", str(dst)],
+                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
     print(f"site: {len(jobs_list)} images to encode into {SITE}")
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        spent("encode", lambda: list(pool.map(transfer, jobs_list)))
+        list(pool.map(transfer, jobs_list))
     write_html(rewritten, versions, SITE / "index.html")
     (SITE / ".nojekyll").touch()  # GitHub Pages: serve as-is, no Jekyll pass over 9k files
     (SITE / ".gitignore").write_text("/work/\n")  # deploy_comparison.sh commits this folder; keep the cache out
@@ -868,14 +902,17 @@ def main() -> None:
                 print(f"  [{i}/{len(futures)}] {g}/{name}: ERROR {e}", file=sys.stderr)
                 continue
             if r:
+                redone = r.pop("redone", [])
                 results.append(r)
                 sc = " ".join(f"{k[:4]}=J{v.get('jaccard', 0):.0f}/S{v.get('ssim', 0):.0f}/T{v.get('text_boundary', 0):.0f}"
                               for k, v in r["scores"].items())
-                print(f"  [{i}/{len(futures)}] {g}/{name}  {sc}")
+                again = "  | redone: " + ", ".join(f"{p} {e} ({w})" for p, e, w in redone) if redone else ""
+                print(f"  [{i}/{len(futures)}] {g}/{name}  {sc}{again[:200]}")
 
     print()
     if not (opts.case or opts.group):   # a filtered run owns nothing but what it was asked for
         prune_work(fixtures)
+    report_redone()
     report_timeouts()
     finish(results, engine_versions(tools))
 

@@ -47,10 +47,7 @@ name = "page-metrics"
 path = "src/bin/page_metrics.rs"
 
 [dependencies]
-# rayon, sha2 and the library itself are only here because page-metrics includes tests/common/mod.rs by path
-rayon = "1"
-sha2 = "0.10"
-docxide-pdf = { path = "..", default-features = false }
+rayon = "1"   # page-metrics, and the harness's metrics.rs it includes by path
 zip = "2"
 roxmltree = "0.21"
 image = "0.25"

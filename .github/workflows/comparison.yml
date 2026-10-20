@@ -11,14 +11,14 @@
 #   gh secret set ASSETS_DEPLOY_KEY -R sverrejb/docxide-pdf < assets_key && rm assets_key assets_key.pub
 #
 # Shards: each fixture goes to one of SHARDS parallel jobs by a hash of its name (engine_compare.py
-# --shard i/n), so adding a fixture moves no other one; each job keeps its own comparison/work cache and
+# --shard i/n), so adding a fixture moves no other one; each job keeps its own comparison/ cache and
 # `publish` joins their site images and manifests and deploys. A cold run took ~110 min on one runner
 # (scoring is 3/4 of it: veraPDF + pdfinfo + SSIM per competitor PDF), which is over the job limit once
 # anything cold-starts the cache.
 #
 # Caching: Rust deps (rust-cache, one key shared by the shards), competitor binaries (keyed by the version
-# resolved at run time, so a new release is built once and then reused), and comparison/work (PDFs,
-# screenshots, scores; the WebP site is re-encoded from them each run, ~1 min). Each shard saves its cache
+# resolved at run time, so a new release is built once and then reused), and comparison/ (PDFs,
+# screenshots, scores and the WebP site, so only new or changed pages are encoded). Each shard saves its cache
 # under a new key every run and then deletes the key it restored from: the repository's 10 GB cache limit
 # evicts the least recently used entries, and with two generations of every shard around that used to be
 # the competitor binaries (14 min to rebuild) or a whole shard (45 min cold instead of 15).
@@ -128,7 +128,7 @@ jobs:
       - uses: actions/cache/restore@v6
         id: restore
         with:
-          path: comparison/work
+          path: comparison
           key: comparison-${{ matrix.shard }}of${{ env.SHARDS }}-fonts${{ hashFiles('assets/fonts/**') }}-${{ github.run_id }}
           restore-keys: comparison-${{ matrix.shard }}of${{ env.SHARDS }}-fonts${{ hashFiles('assets/fonts/**') }}-
       - run: python3 tools/engine_compare.py --shard "${{ matrix.shard }}/$SHARDS"
@@ -136,7 +136,7 @@ jobs:
         id: save
         if: always()   # keep the progress of a failed run
         with:
-          path: comparison/work
+          path: comparison
           key: comparison-${{ matrix.shard }}of${{ env.SHARDS }}-fonts${{ hashFiles('assets/fonts/**') }}-${{ github.run_id }}
       - name: Drop the cache this run superseded
         if: always() && steps.save.outcome == 'success' && steps.restore.outputs.cache-matched-key != ''

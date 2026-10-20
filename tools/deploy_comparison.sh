@@ -27,10 +27,11 @@ BRANCH=${2:-gh-pages}
 # A throwaway .git elsewhere; comparison/ itself is the work tree, nothing is copied.
 # `git add -A` honours comparison/.gitignore, which excludes work/ (PDFs, PNGs, LO profiles).
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+trap 'rm -rf "$TMP" 2>/dev/null || :' EXIT   # a cleanup failure must not fail a deploy that already pushed
 g() { git --git-dir="$TMP/.git" --work-tree="$SITE" "$@"; }
 
 g init -q
+g config gc.auto 0   # 17k loose objects trigger a *background* gc that is still writing when the trap removes .git
 touch "$SITE/.nojekyll"   # stop GitHub running Jekyll over 9k files
 g add -A
 g -c user.name="engine_compare" -c user.email="engine_compare@localhost" \
