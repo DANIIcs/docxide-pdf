@@ -827,6 +827,18 @@ pub(super) struct FloatZone {
     pub from_table: bool,
 }
 
+// A table excludes part of the column; it does not reset the paragraph's
+// margin-relative left indent to the table's right edge.
+fn table_right_text_region(
+    col_x: f32,
+    col_right: f32,
+    float_right: f32,
+    para: &Paragraph,
+) -> (f32, f32) {
+    let left = (col_x + para.indent_left).max(float_right);
+    (left, (col_right - para.indent_right - left).max(0.0))
+}
+
 impl FloatZone {
     /// The exclusion zone of a wrapping float whose frame's left edge is `fi_x`
     /// and top edge `fi_y_top` (page coordinates, y from the bottom).
@@ -905,13 +917,18 @@ impl FloatZone {
             // For bothSides, use the wider region as primary text width (dual
             // geometry handles both regions per-line).
             let lw = (space_left - para.indent_left).max(0.0);
-            let rw = (space_right - para.indent_left - para.indent_right).max(0.0);
+            let table_region = self.from_table.then(|| {
+                table_right_text_region(col_x, col_right, ex_right + self.right_from_text, para)
+            });
+            let rw = table_region.map_or_else(
+                || (space_right - para.indent_left - para.indent_right).max(0.0),
+                |(_, w)| w,
+            );
             if rw > lw {
                 let new_left = ex_right + self.right_from_text;
                 *text_w = rw.max(1.0);
-                *text_x = new_left + para.indent_left;
-                *label_x =
-                    new_left + para.indent_left - para.indent_hanging + para.indent_first_line;
+                *text_x = table_region.map_or(new_left + para.indent_left, |(x, _)| x);
+                *label_x = *text_x - para.indent_hanging + para.indent_first_line;
             } else if lw > 0.0 {
                 *text_w = lw.max(1.0);
             }
@@ -928,10 +945,17 @@ impl FloatZone {
             };
             if use_right {
                 let new_left = ex_right + self.right_from_text;
-                *text_w = (col_right - new_left - para.indent_right).max(1.0);
-                *text_x = new_left + para.indent_left;
-                *label_x =
-                    new_left + para.indent_left - para.indent_hanging + para.indent_first_line;
+                let (x, w) = if self.from_table {
+                    table_right_text_region(col_x, col_right, new_left, para)
+                } else {
+                    (
+                        new_left + para.indent_left,
+                        col_right - new_left - para.indent_right,
+                    )
+                };
+                *text_w = w.max(1.0);
+                *text_x = x;
+                *label_x = x - para.indent_hanging + para.indent_first_line;
             } else if use_left {
                 let avail_right = ex_left - self.left_from_text;
                 *text_w = (avail_right - col_x - para.indent_left - para.indent_right).max(1.0);
@@ -2889,13 +2913,17 @@ fn render_paragraph_block(
                         let float_right = ex_right + fz.right_from_text;
                         let sr = col_right - float_right;
                         let sl = (ex_left - fz.left_from_text) - col_x;
-                        // Word measures the paragraph's indents from the
-                        // float's wrap edge as it does from the margin
-                        // (french youth strategy: arrow list beside a logo).
-                        let right_of_float = (
-                            float_right + para.indent_left,
-                            (sr - para.indent_left - para.indent_right).max(0.0),
-                        );
+                        // Images retain wrap-edge-relative indents (the French
+                        // youth strategy's arrow list beside its logo). Tables
+                        // instead intersect the margin-relative paragraph box.
+                        let right_of_float = if fz.from_table {
+                            table_right_text_region(col_x, col_right, float_right, para)
+                        } else {
+                            (
+                                float_right + para.indent_left,
+                                (sr - para.indent_left - para.indent_right).max(0.0),
+                            )
+                        };
 
                         if is_both_sides {
                             // BothSides: provide both regions
@@ -5675,4 +5703,37 @@ fn cell_grid_pitch(doc: &Document, sp: &crate::model::SectionProperties) -> f32 
     sp.line_grid_pitch()
         .filter(|_| doc.adjust_line_height_in_table)
         .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod table_wrap_indent_tests {
+    use super::*;
+
+    #[test]
+    fn right_table_strip_intersects_margin_relative_paragraph_box() {
+        let mut para = Paragraph {
+            indent_left: 255.0,
+            indent_right: 12.0,
+            ..Default::default()
+        };
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (333.0, 207.0)
+        );
+        para.indent_left = 100.0;
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (299.0, 241.0)
+        );
+        para.indent_left = -10.0;
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (299.0, 241.0)
+        );
+        para.indent_left = 500.0;
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (578.0, 0.0)
+        );
+    }
 }
