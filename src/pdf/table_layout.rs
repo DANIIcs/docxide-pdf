@@ -489,7 +489,8 @@ pub(super) fn auto_fit_columns(
     }
 
     if available_width.is_some() && !table.fixed_layout {
-        let natural_widths = natural_widths(table, fonts, cm);
+        let mut natural_widths = natural_widths(table, fonts, cm);
+        raise_natural_for_nested_tables(table, fonts, cm, &mut natural_widths);
         // Word's auto-fit for nested tables produces column widths slightly
         // below the full natural paragraph width. Scale down by 0.9 to
         // approximate Word's sizing, ensuring text wraps where Word wraps it.
@@ -2050,6 +2051,34 @@ pub(super) fn find_cell_split(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nested_autofit_preserves_each_level_of_cell_padding() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+        let mut content = String::from(
+            r#"<w:p><w:r><w:rPr><w:rFonts w:ascii="TestFont" w:hAnsi="TestFont"/><w:sz w:val="20"/></w:rPr><w:t>abc def</w:t></w:r></w:p>"#,
+        );
+        let fonts = HashMap::from([("TestFont".into(), FontEntry::stub())]);
+        for levels in 1..=3 {
+            content = format!(
+                r#"<w:tbl><w:tblPr><w:tblW w:type="auto" w:w="0"/><w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>{content}</w:tc></w:tr></w:tbl>"#
+            );
+            let xml = format!(
+                r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{content}<w:sectPr/></w:body></w:document>"#
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            zip.start_file("word/document.xml", SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+            let doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            let Block::Table(table) = &doc.sections[0].blocks[0] else {
+                panic!("table");
+            };
+            let width = auto_fit_columns(table, &fonts, Some(150.0), None)[0];
+            assert!((width - (35.0 + 10.0 * levels as f32)).abs() < 0.001);
+        }
+    }
 
     #[test]
     fn natural_width_includes_merged_cell_text() {
