@@ -4078,6 +4078,84 @@
     "a11y_struct": 1.0,
     "a11y_text": 0.5636
   },
+  "negative-x-table/x-142y-33n0": {
+    "jaccard": 0.8325,
+    "ssim": 0.9459,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "negative-x-table/x-142y-33n4": {
+    "jaccard": 0.8325,
+    "ssim": 0.9393,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "negative-x-table/x-142y1n4": {
+    "jaccard": 0.6828,
+    "ssim": 0.9386,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "negative-x-table/x0y-33n4": {
+    "jaccard": 0.8325,
+    "ssim": 0.9393,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "negative-x-table/x142y-33n0": {
+    "jaccard": 0.5238,
+    "ssim": 0.6833,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/m-y-33-n1": {
+    "jaccard": 0.8935,
+    "ssim": 0.9712,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/m-y363-n2": {
+    "jaccard": 0.8935,
+    "ssim": 0.966,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/sp1-y1": {
+    "jaccard": 0.8325,
+    "ssim": 0.9443,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/sp10-y363": {
+    "jaccard": 0.8325,
+    "ssim": 0.9369,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/y1-h4-n1": {
+    "jaccard": 0.8325,
+    "ssim": 0.9459,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/y1-h4-n2": {
+    "jaccard": 0.8325,
+    "ssim": 0.9421,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/y363-h4-n2": {
+    "jaccard": 0.8325,
+    "ssim": 0.9354,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "nested-final-mark/y363-h8-n1": {
+    "jaccard": 0.6991,
+    "ssim": 0.9365,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
   "samples/CV": {
     "jaccard": 0.8569,
     "ssim": 0.954,
