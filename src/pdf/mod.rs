@@ -3156,8 +3156,17 @@ fn render_paragraph_block(
         // font (indigenous_innovation's 2.25pt rule under the title). Taller
         // than a natural line is enough for the leading: a 30pt picture under
         // 3 × 13.8pt lines is 57.6pt in Word, not 41.4.
-        let picture_h = if para.content_height > natural_line_h {
-            para.content_height + leading
+        // Modern Word swaps the inline layout axes in the nearest quarter-turn
+        // quadrant; it does not reserve the exact oblique bounding rectangle.
+        let swap_axes = ctx.compat_mode >= 15
+            && (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0;
+        let image_height = if swap_axes {
+            img.display_width + img.layout_extra_height
+        } else {
+            para.content_height
+        };
+        let picture_h = if image_height > natural_line_h {
+            image_height + leading
         } else {
             line_h
         };
@@ -4206,24 +4215,51 @@ fn render_paragraph_block(
             // a baseline one natural line of the mark's font down, whatever the
             // spacing (Word probe: 2.25-12pt pictures under Arial 12 at single
             // and 1.5 lines).
-            let bottom_depth = if para.content_height > line_h {
-                img.layout_extra_top + img.display_height
+            let turned = img.rotation_deg.abs() > 0.01;
+            let swap_axes = ctx.compat_mode >= 15
+                && (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0;
+            let (box_w, box_h) = if swap_axes {
+                (img.display_height, img.display_width)
             } else {
-                let baseline = para.content_height.max(natural_line_h);
+                (img.display_width, img.display_height)
+            };
+            let image_height = box_h + img.layout_extra_height;
+            let bottom_depth = if image_height > line_h {
+                img.layout_extra_top + box_h
+            } else {
+                let baseline = image_height.max(natural_line_h);
                 baseline - (img.layout_extra_height - img.layout_extra_top)
             };
-            let y_bottom = state.pb.slot_top - bottom_depth;
-            // The picture is the first line's only character: it starts where
-            // that line's text would (81pt in for a 1620-twip indent in Word's
-            // export) and aligns within the indents.
+            let box_bottom = state.pb.slot_top - bottom_depth;
+            // Keep the picture paragraph's existing first-line and side indents.
             let first = if para.list_label.is_empty() {
                 para.indent_first_line - para.indent_hanging
             } else {
                 0.0
             };
             let start = para.indent_left + first;
-            let room = col_w - start - para.indent_right - img.display_width;
-            let x = col_x + start + align_offset(para.alignment, room.max(0.0));
+            let room = col_w - start - para.indent_right - box_w;
+            let box_x = col_x + start + align_offset(para.alignment, room.max(0.0));
+            let x = box_x + (box_w - img.display_width) / 2.0;
+            let y_bottom = box_bottom + (box_h - img.display_height) / 2.0;
+            if turned {
+                state.pb.content.save_state();
+                // Legacy inline layout clips a turned picture to its original
+                // frame instead of growing the occupied line box.
+                if ctx.compat_mode < 15 {
+                    state.pb.content.rect(box_x, box_bottom, box_w, box_h);
+                    state.pb.content.clip_nonzero();
+                    state.pb.content.end_path();
+                }
+                positioning::push_center_rotation(
+                    &mut state.pb.content,
+                    box_x,
+                    box_bottom,
+                    box_w,
+                    box_h,
+                    img.rotation_deg,
+                );
+            }
             let img_fx = effect_names.get(&state.global_block_idx);
             if let Some(ref shadow) = img.shadow {
                 color::draw_image_shadow(
@@ -4290,6 +4326,9 @@ fn render_paragraph_block(
                     img.display_height,
                     img_fx.and_then(|fx| fx.reflection.as_deref()),
                 );
+            }
+            if turned {
+                state.pb.content.restore_state();
             }
             if !img.decorative {
                 state.pb.end_tag();
