@@ -618,6 +618,7 @@ pub(super) fn parse_frame_props(
         },
         width: twips("w"),
         height: twips("h"),
+        height_exact: attr("hRule") == Some("exact"),
         text_below: matches!(attr("wrap"), Some("none") | Some("notBeside")),
         h_space: twips("hSpace"),
         v_space: twips("vSpace"),
