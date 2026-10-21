@@ -934,6 +934,14 @@ pub(super) fn compute_row_layouts(
         .iter()
         .map(|row| {
             let mut max_h: f32 = 0.0;
+            // Word uses the largest top/bottom cell margins across a row,
+            // even when the cell carrying the margin has only a hidden mark.
+            // Left/right margins remain specific to each cell.
+            let (row_top, row_bottom) = row.cells.iter().fold((0.0f32, 0.0f32), |(top, bottom), cell| {
+                let margins = cell.cell_margins.as_ref().unwrap_or(cm);
+                (top.max(margins.top - cell.borders.top.band() / 2.0),
+                 bottom.max(margins.bottom - cell.borders.bottom.band() / 2.0))
+            });
             let cells: Vec<CellLayout> = row
                 .grid_cells()
                 .map(|(grid_col, span, cell)| {
@@ -959,7 +967,12 @@ pub(super) fn compute_row_layouts(
                         };
                     }
 
-                    let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
+                    let effective_margins = CellMargins {
+                        top: row_top + cell.borders.top.band() / 2.0,
+                        bottom: row_bottom + cell.borders.bottom.band() / 2.0,
+                        ..*cell.cell_margins.as_ref().unwrap_or(cm)
+                    };
+                    let ecm = &effective_margins;
                     let is_rotated = cell.text_direction != TextDirection::LrTb;
                     let cell_text_w = if is_rotated {
                         10000.0
