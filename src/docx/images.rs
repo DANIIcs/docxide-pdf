@@ -740,6 +740,39 @@ fn find_chart_ref<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
         })
 }
 
+/// Height occupied by inline drawings, including transparent shape placeholders.
+/// Select the same AlternateContent branch as run parsing, and never enter
+/// a drawing's nested text box when measuring the enclosing paragraph.
+pub(super) fn inline_drawing_height(node: roxmltree::Node) -> f32 {
+    let mut height = 0.0_f32;
+    for child in node.children().filter(|n| n.is_element()) {
+        if child.has_tag_name((WML_NS, "drawing")) {
+            for inline in child
+                .children()
+                .filter(|n| n.has_tag_name((WPD_NS, "inline")))
+            {
+                let (_, h) = extent_dimensions(inline);
+                height = height.max(h + inline_extra_height(inline).0);
+            }
+        } else if child.has_tag_name((WML_NS, "r")) {
+            height = height.max(inline_drawing_height(child));
+        } else if child.has_tag_name((super::MC_NS_TOP, "AlternateContent")) {
+            let branch = child
+                .children()
+                .find(|n| n.has_tag_name((super::MC_NS_TOP, "Choice")))
+                .or_else(|| {
+                    child
+                        .children()
+                        .find(|n| n.has_tag_name((super::MC_NS_TOP, "Fallback")))
+                });
+            if let Some(branch) = branch {
+                height = height.max(inline_drawing_height(branch));
+            }
+        }
+    }
+    height
+}
+
 pub(super) fn compute_drawing_info<R: Read + Seek>(
     para_node: roxmltree::Node,
     rels: &HashMap<String, String>,
@@ -1143,5 +1176,24 @@ mod tests {
     fn src_rect_leaving_nothing_visible_is_none() {
         assert_eq!(src_rect_of(r#"<a:srcRect l="60000" r="50000"/>"#), None);
         assert_eq!(src_rect_of(r#"<a:srcRect t="100000"/>"#), None);
+    }
+}
+
+#[cfg(test)]
+mod inline_shape_height_tests {
+    use super::inline_drawing_height;
+
+    #[test]
+    fn inline_extent_counts_without_a_blip_but_anchors_do_not() {
+        let xml = r#"<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:r><w:drawing><wp:inline><wp:extent cx="127000" cy="254000"/><wp:effectExtent t="12700" b="25400" l="0" r="0"/></wp:inline></w:drawing></w:r><w:r><w:drawing><wp:anchor><wp:extent cx="127000" cy="1270000"/></wp:anchor></w:drawing></w:r></w:p>"#;
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        assert!((inline_drawing_height(doc.root_element()) - 23.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn alternate_content_counts_only_the_selected_branch() {
+        let xml = r#"<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><w:r><mc:AlternateContent><mc:Choice Requires="wp"><w:drawing><wp:inline><wp:extent cx="127000" cy="254000"/></wp:inline></w:drawing></mc:Choice><mc:Fallback><w:drawing><wp:inline><wp:extent cx="127000" cy="1270000"/></wp:inline></w:drawing></mc:Fallback></mc:AlternateContent></w:r></w:p>"#;
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        assert!((inline_drawing_height(doc.root_element()) - 20.0).abs() < 0.001);
     }
 }
