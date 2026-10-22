@@ -2146,11 +2146,11 @@ pub(super) fn render_table(
         // instead).
         // Word 2013+ layout keeps two lines of a paragraph on each side of a
         // row break, Word 2010 layout one (`find_cell_split`).
-        let widow = if ctx.compat_mode >= 15 { 2 } else { 1 };
+        // Each paragraph carries its own rule (`two_line_widow`).
         let any_cell_multi_item = layout.cells.iter().any(|c| {
             c.items.len() > 1
                 || c.items.iter().any(|it| match it {
-                    CellContentItem::Paragraph(p) => p.lines.len() >= 2 * widow && !p.keep_lines,
+                    CellContentItem::Paragraph(p) => p.lines.len() >= if p.two_line_widow { 4 } else { 2 } && !p.keep_lines,
                     CellContentItem::NestedTable { rows, .. } => {
                         rows.len() >= 2 || rows.iter().any(|r| r.split_min.is_some())
                     }
@@ -2160,14 +2160,14 @@ pub(super) fn render_table(
         // two in Word 2013+ layout or for a row taller than the page
         // (croatian_grant's 776pt row waits for the next page rather than put
         // one line in the 21.8pt above a footnote), else one.
-        let start_lines = if widow == 2 || row_h > page_content_h { 2 } else { 1 };
+        let start_lines = |p: &CellParagraphLayout| if p.two_line_widow || row_h > page_content_h { 2 } else { 1 };
         // Whether every cell's first chunk fits in the room left: its first
         // paragraph (`start_lines` of a longer one) or first nested row, with
         // the opening space before that find_cell_split charges.
         let first_chunks_fit = layout.cells.iter().all(|c| {
             c.items.first().is_none_or(|it| {
                 let end = match it {
-                    CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines && !p.keep_lines => Some(start_lines),
+                    CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines(p) && !p.keep_lines => Some(start_lines(p)),
                     CellContentItem::Paragraph(_) => None,
                     CellContentItem::NestedTable { .. } => Some(1),
                 };
