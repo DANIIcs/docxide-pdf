@@ -189,6 +189,25 @@ pub enum LineNumberRestart {
 
 /// §17.6.23 ST_VerticalJc — how the section's body content is positioned
 /// vertically within the text region of each page.
+/// `w:textAlignment`; baseline, bottom and auto lay out alike so far.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum TextAlignment {
+    #[default]
+    Auto,
+    Top,
+    Center,
+}
+
+impl TextAlignment {
+    pub fn parse(val: &str) -> Self {
+        match val {
+            "top" => Self::Top,
+            "center" => Self::Center,
+            _ => Self::Auto,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Default, PartialEq)]
 pub enum PageVerticalAlign {
     #[default]
@@ -493,8 +512,6 @@ pub struct Paragraph {
     pub keep_next: bool,
     pub keep_lines: bool,
     pub widow_control: bool,
-    /// Vertical centering of mixed fonts (w:textAlignment=center).
-    pub text_alignment_center: bool,
     pub line_spacing: Option<LineSpacing>,
     pub image: Option<EmbeddedImage>,
     pub borders: ParagraphBorders,
@@ -537,8 +554,8 @@ pub struct Paragraph {
     pub paragraph_mark_font_name: Option<String>,
     /// The mark's `w:position` in points (negative = lowered).
     pub paragraph_mark_position: f32,
-    /// `w:textAlignment="top"`: raised and lowered runs size the line differently.
-    pub text_align_top: bool,
+    /// `w:textAlignment`: how glyphs of different heights sit in their line.
+    pub text_alignment: TextAlignment,
     pub snap_to_grid: bool,
     pub auto_space_de: bool,
     pub auto_space_dn: bool,
