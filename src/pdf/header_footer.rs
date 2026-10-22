@@ -717,6 +717,50 @@ pub(super) fn flow_slot_top(
     }
 }
 
+/// The lowest bottom (page coordinates, text distance included) of the
+/// page header's wrapping floats that overlap `left..right`. Body text flows
+/// beside them; a table cannot, so one at the page top starts below them
+/// (cote_dazur: two logos end 81.2pt from the top, where Word starts the
+/// body table 10.4pt below the top margin).
+// ponytail: floats anchor at the header's top line; a letterhead rarely
+// anchors its logo in a later header paragraph.
+pub(super) fn header_float_floor(
+    sp: &SectionProperties,
+    is_first: bool,
+    page_idx: usize,
+    ctx: &RenderContext,
+    left: f32,
+    right: f32,
+) -> Option<f32> {
+    let hf = layout_hf(sp, is_first, page_idx, true, ctx)?;
+    let text_width = sp.text_width();
+    let slot_top = sp.page_height - sp.header_margin;
+    hf.blocks
+        .iter()
+        .filter_map(|b| match b {
+            Block::Paragraph(para) => Some(para),
+            Block::Table(_) => None,
+        })
+        .flat_map(|para| &para.floating_images)
+        .filter(|fi| fi.wrap_type.wraps_beside() || matches!(fi.wrap_type, WrapType::TopAndBottom))
+        .filter_map(|fi| {
+            let fi_x = super::resolve_h_position(
+                fi.h_relative_from,
+                &fi.h_position,
+                fi.image.display_width,
+                sp,
+                sp.margin_left,
+                text_width,
+                text_width,
+            );
+            let overlaps = fi_x - fi.dist_left < right && fi_x + fi.image.display_width + fi.dist_right > left;
+            overlaps.then(|| {
+                super::resolve_fi_y_top(fi, sp, slot_top) - fi.image.display_height - fi.dist_bottom
+            })
+        })
+        .min_by(f32::total_cmp)
+}
+
 pub(super) fn compute_effective_margin_bottom(
     sp: &SectionProperties,
     is_first: bool,
@@ -1860,7 +1904,7 @@ pub(super) fn hf_paragraph_gap(
     prev_space_after: f32,
     para: &Paragraph,
 ) -> f32 {
-    let after = if prev.is_some_and(|p| super::helpers::drops_contextual_spacing(p, Some(para))) {
+    let after = if prev.is_some_and(|p| super::helpers::drops_space_after(p, Some(para))) {
         0.0
     } else {
         prev_space_after

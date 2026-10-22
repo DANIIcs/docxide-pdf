@@ -46,7 +46,7 @@ use header_footer::{
 pub(super) use helpers::resolve_line_h;
 use helpers::{
     align_offset, auto_ascent_scale, border_band, collect_paras, draw_horizontal_rule,
-    drops_contextual_spacing, joins_border_group, para_runs_with_textboxes, spacing_leading,
+    joins_border_group, para_runs_with_textboxes, spacing_leading,
 };
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
@@ -1197,6 +1197,9 @@ impl FloatingTablePos {
 }
 
 pub(super) struct PageBuilder {
+    /// The body table being rendered, as `(left, right)`: a page it opens
+    /// starts below the header floats it would overlap.
+    pub(super) table_extent: Option<(f32, f32)>,
     // Current page state
     pub(super) content: Content,
     pub(super) links: Vec<LinkAnnotation>,
@@ -1334,6 +1337,7 @@ impl PageBuilder {
             float_table_extent: None,
             frame_bands: Vec::new(),
             pending_float_anchor: None,
+            table_extent: None,
             next_text_below_picture: None,
             deferred_shapes: Vec::new(),
             all_contents: Vec::new(),
@@ -1577,18 +1581,35 @@ impl PageBuilder {
     /// 0 and +30pt land at the 56.7pt margin and 30pt below it, while the
     /// text sits under the letterhead; a header of flowing text moves both).
     fn anchor_slot_top(&self, sp: &SectionProperties, ctx: &RenderContext) -> f32 {
+        match self.page_top_header(sp, ctx) {
+            Some(is_first) => self
+                .slot_top
+                .max(header_footer::flow_slot_top(sp, is_first, self.page_count(), ctx)),
+            None => self.slot_top,
+        }
+    }
+
+    /// Which header variant (first page or not) opened this page, when the
+    /// cursor still sits at its top: the one whose body top matches.
+    fn page_top_header(&self, sp: &SectionProperties, ctx: &RenderContext) -> Option<bool> {
         if !self.is_at_page_top(sp) {
-            return self.slot_top;
+            return None;
         }
         let page = self.page_count();
-        for is_first in [true, false] {
-            if (effective_slot_top(sp, is_first, page, ctx) - self.page_top_y).abs() < 0.01 {
-                return self
-                    .slot_top
-                    .max(header_footer::flow_slot_top(sp, is_first, page, ctx));
-            }
-        }
-        self.slot_top
+        [true, false].into_iter().find(|&is_first| {
+            (effective_slot_top(sp, is_first, page, ctx) - self.page_top_y).abs() < 0.01
+        })
+    }
+
+    /// Where a table spanning `left..right` starts: a page-top table drops
+    /// below the header's wrapping floats it would overlap, see
+    /// `header_float_floor`.
+    fn below_header_floats(&self, sp: &SectionProperties, ctx: &RenderContext, left: f32, right: f32) -> f32 {
+        self.page_top_header(sp, ctx)
+            .and_then(|is_first| {
+                header_footer::header_float_floor(sp, is_first, self.page_count(), ctx, left, right)
+            })
+            .map_or(self.slot_top, |floor| self.slot_top.min(floor))
     }
 
     fn is_at_page_top(&self, sp: &SectionProperties) -> bool {
@@ -1697,6 +1718,10 @@ impl PageBuilder {
         self.flush_page(sect_idx);
         let page = self.page_count();
         self.slot_top = effective_slot_top(sp, first_page, page, ctx);
+        self.page_top_y = self.slot_top;
+        if let Some((left, right)) = self.table_extent {
+            self.slot_top = self.below_header_floats(sp, ctx, left, right);
+        }
         self.column_top_y = self.slot_top;
         self.page_top_y = self.slot_top;
         *effective_margin_bottom = compute_effective_margin_bottom(sp, first_page, page, ctx);
@@ -2278,21 +2303,13 @@ fn compute_bookmark_positions(
                     } else {
                         num_lines as f32 * line_h
                     };
-                    let effective_sb = if drops_contextual_spacing(para, prev_para) {
-                        0.0
-                    } else {
-                        para.space_before
-                    };
+                    let effective_sb = helpers::effective_space_before(para, prev_para);
                     let next_para = match blocks.get(bi + 1) {
                         Some(Block::Paragraph(p)) => Some(p),
                         Some(Block::Table(t)) => first_cell_paragraph(t),
                         None => None,
                     };
-                    let effective_sa = if drops_contextual_spacing(para, next_para) {
-                        0.0
-                    } else {
-                        para.space_after
-                    };
+                    let effective_sa = helpers::effective_space_after(para, next_para);
                     let inter_gap = f32::max(prev_space_after, effective_sb);
                     let needed = inter_gap + content_h;
                     if slot_top - needed < margin_bottom
@@ -2590,18 +2607,12 @@ fn render_paragraph_block(
         && state.pb.is_at_page_top(sp)
         && block_idx.checked_sub(1).and_then(|i| section_blocks.get(i))
             .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()));
-    let effective_space_before = if drops_contextual_spacing(para, context_prev)
-        || empty_anchor_after_float
-    {
+    let effective_space_before = if empty_anchor_after_float {
         0.0
     } else {
-        para.space_before
+        helpers::effective_space_before(para, context_prev)
     };
-    let effective_space_after = if drops_contextual_spacing(para, context_next) {
-        0.0
-    } else {
-        para.space_after
-    };
+    let effective_space_after = helpers::effective_space_after(para, context_next);
 
     // Word overlaps the space after and the next space before (the larger
     // wins) under its HTML spacing rule; doNotUseHTMLParagraphAutoSpacing
@@ -5157,6 +5168,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             }
                             resolved
                         });
+                        if table.position.is_none() {
+                            let (col_x, col_w) = col_geometry[state.current_col];
+                            let w: f32 = table.col_widths.iter().sum();
+                            let left = col_x + table.table_indent;
+                            let right = if w > 0.0 { left + w } else { col_x + col_w };
+                            state.pb.slot_top = state.pb.below_header_floats(sp, &ctx, left, right);
+                            state.pb.table_extent = Some((left, right));
+                        }
                         let col_bounds =
                             (cols > 1 || frame.is_some()).then(|| geometry[state.current_col]);
                         let table_tags =
@@ -5174,6 +5193,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             &mut state.effective_margin_bottom,
                             col_bounds,
                         );
+                        state.pb.table_extent = None;
                         // A full-width, negatively positioned text float displaces
                         // its preceding empty anchor line below the table in Word.
                         // Keep the table's measured position, but reserve that line

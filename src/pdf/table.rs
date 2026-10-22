@@ -493,6 +493,21 @@ fn render_cell_content(
                 let para_top = cursor_y;
                 if !para_has_visible_content(para) && !para.has_textboxes && !para.has_connectors {
                     cursor_y -= para.space_before + para_block_height(para);
+                    // A VML horizontal rule (o:hr) rides an otherwise empty
+                    // paragraph, in cells as in the body (advocacy's story
+                    // separators).
+                    if let Some(p) = source_para
+                        && let Some(hr) = &p.horizontal_rule
+                    {
+                        super::helpers::draw_horizontal_rule(
+                            content,
+                            p,
+                            hr,
+                            cell_x + cm.left,
+                            col_w - cm.left - cm.right,
+                            cursor_y,
+                        );
+                    }
                     end_cell_tag(content, &tagger);
                     continue;
                 }
@@ -2124,27 +2139,35 @@ pub(super) fn render_table(
         // trHeight (exact or atLeast) never breaks in Word; it migrates whole
         // (arizona_physical / traditional_skills vs isla / master_thesis).
         // A cell must have somewhere to break — several items, or a paragraph
-        // long enough to leave two lines on each side — for the split to
+        // of two lines or more (one may stay, one may follow) — for the split to
         // produce anything, and every cell's first chunk must genuinely fit
         // in the remaining space (otherwise find_cell_split's force-included
         // first item would overflow the footer and the row migrates whole
         // instead).
+        // Word 2013+ layout keeps two lines of a paragraph on each side of a
+        // row break, Word 2010 layout one (`find_cell_split`).
+        let widow = if ctx.compat_mode >= 15 { 2 } else { 1 };
         let any_cell_multi_item = layout.cells.iter().any(|c| {
             c.items.len() > 1
                 || c.items.iter().any(|it| match it {
-                    CellContentItem::Paragraph(p) => p.lines.len() >= 4,
+                    CellContentItem::Paragraph(p) => p.lines.len() >= 2 * widow && !p.keep_lines,
                     CellContentItem::NestedTable { rows, .. } => {
                         rows.len() >= 2 || rows.iter().any(|r| r.split_min.is_some())
                     }
                 })
         });
+        // A row starts with `start_lines` lines of a cell's first paragraph:
+        // two in Word 2013+ layout or for a row taller than the page
+        // (croatian_grant's 776pt row waits for the next page rather than put
+        // one line in the 21.8pt above a footnote), else one.
+        let start_lines = if widow == 2 || row_h > page_content_h { 2 } else { 1 };
         // Whether every cell's first chunk fits in the room left: its first
-        // paragraph (two lines of a long one) or first nested row, with the
-        // opening space before that find_cell_split charges.
+        // paragraph (`start_lines` of a longer one) or first nested row, with
+        // the opening space before that find_cell_split charges.
         let first_chunks_fit = layout.cells.iter().all(|c| {
             c.items.first().is_none_or(|it| {
                 let end = match it {
-                    CellContentItem::Paragraph(p) if p.lines.len() >= 4 => Some(2),
+                    CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines && !p.keep_lines => Some(start_lines),
                     CellContentItem::Paragraph(_) => None,
                     CellContentItem::NestedTable { .. } => Some(1),
                 };

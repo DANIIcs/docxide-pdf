@@ -62,7 +62,7 @@ pub(super) fn apply_pct_width(
             || scale > 1.0
             || widths
                 .iter()
-                .zip(hard_content_widths(table))
+                .zip(hard_content_widths(table, true))
                 .any(|(w, m)| w * scale < m - 0.5)
     };
     if !table.grid_inferred && keeps_grid() {
@@ -100,9 +100,38 @@ pub(super) fn apply_nested_pct_width(table: &Table, widths: &mut [f32], availabl
     }
 }
 
-/// Each grid column's widest nested table or picture plus its cell padding:
-/// content that never wraps narrower.
-fn hard_content_widths(table: &Table) -> Vec<f32> {
+/// A spacer column (every cell empty) keeps its written `tcW`: Word's
+/// AutoFit has no content to size it by (advocacy's 225-twip gutter beside
+/// a picture; content-fitting left it 4.5pt wide and the story 7.7pt left).
+fn spacer_widths(table: &Table) -> Vec<f32> {
+    // The widest tcW per column, None once a cell has content.
+    let mut pref: Vec<Option<f32>> = vec![Some(0.0); table.col_widths.len()];
+    for row in &table.rows {
+        for (grid_col, span, cell) in row.grid_cells() {
+            let Some(Some(w)) = (span == 1).then(|| pref.get_mut(grid_col)).flatten() else {
+                continue;
+            };
+            let has_content = cell.content.iter().any(|b| match b {
+                Block::Table(_) => true,
+                Block::Paragraph(p) => {
+                    p.image.is_some()
+                        || p.runs.iter().any(|r| !r.text.trim().is_empty() || r.inline_image.is_some())
+                }
+            });
+            if has_content {
+                pref[grid_col] = None;
+            } else {
+                *w = w.max(cell.width);
+            }
+        }
+    }
+    pref.into_iter().map(|w| w.unwrap_or(0.0)).collect()
+}
+
+/// Each grid column's widest picture (and nested table, when asked) plus its
+/// cell padding: content that never wraps narrower. Pictures alone size the
+/// auto-fit minimum (nested tables fit their column, case51).
+fn hard_content_widths(table: &Table, nested_tables: bool) -> Vec<f32> {
     let mut min = vec![0.0f32; table.col_widths.len()];
     for row in &table.rows {
         for (grid_col, span, cell) in row.grid_cells() {
@@ -113,7 +142,8 @@ fn hard_content_widths(table: &Table) -> Vec<f32> {
             let pad = pad.left + pad.right;
             for block in &cell.content {
                 let w = match block {
-                    Block::Table(t) => t.col_widths.iter().sum(),
+                    Block::Table(t) if nested_tables => t.col_widths.iter().sum(),
+                    Block::Table(_) => 0.0,
                     Block::Paragraph(p) => p
                         .image
                         .iter()
@@ -425,7 +455,13 @@ pub(super) fn auto_fit_columns(
     }
 
     let cm = &table.cell_margins;
-    let min_widths = min_content_widths(table, fonts);
+    // A picture never wraps: its column is at least that wide (advocacy's
+    // nested picture table collapsed to its padding, the picture clipped away).
+    let min_widths: Vec<f32> = min_content_widths(table, fonts)
+        .iter()
+        .zip(hard_content_widths(table, false))
+        .map(|(text, hard)| text.max(hard))
+        .collect();
 
     // Word's AutoFit (tblLayout=autofit, the default) ignores the stored
     // gridCol widths for a `tblW type="auto"` table and re-derives column
@@ -530,8 +566,9 @@ pub(super) fn auto_fit_columns(
                 // the stored gridCol hints (§17.18.87 derives purely from cell
                 // content). Only when it overflows does Word squeeze below
                 // natural width; the 0.9 factor approximates that squeeze.
+                let spacer = spacer_widths(table);
                 let full: Vec<f32> = (0..ncols)
-                    .map(|i| natural_widths[i].max(min_widths[i].max(min_cell)))
+                    .map(|i| natural_widths[i].max(min_widths[i].max(min_cell)).max(spacer[i]))
                     .collect();
                 if full.iter().sum::<f32>() <= avail {
                     full
@@ -728,6 +765,11 @@ pub(super) struct CellParagraphLayout {
     /// Extra left indent from wrapSquare/Tight floating images in this paragraph.
     /// Text lines are laid out narrower and rendered further right to avoid the image.
     pub(super) float_indent_left: f32,
+    /// `w:keepLines`: the paragraph never splits over a row break.
+    pub(super) keep_lines: bool,
+    /// Word 2013+ layout (compatibilityMode 15): a row break keeps two lines
+    /// of this paragraph on each side; earlier layout lets a row start with one.
+    pub(super) two_line_widow: bool,
     pub(super) list_label: String,
     pub(super) label_font_key: Option<String>,
     pub(super) label_font_size: f32,
@@ -1076,6 +1118,17 @@ pub(super) fn compute_row_layouts(
                     for (block_idx, block) in cell.content.iter().enumerate() {
                         match block {
                             Block::Paragraph(para) => {
+                                // An HTML rule (o:hr) alone in a hideMark cell keeps a
+                                // 5.25pt line in Word (advocacy's story separators:
+                                // 0.75pt margins, the 0.5pt rule 2.5pt below the top),
+                                // where the hidden mark would otherwise collapse it.
+                                // ponytail: one measurement; Word's rule for the
+                                // shape's line box is unknown.
+                                let para_content_h = if cell.hide_mark && para.horizontal_rule.is_some() && is_text_empty(&para.runs) {
+                                    5.25
+                                } else {
+                                    para.content_height
+                                };
                                 let nested_float_clearance = if left_float_right_gap < MIN_NESTED_FLOAT_STRIP
                                     && para.runs.iter().all(|r| r.text.trim().is_empty() && !r.is_tab && !r.is_line_break)
                                 {
@@ -1105,7 +1158,7 @@ pub(super) fn compute_row_layouts(
                                 // padding spaces has the paragraph mark's line
                                 // metrics in Word, not the spaces' run format.
                                 let padding_mark;
-                                let runs = if para.content_height == 0.0
+                                let runs = if para_content_h == 0.0
                                     && runs.iter().any(|run| !run.text.is_empty())
                                     && runs.iter().all(|run| !run.is_tab
                                         && !run.is_line_break && run.math.is_none()
@@ -1206,7 +1259,7 @@ pub(super) fn compute_row_layouts(
                                         line_h,
                                         grid_pitch,
                                     )
-                                } else if is_text_empty(runs) && para.content_height == 0.0 {
+                                } else if is_text_empty(runs) && para_content_h == 0.0 {
                                     line_h + super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
                                 } else {
                                     line_h
@@ -1239,7 +1292,7 @@ pub(super) fn compute_row_layouts(
                                 // after (Word probes).
                                 let mark_hidden = cell.hide_mark
                                     && block_idx == block_count - 1
-                                    && para.content_height == 0.0
+                                    && para_content_h == 0.0
                                     && is_text_empty(runs)
                                     && !para.paragraph_mark_vanish;
                                 // A cell drops HTML auto spacing at its edges.
@@ -1322,7 +1375,7 @@ pub(super) fn compute_row_layouts(
                                 // come from the image's content_height, not a stray
                                 // text line — otherwise the cell collapses and a
                                 // tall header logo fails to push the body down.
-                                let image_only = para.content_height > 0.0
+                                let image_only = para_content_h > 0.0
                                     && runs.iter().all(|r| r.text.is_empty() && !r.is_tab);
                                 let mut break_mark_hidden = false;
                                 let lines = if !is_text_empty(runs) && !image_only {
@@ -1426,13 +1479,13 @@ pub(super) fn compute_row_layouts(
                                         // contributes no height
                                     } else if prev_was_nested_table
                                         && block_idx == block_count - 1
-                                        && para.content_height == 0.0
+                                        && para_content_h == 0.0
                                     {
                                         // End-of-cell mark directly after a nested
                                         // table: Word hides it; space_after is
                                         // suppressed in the trailing-space block
                                         // below.
-                                    } else if para.content_height > 0.0 {
+                                    } else if para_content_h > 0.0 {
                                         // Image paragraph: the image is line 1; each
                                         // trailing w:br adds a further blank line
                                         // (matches the non-table header height path).
@@ -1440,7 +1493,7 @@ pub(super) fn compute_row_layouts(
                                             .iter()
                                             .filter(|r| r.is_line_break)
                                             .count();
-                                        total_h += para.content_height
+                                        total_h += para_content_h
                                             + br_count as f32 * line_h;
                                     } else {
                                         total_h += line_h;
@@ -1546,6 +1599,8 @@ pub(super) fn compute_row_layouts(
                                     text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
+                                    keep_lines: para.keep_lines,
+                                    two_line_widow: ctx.compat_mode >= 15,
                                     list_label: para.list_label.clone(),
                                     sole_formula: super::sole_formula(para),
                                     label_font_key: (!para.list_label.is_empty())
@@ -1569,7 +1624,7 @@ pub(super) fn compute_row_layouts(
                                     image_glow: img_glow,
                                     image_glow_xobj: img_glow_xobj,
                                     image_clip: para.image.as_ref().and_then(|img| img.clip_geometry.clone()),
-                                    content_height: para.content_height,
+                                    content_height: para_content_h,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,
                                     space_after,
@@ -1624,6 +1679,10 @@ pub(super) fn compute_row_layouts(
                                         && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
                                         && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty()
                                 };
+                                // A left float leaving a text strip of at least
+                                // MIN_NESTED_FLOAT_STRIP beside it may be followed by
+                                // text: the text flows beside it (advocacy's picture
+                                // tables with their stories to the right).
                                 let mut floating_offset = nested_table.position.as_ref()
                                     .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
@@ -2099,11 +2158,14 @@ pub(super) fn chunk_space_before(item: &CellContentItem, pi: usize, start: &Cell
 }
 
 /// Where the cell content from `start` must break to fit `available_h`.
-/// Word breaks a row's paragraph between lines, keeping two lines on each
-/// side (widow control; annotation #237: a 10-line cell paragraph moved whole
-/// to the next page, leaving 90pt of the row empty). A paragraph that cannot
-/// split that way moves whole. Always progresses by at least one item.
-/// ponytail: widowControl is assumed on, not read from the paragraph.
+/// Word breaks a row's paragraph between lines. In Word 2013+ layout
+/// (compatibilityMode 15) two lines stay on each side (strategi, italian,
+/// carbon_farming: two-line cell paragraphs move whole; croatian's three-
+/// line one leaves no single line above the footer). In Word 2010 layout
+/// (mode 14) a row starts with as many lines as fit, one included, and one
+/// may follow alone (Word online probes 2026-10-22 with 1-3 lines of room,
+/// widowControl set or absent; advocacy's two-line heading splits 1/1).
+/// A keepLines paragraph moves whole. Always progresses by at least one item.
 pub(super) fn find_cell_split(
     cell: &CellLayout,
     start: &CellCursor,
@@ -2183,8 +2245,11 @@ pub(super) fn find_cell_split(
                     used <= available_h
                 })
                 .count();
-            let fit = room.min(remaining.saturating_sub(2));
-            if fit >= 2 {
+            // ponytail: the one-line start is only taken where the row itself
+            // starts (the probes' case); later paragraphs keep two lines.
+            let keep = if first && *start == CELL_START && !p.two_line_widow { 1 } else { 2 };
+            let fit = room.min(remaining.saturating_sub(keep));
+            if fit >= keep && !p.keep_lines {
                 return CellCursor::at(pi, l0 + fit);
             }
         }

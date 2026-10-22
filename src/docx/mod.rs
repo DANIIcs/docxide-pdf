@@ -201,6 +201,8 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     /// The body's comment ranges (`comment_ranges`); empty for headers,
     /// footers and notes.
     pub(in crate::docx) comments: CommentRanges,
+    /// Fields left open by the previous paragraph (`runs::FieldCarry`).
+    pub(in crate::docx) fields: runs::FieldCarry,
 }
 
 #[derive(Default)]
@@ -1024,6 +1026,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     );
     let mut styles = parse_styles(zip, &theme, settings.styles_from_normal_template);
     styles.defaults.no_html_auto_spacing = settings.no_html_auto_spacing;
+    styles.defaults.no_indent_as_num_tab = settings.no_indent_as_num_tab;
     let numbering = parse_numbering(zip);
     let rels = parse_relationships(zip);
     let ft = parse_font_table(zip);
@@ -1062,6 +1065,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         zip,
         numbering: &numbering,
         comments: comment_ranges,
+        fields: Default::default(),
     };
 
     let mut sections: Vec<Section> = Vec::new();
@@ -1076,6 +1080,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         }
         match node.tag_name().name() {
             "tbl" => {
+                ctx.fields = Default::default();
                 let table = parse_table_node(node, &mut ctx, &mut lists);
                 blocks.push(Block::Table(table));
                 prev_list_num_id = None;
@@ -1121,6 +1126,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let continuation = paragraph::split_at_page_break(&mut para);
                 blocks.push(Block::Paragraph(para));
                 blocks.extend(continuation.map(Block::Paragraph));
+                paragraph::merge_field_code_paragraphs(&mut blocks);
 
                 // Mid-document section break: sectPr inside pPr ends the current section
                 if let Some(sect_node) = ppr.and_then(|ppr| wml(ppr, "sectPr")) {
