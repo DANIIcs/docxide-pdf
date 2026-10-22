@@ -341,7 +341,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         paragraph_mark_font_size,
         paragraph_mark_font_name,
         paragraph_mark_position,
-        text_align_top: text_align_top(ppr, para_style),
+        text_alignment: text_alignment(ppr, para_style, &ctx.styles.defaults),
         snap_to_grid,
         auto_space_de,
         auto_space_dn,
@@ -422,7 +422,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         paragraph_mark_font_size: para.paragraph_mark_font_size,
         paragraph_mark_font_name: para.paragraph_mark_font_name.clone(),
         paragraph_mark_position: para.paragraph_mark_position,
-        text_align_top: para.text_align_top,
+        text_alignment: para.text_alignment,
         snap_to_grid: para.snap_to_grid,
         auto_space_de: para.auto_space_de,
         auto_space_dn: para.auto_space_dn,
@@ -444,18 +444,20 @@ pub(super) fn paragraph_mark_position(
         .unwrap_or(0.0)
 }
 
-/// `w:contextualSpacing`, direct or from the style. Shared by body and
-/// table-cell paragraphs.
-pub(super) fn text_align_top(
+/// `w:textAlignment`, direct, from the style or the document defaults.
+pub(super) fn text_alignment(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,
-) -> bool {
+    defaults: &StyleDefaults,
+) -> crate::model::TextAlignment {
     ppr.and_then(|ppr| wml_attr(ppr, "textAlignment"))
-        .map(|v| v == "top")
-        .or_else(|| para_style.and_then(|s| s.text_align_top))
-        .unwrap_or(false)
+        .map(crate::model::TextAlignment::parse)
+        .or_else(|| para_style.and_then(|s| s.text_alignment))
+        .unwrap_or(defaults.text_alignment)
 }
 
+/// `w:contextualSpacing`, direct or from the style. Shared by body and
+/// table-cell paragraphs.
 pub(super) fn contextual_spacing(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,

@@ -593,6 +593,13 @@ pub(super) fn label_boosted_line_h(
     let Some(label_ar) = entry.ascender_ratio else {
         return text_line_h;
     };
+    if para.text_alignment == crate::model::TextAlignment::Center {
+        return if matches!(effective_ls, LineSpacing::Exact(_)) {
+            text_line_h
+        } else {
+            text_line_h.max(label_fs * entry.line_h_ratio.unwrap_or(1.0))
+        };
+    }
     // Word raises the line by the marker's ascent but keeps the text's descent,
     // never one font's whole line height: a Symbol bullet reaches 0.6pt above
     // 11pt Calibri and Word's line grows by exactly that (annotation #66, 16.0pt
@@ -632,7 +639,7 @@ fn label_boosted_baseline_offset(
     text_offset: f32,
     text_font_size: f32,
 ) -> f32 {
-    if para.list_label.is_empty() {
+    if para.list_label.is_empty() || para.text_alignment == crate::model::TextAlignment::Center {
         return text_offset;
     }
     let label_fs = para.list_label_font_size.unwrap_or(text_font_size);
@@ -691,7 +698,7 @@ fn mark_position_stretch(
     let size = para.paragraph_mark_font_size.unwrap_or(11.0);
     let pos = para.paragraph_mark_position;
     let natural = size * lhr;
-    let shifted = if para.text_align_top {
+    let shifted = if para.text_alignment == crate::model::TextAlignment::Top {
         natural + layout::top_aligned_drop(font, size, pos)
     } else {
         (size * ar + pos).max(0.0) + (size * (lhr - ar).max(0.0) - pos).max(0.0)
@@ -3216,7 +3223,7 @@ fn render_paragraph_block(
             * auto_ascent_scale(effective_ls);
     // A grid or an exact rule gives every line the same box.
     if !grid_snapped && !matches!(effective_ls, LineSpacing::Exact(_)) {
-        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_align_top);
+        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_alignment == crate::model::TextAlignment::Top);
         // A line holding only a w:br is as tall as the break run, wherever it
         // falls: pasto's title opens with an unformatted <w:br/> (11pt) above
         // its 12pt bold text, and Word steps 12.65 for that line, not 13.80.
@@ -5953,6 +5960,25 @@ mod tests {
         // Courier New's deeper descent does not count (streamnet p5 sub-bullets).
         para.list_label_font = Some("Courier New".to_string());
         assert_eq!(boosted(&para), text_line_h);
+        para.list_label_font = Some("Symbol".to_string());
+        para.text_alignment = crate::model::TextAlignment::Center;
+        assert_eq!(boosted(&para), text_line_h);
+        assert_eq!(
+            label_boosted_baseline_offset(&para, &fonts, 11.0 * cal_ar, 11.0),
+            11.0 * cal_ar
+        );
+        assert_eq!(
+            label_boosted_line_h(
+                &para,
+                &fonts,
+                8.0,
+                LineSpacing::Exact(8.0),
+                11.0,
+                Some(cal_lhr),
+                Some(cal_ar)
+            ),
+            8.0
+        );
     }
 }
 
