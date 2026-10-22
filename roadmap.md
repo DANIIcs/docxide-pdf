@@ -1,5 +1,58 @@
 # Roadmap
 
+## New fixtures round (2026-10-22, branch `new-fixtures`)
+
+Ten new scraped fixtures with Word online references (`a05e5f00`), rules
+derived from the five weakest and verified on the suite (snapshots
+`new10-base` / `new10-fix2`, scraped mean 65.2 -> 65.8, nothing else moved):
+
+- HTML auto spacing (`beforeAutospacing`/`afterAutospacing`) collapses
+  between two items of the same list, as `<li>` margins do; the first item
+  keeps its 14pt above and the last its 14pt below (federal_design_services
+  43.8 -> 69.2).
+- `w:compat/w:doNotUseIndentAsNumberingTabStop`: the label's tab runs to the
+  next default or custom stop, never to the hanging indent. A form check box
+  (`FORMCHECKBOX`) is a glyph of its own `w:size`: a 12pt box lifts a 10pt line
+  to 12pt metrics (geneva_waste 15.8 -> 55.4 together).
+- A body table at the page top drops below the header's wrapping floats it
+  would overlap, also on pages the table opens itself; text keeps flowing
+  beside them (cote_dazur 39.5 -> 68.3).
+- A nested floating table that is its cell's only table floats with the
+  following paragraphs beside it when the strip is wide enough; a picture
+  sets its column's minimum width and an empty spacer column keeps its tcW;
+  VML horizontal rules draw inside cells (advocacy_initiative 31.3 -> 32.8,
+  visually most of the way).
+
+Second pass (same day, `new10-fix4`, scraped mean 65.2 -> 65.9, nothing
+else moved):
+
+- Fields spanning paragraphs: the open field stack is carried from one
+  paragraph to the next (`ParseContext::fields`); paragraphs whose mark lies
+  inside a field's code are merged into the next one, as Word hides them
+  (geneva_waste's IF/REF letterhead lays out two lines, not six).
+- Text beside a nested floating table is wrapped per line: lines level with
+  the table take the strip, the rest the full width (`beside_lines`).
+- An HTML rule alone in a hideMark cell keeps Word's 5.25pt line
+  (advocacy's separators; one measurement, see `HR_CELL_LINE_H`).
+- Row splits: Word online probes (`tests/output/probe_widow`) show no widow
+  control inside table cells in compatibilityMode 14 (a row starts with as
+  many lines as fit, one included), while mode 15 keeps two lines each side
+  (strategi, italian_evaluation, carbon_farming, croatian). Body paragraphs
+  keep widow control even when no style sets it. advocacy 32.8 -> 36.7
+  (its heading splits 1/1 like Word), geneva 55.4 -> 55.6.
+
+Still open on these fixtures:
+
+- **advocacy_initiative_newsletter_2013 (36.7)**: our nested picture table
+  is 1.4pt narrower than Word's grid, so the stories wrap a word earlier or
+  later and pages 2-3 end 24pt off; the standard `o:hr` draws 1.5pt, Word 0.5.
+- **romanian_candidate_declaration_form_f2 (36.6, SSIM 91.5)**: layout is
+  right to within 0.3pt; thin borders drift 0.1-0.3pt per row and miss the
+  reference pixels. Word quantizes baselines to a 0.25pt grid (memory
+  `line_height_grid`); nothing short of that grid will move this score.
+- **cote_dazur (68.3)**: body text does not wrap around header floats (Word
+  does, per line); only tables are pushed.
+
 ## WordCraft head-to-head round (2026-10-13)
 
 Fresh comparison with WordCraft (storytold/wordcraft, own DOCX parser and

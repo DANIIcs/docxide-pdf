@@ -133,6 +133,7 @@ pub(super) struct StyleDefaults {
     pub(super) builtin_para_defaults: bool,
     /// `doNotUseHTMLParagraphAutoSpacing` (settings): auto spacing flags off.
     pub(super) no_html_auto_spacing: bool,
+    pub(super) no_indent_as_num_tab: bool,
     pub(super) font_size: f32,
     pub(super) font_name: String,
     pub(super) east_asia_font: Option<String>,
@@ -846,6 +847,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
     let mut defaults = StyleDefaults {
         builtin_para_defaults: false,
         no_html_auto_spacing: false,
+        no_indent_as_num_tab: false,
         font_size: 10.0,
         font_name: theme.minor.clone(),
         east_asia_font: None,

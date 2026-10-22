@@ -1,4 +1,4 @@
-use crate::model::{Paragraph, TabAlignment, TabStop};
+use crate::model::{Block, Paragraph, TabAlignment, TabStop};
 
 use super::images::compute_drawing_info;
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
@@ -181,7 +181,11 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         });
         tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
     }
-    add_hanging_tab_stop(&mut tab_stops, indent_left, indent_hanging);
+    // doNotUseIndentAsNumberingTabStop: the indent is no tab stop either
+    // (`list_label::text_hanging` skips it too).
+    if !ctx.styles.defaults.no_indent_as_num_tab {
+        add_hanging_tab_stop(&mut tab_stops, indent_left, indent_hanging);
+    }
 
     let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
     let inline_image_count = runs.iter().filter(|r| r.inline_image.is_some()).count();
@@ -295,6 +299,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
                 && n.text().is_some_and(|t| t.trim_start().starts_with("TOC"))
         }),
         num_level_tab_stop: num_tab_stop,
+        no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,
         contextual_spacing,
         keep_next,
         keep_lines,
@@ -328,6 +333,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         smartart,
         floating_smartart,
         horizontal_rule: parsed.horizontal_rule,
+        field_code_mark: parsed.mark_in_field_code,
         is_section_break: false,
         bookmarks,
         outline_level,
@@ -351,6 +357,24 @@ fn mirrored(alignment: crate::model::Alignment) -> crate::model::Alignment {
         Right => Left,
         other => other,
     }
+}
+
+/// A paragraph whose mark lies inside a field's code continues into the next
+/// one: Word shows neither the code nor the mark (geneva_waste's letterhead
+/// cell lays out two lines, not six).
+// ponytail: the first paragraph's properties win; Word uses the surviving mark's.
+pub(super) fn merge_field_code_paragraphs(blocks: &mut Vec<Block>) {
+    let [.., Block::Paragraph(prev), Block::Paragraph(next)] = &mut blocks[..] else {
+        return;
+    };
+    if !prev.field_code_mark {
+        return;
+    }
+    prev.runs.append(&mut next.runs);
+    prev.floating_images.append(&mut next.floating_images);
+    prev.textboxes.append(&mut next.textboxes);
+    prev.field_code_mark = next.field_code_mark;
+    blocks.pop();
 }
 
 /// OOXML 17.3.1.38: a hanging indent implicitly sets a tab stop at the indent.
@@ -387,6 +411,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         indent_right: para.indent_right,
         contextual_spacing: para.contextual_spacing,
         keep_next: std::mem::take(&mut para.keep_next),
+        field_code_mark: std::mem::take(&mut para.field_code_mark),
         keep_lines: para.keep_lines,
         widow_control: para.widow_control,
         line_spacing: para.line_spacing,
