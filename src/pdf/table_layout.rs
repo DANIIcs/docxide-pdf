@@ -789,10 +789,6 @@ pub(super) struct CellParagraphLayout {
     /// Extra left indent from wrapSquare/Tight floating images in this paragraph.
     /// Text lines are laid out narrower and rendered further right to avoid the image.
     pub(super) float_indent_left: f32,
-    /// The first `beside_lines` lines start `beside_indent` further right,
-    /// level with a left floating nested table.
-    pub(super) beside_indent: f32,
-    pub(super) beside_lines: usize,
     /// `w:keepLines`: the paragraph never splits over a row break.
     pub(super) keep_lines: bool,
     /// Lines a row break keeps on each side of this paragraph: 2 in Word
@@ -994,6 +990,71 @@ fn spacers_clear_nested_registration(
     visible_seen
 }
 
+fn plain_text_fits_nested_strip(
+    cell: &crate::model::TableCell,
+    idx: usize,
+    table: &Table,
+    widths: &[f32],
+    cell_text_w: f32,
+    ctx: &RenderContext,
+) -> bool {
+    let Some(pos) = &table.position else {
+        return false;
+    };
+    if !matches!(pos.h_anchor, "margin" | "column")
+        || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
+        || pos.v_offset_pt < 0.0
+        || table.table_indent != 0.0
+        || table.alignment != crate::model::TableAlignment::Left
+    {
+        return false;
+    }
+    let [Block::Paragraph(p)] = &cell.content[idx + 1..] else {
+        return false;
+    };
+    if p.frame_props.is_some()
+        || p.list_item.is_some()
+        || p.image.is_some()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || p.runs.iter().any(|r| {
+            r.is_tab
+                || r.is_line_break
+                || r.inline_image.is_some()
+                || r.field_code.is_some()
+                || r.math.is_some()
+                || r.vanish
+                || r.caps
+        })
+    {
+        return false;
+    }
+    if !p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+        return false;
+    }
+    let strip = cell_text_w - widths.iter().sum::<f32>() - pos.right_from_text;
+    if strip < MIN_NESTED_FLOAT_STRIP {
+        return false;
+    }
+    let mut text_w = p.indent_left + p.indent_right + p.indent_first_line.max(0.0);
+    let mut key = String::new();
+    for run in &p.runs {
+        let Some(font) = ctx.fonts.get(font_key_buf(run, &mut key)) else {
+            return false;
+        };
+        text_w += word_width_for_run(
+            font,
+            run,
+            &run.text,
+            run.font_size,
+            run.kerns_at(run.font_size),
+            0.0,
+            1.0,
+        );
+    }
+    text_w <= strip
+}
+
 pub(super) fn compute_row_layouts(
     table: &Table,
     col_widths: &[f32],
@@ -1054,6 +1115,9 @@ pub(super) fn compute_row_layouts(
                     let mut total_h: f32 = ecm.top + ecm.bottom;
                     let mut floating_extent: f32 = 0.0;
                     let mut left_float_bottom: f32 = 0.0;
+                    let mut left_float_top: f32 = 0.0;
+                    let mut left_float_indent: f32 = 0.0;
+                    let mut first_positive_float = false;
                     let mut left_float_right_gap: f32 = f32::INFINITY;
                     let mut max_rotated_line_w: f32 = 0.0;
                     let mut items: Vec<CellContentItem> = Vec::new();
@@ -1061,6 +1125,7 @@ pub(super) fn compute_row_layouts(
                     let mut para_idx = 0usize;
                     let mut prev_was_nested_table = false;
                     let mut negative_anchor_shift = 0.0f32;
+                    let mut final_float_mark_hidden = false;
                     let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
                     let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
@@ -1092,7 +1157,11 @@ pub(super) fn compute_row_layouts(
                                 };
                                 let nested_float_clearance = if left_float_right_gap < MIN_NESTED_FLOAT_STRIP
                                     && para.runs.iter().all(|r| r.text.trim().is_empty() && !r.is_tab && !r.is_line_break)
-                                { (left_float_bottom - total_h).max(0.0) } else { 0.0 };
+                                {
+                                    let (fs,lhr,_) = super::layout::tallest_run_metrics(&para.runs,ctx.fonts);
+                                    let pitch=resolve_line_h(para.line_spacing.unwrap_or(ctx.doc_line_spacing),fs,lhr);
+                                    if !first_positive_float || total_h + pitch > left_float_top { (left_float_bottom-total_h).max(0.0) } else { 0.0 }
+                                } else { 0.0 };
                                 let substituted;
                                 let runs = if let Some(sub) = hf_sub {
                                     substituted = substitute_hf_runs(
@@ -1320,24 +1389,11 @@ pub(super) fn compute_row_layouts(
                                         };
                                         left_edge + fi.image.display_width + fi.dist_right
                                     })
-                                    .fold(0.0f32, f32::max);
-                                // Lines level with a left floating nested table
-                                // keep clear of it, the rest run full width
-                                // (Word: "Public" beside the table, "visible
-                                // topic" below it in nested-floats-spaced-text-
-                                // short-spacers).
-                                let (beside_indent, beside_lines) = if left_float_right_gap.is_finite()
-                                    && left_float_right_gap >= MIN_NESTED_FLOAT_STRIP
-                                    && total_h < left_float_bottom
-                                    && !is_text_empty(runs)
-                                {
-                                    (
-                                        cell_text_w - left_float_right_gap,
-                                        ((left_float_bottom - total_h) / line_h.max(1.0)).ceil().max(1.0) as usize,
-                                    )
-                                } else {
-                                    (0.0, 0)
-                                };
+                                    .fold(0.0f32, f32::max)
+                                    .max(if total_h < left_float_bottom && total_h + line_h > left_float_top
+                                        && left_float_right_gap >= MIN_NESTED_FLOAT_STRIP {
+                                        left_float_indent
+                                    } else { 0.0 });
 
                                 // An inline-image paragraph whose only other run
                                 // is a trailing line break (Word's logo-in-cell
@@ -1379,7 +1435,6 @@ pub(super) fn compute_row_layouts(
                                             ctx.cjk(false, para),
                                         )
                                     } else {
-                                        let beside_widths = vec![(para_text_w - beside_indent).max(1.0); beside_lines];
                                         build_paragraph_lines(
                                             runs,
                                             ctx.fonts,
@@ -1388,7 +1443,7 @@ pub(super) fn compute_row_layouts(
                                             &inline_images,
                                             &inline_effects,
                                             None,
-                                            (beside_lines > 0).then_some(beside_widths.as_slice()),
+                                            None,
                                             None,
                                             ctx.cjk(para.auto_space_de || para.auto_space_dn, para),
                                         )
@@ -1570,8 +1625,6 @@ pub(super) fn compute_row_layouts(
                                     text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
-                                    beside_indent,
-                                    beside_lines,
                                     keep_lines: para.keep_lines,
                                     widow_lines: if ctx.compat_mode >= 15 { 2 } else { 1 },
                                     list_label: para.list_label.clone(),
@@ -1646,6 +1699,7 @@ pub(super) fn compute_row_layouts(
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h = nested_layouts.iter().map(|rl| rl.height).sum::<f32>();
+                                let plain_side_text = plain_text_fits_nested_strip(cell, block_idx, nested_table, &nested_cw, cell_text_w, ctx);
                                 let blank = |p: &crate::model::Paragraph| {
                                     p.runs.iter().all(|r| r.text.trim().is_empty()
                                         && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
@@ -1655,19 +1709,8 @@ pub(super) fn compute_row_layouts(
                                 // MIN_NESTED_FLOAT_STRIP beside it may be followed by
                                 // text: the text flows beside it (advocacy's picture
                                 // tables with their stories to the right).
-                                // Only for a cell's sole table: a later nested table
-                                // cannot flow beside it and drops below (nested-floats-
-                                // spaced-text-inline-reference), and under an earlier
-                                // float Word stacks it instead (nonzero-x).
-                                let beside_strip = top_aligned
-                                    && cell.content.iter().enumerate().all(|(i, b)| i == block_idx || matches!(b, Block::Paragraph(_)))
-                                    && nested_table.position.as_ref().is_some_and(|p| {
-                                        matches!(p.h_position, HorizontalPosition::Offset(v) if v == 0.0)
-                                            && cell_text_w - nested_cw.iter().sum::<f32>() - p.right_from_text
-                                                >= MIN_NESTED_FLOAT_STRIP
-                                    });
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && (nested_table.rows.len() == 1 || beside_strip) && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
+                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
@@ -1680,7 +1723,8 @@ pub(super) fn compute_row_layouts(
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
-                                        }) || beside_strip || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
+                                        }) || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
+                                            || plain_side_text
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
@@ -1689,7 +1733,8 @@ pub(super) fn compute_row_layouts(
                                 let space_before = prev_space_after;
                                 let mut floating_x_offset = None;
                                 let auto_left_float = nested_table.position.as_ref().is_some_and(|p|
-                                    (p.h_anchor == "margin" || p.h_anchor == "column") && matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if v == 0.0))
+                                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if (p.h_anchor == "margin" && v <= 0.0 && v + nested_cw.iter().sum::<f32>() > 0.0)
+                                        || (p.h_anchor == "column" && plain_side_text && v == 0.0)))
                                     && nested_table.alignment == crate::model::TableAlignment::Left
                                     && nested_table.table_indent == 0.0;
                                 if auto_left_float && let Some(offset) = floating_offset {
@@ -1703,7 +1748,11 @@ pub(super) fn compute_row_layouts(
                                     floating_extent = floating_extent.max(total_h + space_before + offset + nested_h);
                                     if auto_left_float {
                                         left_float_bottom = total_h + space_before + offset + nested_h;
-                                        left_float_right_gap = cell_text_w - nested_cw.iter().sum::<f32>()
+                                        left_float_top = total_h + space_before + offset;
+                                        left_float_indent = if plain_side_text { nested_cw.iter().sum::<f32>() + nested_table.position.as_ref().unwrap().right_from_text } else { 0.0 };
+                                        first_positive_float = block_idx == 0 && nested_table.position.as_ref().is_some_and(|p| p.v_offset_pt >= 0.0);
+                                        let float_x = match nested_table.position.as_ref().unwrap().h_position { crate::model::HorizontalPosition::Offset(x) => x, _ => 0.0 };
+                                        left_float_right_gap = cell_text_w - float_x - nested_cw.iter().sum::<f32>()
                                             - nested_table.position.as_ref().unwrap().right_from_text;
                                     }
                                 } else {
@@ -1717,8 +1766,14 @@ pub(super) fn compute_row_layouts(
                                     floating_x_offset,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
+                                // A lone end-of-cell mark directly anchoring a
+                                // wide float does not add a line below that float.
+                                final_float_mark_hidden = block_idx + 2 == block_count
+                                    && auto_left_float && left_float_right_gap < MIN_NESTED_FLOAT_STRIP
+                                    && floating_offset.is_some_and(|offset| offset >= 0.0)
+                                    && matches!(cell.content.get(block_idx+1),Some(Block::Paragraph(p)) if is_text_empty(&p.runs));
                                 // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
-                                prev_was_nested_table = floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
                                     || suppress_negative_mark(block_idx, floating_offset)
                                     || (negative_anchor_shift > 0.0 && floating_offset.is_some());
                                 para_idx += 1;
@@ -1733,7 +1788,7 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                            if final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
                                 || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset)
                                 || (negative_anchor_shift > 0.0 && floating_offset.is_some()))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());

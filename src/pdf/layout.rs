@@ -129,6 +129,10 @@ fn drop_url_breaks(text: &str, breaks: &mut Vec<usize>) {
 /// characters: `Some(true)` adds a break, `Some(false)` removes one, `None`
 /// keeps UAX #14's answer. The URL rule needs more context (`drop_url_breaks`).
 fn word_pair_rule(a: char, b: char) -> Option<bool> {
+    // A period immediately followed by an opening parenthesis remains joined.
+    if a == '.' && b == '(' {
+        return Some(false);
+    }
     // Word keeps an abbreviation joined to an adjacent numero sign.
     if a == '.' && b == '№' {
         return Some(false);
@@ -4117,7 +4121,14 @@ pub(super) fn render_paragraph_lines(
                         .map(|(top, th)| (y + top - th, th));
                     let (st_y, st_thick) = strike.unwrap_or((y + chunk.font_size * 0.3, thick));
                     // One line across the spaces of a struck run, like Word's.
-                    push_decoration(&mut decorations, x, st_y, chunk.width, st_thick, chunk.color);
+                    push_decoration(
+                        &mut decorations,
+                        x,
+                        st_y,
+                        chunk.width,
+                        st_thick,
+                        chunk.color,
+                    );
                 }
                 if chunk.dstrike {
                     let gap = thick * 1.5;
@@ -4743,7 +4754,8 @@ mod tests {
     #[test]
     fn breaks_between_matches_splitting_inside_a_run() {
         let chars = [
-            'a', 'Z', '-', '/', ',', '(', ')', '…', '⁞', '中', '文', '。', '「', 'é', '1', '%', '$',
+            'a', 'Z', '-', '/', ',', '.', '(', ')', '…', '⁞', '中', '文', '。', '「', 'é', '1',
+            '%', '$',
         ];
         for a in chars {
             for b in chars {
@@ -4751,6 +4763,19 @@ mod tests {
                 assert_eq!(breaks_between(a, b), split, "{a:?}{b:?}");
             }
         }
+    }
+
+    #[test]
+    fn period_and_opening_parenthesis_stay_in_one_token() {
+        assert_eq!(
+            split_preserving_spaces("2023г.(note)"),
+            vec![(0, "2023г.(note)")]
+        );
+        assert_eq!(
+            split_preserving_spaces("2023г. (note)"),
+            vec![(0, "2023г."), (1, "(note)")]
+        );
+        assert!(!breaks_between('.', '('));
     }
 
     #[test]
@@ -4833,8 +4858,14 @@ mod tests {
     #[test]
     fn abbreviation_before_numero_sign_stays_together() {
         assert_eq!(split_preserving_spaces("ст.№4"), vec![(0, "ст.№4")]);
-        assert_eq!(split_preserving_spaces("st.№ 4"), vec![(0, "st.№"), (1, "4")]);
-        assert_eq!(split_preserving_spaces("st. №4"), vec![(0, "st."), (1, "№4")]);
+        assert_eq!(
+            split_preserving_spaces("st.№ 4"),
+            vec![(0, "st.№"), (1, "4")]
+        );
+        assert_eq!(
+            split_preserving_spaces("st. №4"),
+            vec![(0, "st."), (1, "№4")]
+        );
         assert!(!breaks_between('.', '№'));
         assert!(breaks_between(' ', '№'));
     }
@@ -5027,11 +5058,22 @@ mod tests {
             runs: vec![make_run(10.0, VertAlign::Baseline, false)],
             list_label: "1.".into(),
             indent_first_line: 28.35,
-            tab_stops: vec![TabStop { position: 21.3, alignment: TabAlignment::Left, leader: None },
-                TabStop { position: 42.55, alignment: TabAlignment::Left, leader: None }],
+            tab_stops: vec![
+                TabStop {
+                    position: 21.3,
+                    alignment: TabAlignment::Left,
+                    leader: None,
+                },
+                TabStop {
+                    position: 42.55,
+                    alignment: TabAlignment::Left,
+                    leader: None,
+                },
+            ],
             ..Default::default()
         };
-        let hanging = |p: &crate::model::Paragraph| super::super::list_label::text_hanging(p, 36.0, &fonts);
+        let hanging =
+            |p: &crate::model::Paragraph| super::super::list_label::text_hanging(p, 36.0, &fonts);
         assert!((hanging(&para) + 42.55).abs() < 0.01);
         para.indent_first_line = 0.0;
         para.indent_left = -5.0;
@@ -5044,7 +5086,11 @@ mod tests {
         assert!((hanging(&para) + 36.0).abs() < 0.01);
         para.indent_left = 36.0;
         para.indent_hanging = 18.0;
-        para.tab_stops.push(TabStop { position: 20.1, alignment: TabAlignment::Left, leader: None });
+        para.tab_stops.push(TabStop {
+            position: 20.1,
+            alignment: TabAlignment::Left,
+            leader: None,
+        });
         assert!(hanging(&para).abs() < 0.01);
         para.indent_left = 0.0;
         para.indent_hanging = 0.0;

@@ -2093,6 +2093,26 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
         && !para.column_break_after
 }
 
+/// Whether a leading picture leaves no usable text strip on either side.
+fn leading_full_width_picture(
+    fi: &crate::model::FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> bool {
+    if !fi.anchor_at_start
+        || fi.v_relative_from != VRelativeFrom::Paragraph
+        || !matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
+        || !matches!(fi.wrap_type, WrapType::Square | WrapType::Tight)
+    {
+        return false;
+    }
+    let x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+    (x - fi.dist_left - col_x).max(col_x + col_w - x - fi.image.display_width - fi.dist_right)
+        < MIN_EMPTY_STRIP
+}
+
 /// Compute effective first-line hanging indent for a paragraph.
 fn compute_text_hanging(
     para: &Paragraph,
@@ -2565,6 +2585,24 @@ fn render_paragraph_block(
         None
     };
 
+    // A continuous section boundary does not interrupt contextual spacing.
+    // Border grouping still uses the section-local neighbours above.
+    let context_prev = prev_para.or_else(|| {
+        (block_idx == 0 && sp.break_type == SectionBreakType::Continuous)
+            .then(|| sect_idx.checked_sub(1).and_then(|i| doc.sections.get(i)))
+            .flatten()
+            .and_then(|section| section.blocks.last())
+            .and_then(leading_para)
+    });
+    let context_next = next_para.or_else(|| {
+        (block_idx + 1 == section_blocks.len())
+            .then(|| doc.sections.get(sect_idx + 1))
+            .flatten()
+            .filter(|section| section.properties.break_type == SectionBreakType::Continuous)
+            .and_then(|section| section.blocks.first())
+            .and_then(leading_para)
+    });
+
     // A leading floating table is already the first body block. Word drops
     // the following empty anchor's before-spacing at the page top, while a
     // document's ordinary first paragraph retains its own before-spacing.
@@ -2572,14 +2610,14 @@ fn render_paragraph_block(
         && state.pb.is_at_page_top(sp)
         && block_idx.checked_sub(1).and_then(|i| section_blocks.get(i))
             .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()));
-    let effective_space_before = if drops_space_before(para, prev_para)
+    let effective_space_before = if drops_space_before(para, context_prev)
         || empty_anchor_after_float
     {
         0.0
     } else {
         para.space_before
     };
-    let effective_space_after = if drops_space_after(para, next_para) {
+    let effective_space_after = if drops_space_after(para, context_next) {
         0.0
     } else {
         para.space_after
@@ -3180,7 +3218,7 @@ fn render_paragraph_block(
             }
         }
     }
-    let para_metrics = (
+    let mut para_metrics = (
         para_ascent,
         if max_inline_img_h > 0.0 {
             picture_line_bottom(&effective_runs, para, ctx.fonts, effective_ls)
@@ -3188,6 +3226,21 @@ fn render_paragraph_block(
             0.0
         },
     );
+
+    // Legacy Word puts the mark's extra automatic leading only after the
+    // last picture line. Modern Word adds it after every picture line.
+    let legacy_picture_leading = if ctx.compat_mode < 15
+        && max_inline_img_h > 0.0
+        && matches!(effective_ls, LineSpacing::Auto(factor) if factor > 1.0)
+        && !effective_runs.is_empty()
+        && effective_runs
+            .iter()
+            .all(|r| r.vanish || r.inline_image.is_some())
+    {
+        std::mem::replace(&mut para_metrics.1, 0.0)
+    } else {
+        0.0
+    };
 
     // One line of the mark's font at single spacing: a picture-only line's
     // baseline below its top (and the base its leading is measured from).
@@ -3308,6 +3361,14 @@ fn render_paragraph_block(
         }
     };
 
+    if legacy_picture_leading > 0.0
+        && lines
+            .last()
+            .is_some_and(|line| line_max_image_h(line) > para_ascent)
+    {
+        content_h += legacy_picture_leading;
+    }
+
     // A tall inline picture on the first line lowers that line's baseline; the
     // list label sits on the lowered one (render_paragraph_lines drops the text
     // lines itself).
@@ -3351,7 +3412,9 @@ fn render_paragraph_block(
             }
             _ => fi.dist_top + fi.image.display_height + fi.dist_bottom,
         };
-        if reserve {
+        if reserve && !text_empty && leading_full_width_picture(fi, sp, col_x, col_w, text_width) {
+            float_overflow_h = float_overflow_h.max(fi_h);
+        } else if reserve {
             // Wide images block all text — add to content_h. An empty anchor
             // paragraph's own line moves below such a float when the float
             // covers it: cyprus' page-wide letterhead (margin-relative, top
@@ -3687,6 +3750,7 @@ fn render_paragraph_block(
             }
         }
 
+        let text_would_split = lines_h > available;
         if para.widow_control {
             // Ensure at least 2 lines remain on next page (orphan prevention)
             if lines_that_fit > 0 && lines.len().saturating_sub(lines_that_fit) < 2 {
@@ -3695,7 +3759,14 @@ fn render_paragraph_block(
         }
 
         // keepLines: don't split — move entire paragraph to next column/page
-        if para.keep_lines {
+        let leading_picture_keeps_text = content_h
+            <= sp.page_height - sp.margin_top - sp.margin_bottom
+            && text_would_split
+            && para
+                .floating_images
+                .iter()
+                .any(|fi| leading_full_width_picture(fi, sp, col_x, col_w, text_width));
+        if para.keep_lines || leading_picture_keeps_text {
             lines_that_fit = 0;
         }
 
@@ -3840,7 +3911,8 @@ fn render_paragraph_block(
                 let trailing_images_fit = fit >= remaining.len()
                     && !para.floating_images.is_empty()
                     && para.floating_images.iter().all(|fi| {
-                        fi.v_relative_from == VRelativeFrom::Paragraph
+                        !fi.anchor_at_start
+                            && fi.v_relative_from == VRelativeFrom::Paragraph
                             && matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
                             && fi.wrap_type.wraps_beside()
                             && {
@@ -4142,6 +4214,15 @@ fn render_paragraph_block(
         let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
         let fi_y_top = anchor.fi_y_top(fi, sp);
         state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
+        if !text_empty && leading_full_width_picture(fi, sp, col_x, col_w, text_width) {
+            let bottom = fi_y_top - fi.image.display_height - fi.dist_bottom;
+            state.pb.next_text_below_picture = Some(
+                state
+                    .pb
+                    .next_text_below_picture
+                    .map_or(bottom, |old| old.min(bottom)),
+            );
+        }
     }
 
     if debug_wrap && let Some(ref fz) = state.pb.float_zone {
@@ -5178,12 +5259,25 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     } else {
                         0
                     };
-                    if state.pb.slot_top > fz.bottom_y || (fz.from_table && extra_breaks > 0) {
+                    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+                    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                    let mark_pitch = resolve_line_h(ls, fs, lhr);
+                    // Clear the line after a trailing break even when its end
+                    // already extends below the table: its start can still be
+                    // inside the table's vertical band.
+                    let trailing_clear = fz.from_table
+                        && !empty_clear
+                        && p.runs.last().is_some_and(|r| r.is_line_break)
+                        && p.runs.iter().filter(|r| r.is_line_break).count() == 1
+                        && p.runs.iter().all(|r| r.inline_image.is_none())
+                        && p.image.is_none();
+                    if state.pb.slot_top > fz.bottom_y
+                        || (fz.from_table && extra_breaks > 0)
+                        || (trailing_clear && state.pb.slot_top + mark_pitch > fz.bottom_y)
+                    {
                         // The line following the break resumes below the
                         // float and still occupies its full line height
                         // there (the break paragraph's mark line).
-                        let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-                        let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
                         // A continuous section mark terminates this paragraph;
                         // unlike an ordinary clearing paragraph, its mark has
                         // no additional line below the float in Word.
@@ -5192,7 +5286,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             && doc.sections.get(sect_idx + 1).is_some_and(|next|
                                 next.properties.break_type == SectionBreakType::Continuous);
                         let mark_lines = usize::from(!section_mark) + extra_breaks;
-                        state.pb.slot_top = fz.bottom_y - resolve_line_h(ls, fs, lhr) * mark_lines as f32;
+                        state.pb.slot_top = fz.bottom_y - mark_pitch * mark_lines as f32;
                     }
                     state.pb.float_zone = None;
                 }

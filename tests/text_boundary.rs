@@ -124,3 +124,16 @@ fn text_boundaries_match() {
         println!("  PAGE COUNT MISMATCH: {}", page_mismatches.join(", "));
     }
 }
+
+#[test]
+fn an_actual_pdf_self_comparison_measures_text_lines() {
+    let reference = Path::new("tests/fixtures/cases/case1/reference.pdf");
+    let metrics = common::text_boundary::analyze(reference, reference);
+    assert!(metrics.total_words > 0);
+    assert!(
+        metrics.total_lines > 0,
+        "a successful mutool run must measure actual lines"
+    );
+    assert_eq!(metrics.ref_pages, metrics.gen_pages);
+    assert_eq!(metrics.line_match_pct(), 1.0);
+}

@@ -140,6 +140,8 @@ pub struct FloatingImage {
     /// Position among the paragraph's floating pictures and textboxes in XML
     /// order: their tags follow the anchors' order, not the drawing order.
     pub anchor_seq: u32,
+    /// The picture anchor precedes visible text and explicit breaks in this paragraph.
+    pub anchor_at_start: bool,
     /// Flattened from an inline canvas: its offset counts from the line top,
     /// as for `Textbox::on_line`.
     pub on_line: bool,

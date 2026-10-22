@@ -415,6 +415,45 @@ fn wrapped_header_picture_height(para: &Paragraph, ctx: &RenderContext, width: f
     Some(lines_height(&lines, line_h, metrics) - trailing_descent)
 }
 
+// Inline groups are flattened into an invisible flow box and positioned leaves.
+// Keep the terminal tab on the following line when the group fills the line,
+// and advance past the box before laying out subsequent header paragraphs.
+fn inline_canvas_tab_height(para: &Paragraph, width: f32, line_h: f32) -> Option<f32> {
+    let terminal_tab = para
+        .runs
+        .iter()
+        .rev()
+        .find(|run| {
+            run.is_tab || run.is_line_break || !run.text.is_empty() || run.inline_image.is_some()
+        })
+        .is_some_and(|run| run.is_tab);
+    if !terminal_tab {
+        return None;
+    }
+    let available = (width - para.indent_left - para.indent_right - para.indent_first_line
+        + para.indent_hanging)
+        .max(0.0);
+    para.textboxes
+        .iter()
+        .filter(|tb| {
+            tb.on_line
+                && tb.no_text_wrap
+                && tb.paragraphs.is_empty()
+                && matches!(tb.wrap_type, WrapType::TopAndBottom)
+        })
+        .map(|tb| {
+            tb.v_offset_pt
+                + tb.height_pt
+                + tb.dist_bottom
+                + if tb.width_pt > available + 0.05 {
+                    line_h
+                } else {
+                    0.0
+                }
+        })
+        .reduce(f32::max)
+}
+
 fn compute_header_height(
     hf: &HeaderFooter,
     ctx: &RenderContext,
@@ -615,6 +654,11 @@ fn measure_header_height(
                 }
 
                 // Each w:br (line break) in the paragraph creates an additional line.
+                if is_header && with_floats {
+                    if let Some(canvas_h) = inline_canvas_tab_height(para, text_width, line_h) {
+                        content_h = content_h.max(canvas_h);
+                    }
+                }
                 let br_count = para.runs.iter().filter(|r| r.is_line_break).count();
                 if wrapped_h.is_none() && text_lines.is_none() {
                     content_h += br_count as f32 * line_h;
@@ -1744,7 +1788,12 @@ pub(super) fn render_header_footer(
                 } else {
                     0.0
                 };
-                let para_h = lines_height(&lines, line_h, metrics) - trailing_descent;
+                let mut para_h = lines_height(&lines, line_h, metrics) - trailing_descent;
+                if is_header {
+                    if let Some(canvas_h) = inline_canvas_tab_height(para, text_width, line_h) {
+                        para_h = para_h.max(canvas_h);
+                    }
+                }
                 draw_connectors(content, true);
                 draw_para_borders(content, cursor_y - para_h);
                 cursor_y -= para_h + bottom_border_band(para);
