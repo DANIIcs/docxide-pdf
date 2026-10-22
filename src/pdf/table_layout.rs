@@ -62,7 +62,7 @@ pub(super) fn apply_pct_width(
             || scale > 1.0
             || widths
                 .iter()
-                .zip(hard_content_widths(table))
+                .zip(hard_content_widths(table, true))
                 .any(|(w, m)| w * scale < m - 0.5)
     };
     if !table.grid_inferred && keeps_grid() {
@@ -104,14 +104,13 @@ pub(super) fn apply_nested_pct_width(table: &Table, widths: &mut [f32], availabl
 /// AutoFit has no content to size it by (advocacy's 225-twip gutter beside
 /// a picture; content-fitting left it 4.5pt wide and the story 7.7pt left).
 fn spacer_widths(table: &Table) -> Vec<f32> {
-    let ncols = table.col_widths.len();
-    let mut pref = vec![0.0f32; ncols];
-    let mut empty = vec![true; ncols];
+    // The widest tcW per column, None once a cell has content.
+    let mut pref: Vec<Option<f32>> = vec![Some(0.0); table.col_widths.len()];
     for row in &table.rows {
         for (grid_col, span, cell) in row.grid_cells() {
-            if grid_col >= ncols || span > 1 {
+            let Some(Some(w)) = (span == 1).then(|| pref.get_mut(grid_col)).flatten() else {
                 continue;
-            }
+            };
             let has_content = cell.content.iter().any(|b| match b {
                 Block::Table(_) => true,
                 Block::Paragraph(p) => {
@@ -119,44 +118,20 @@ fn spacer_widths(table: &Table) -> Vec<f32> {
                         || p.runs.iter().any(|r| !r.text.trim().is_empty() || r.inline_image.is_some())
                 }
             });
-            empty[grid_col] &= !has_content;
-            pref[grid_col] = pref[grid_col].max(cell.width);
-        }
-    }
-    (0..ncols).map(|i| if empty[i] { pref[i] } else { 0.0 }).collect()
-}
-
-/// Each grid column's widest picture plus its cell padding (nested tables
-/// excluded: they fit their column, case51).
-fn picture_widths(table: &Table) -> Vec<f32> {
-    let mut min = vec![0.0f32; table.col_widths.len()];
-    for row in &table.rows {
-        for (grid_col, span, cell) in row.grid_cells() {
-            if grid_col >= min.len() || span > 1 {
-                continue;
-            }
-            let pad = cell.cell_margins.as_ref().unwrap_or(&table.cell_margins);
-            let w = cell
-                .content
-                .iter()
-                .filter_map(|b| match b {
-                    Block::Paragraph(p) => Some(p),
-                    Block::Table(_) => None,
-                })
-                .flat_map(|p| p.image.iter().chain(p.runs.iter().filter_map(|r| r.inline_image.as_ref())))
-                .map(|i| i.layout_size().0)
-                .fold(0.0, f32::max);
-            if w > 0.0 {
-                min[grid_col] = min[grid_col].max(w + pad.left + pad.right);
+            if has_content {
+                pref[grid_col] = None;
+            } else {
+                *w = w.max(cell.width);
             }
         }
     }
-    min
+    pref.into_iter().map(|w| w.unwrap_or(0.0)).collect()
 }
 
-/// Each grid column's widest nested table or picture plus its cell padding:
-/// content that never wraps narrower.
-fn hard_content_widths(table: &Table) -> Vec<f32> {
+/// Each grid column's widest picture (and nested table, when asked) plus its
+/// cell padding: content that never wraps narrower. Pictures alone size the
+/// auto-fit minimum (nested tables fit their column, case51).
+fn hard_content_widths(table: &Table, nested_tables: bool) -> Vec<f32> {
     let mut min = vec![0.0f32; table.col_widths.len()];
     for row in &table.rows {
         for (grid_col, span, cell) in row.grid_cells() {
@@ -167,7 +142,8 @@ fn hard_content_widths(table: &Table) -> Vec<f32> {
             let pad = pad.left + pad.right;
             for block in &cell.content {
                 let w = match block {
-                    Block::Table(t) => t.col_widths.iter().sum(),
+                    Block::Table(t) if nested_tables => t.col_widths.iter().sum(),
+                    Block::Table(_) => 0.0,
                     Block::Paragraph(p) => p
                         .image
                         .iter()
@@ -483,7 +459,7 @@ pub(super) fn auto_fit_columns(
     // nested picture table collapsed to its padding, the picture clipped away).
     let min_widths: Vec<f32> = min_content_widths(table, fonts)
         .iter()
-        .zip(picture_widths(table))
+        .zip(hard_content_widths(table, false))
         .map(|(text, hard)| text.max(hard))
         .collect();
 
@@ -568,7 +544,6 @@ pub(super) fn auto_fit_columns(
         // below the full natural paragraph width. Scale down by 0.9 to
         // approximate Word's sizing, ensuring text wraps where Word wraps it.
         let min_cell = cm.left + cm.right;
-        let spacer = spacer_widths(table);
         let avail = available_width.unwrap_or(0.0);
         let preferred_total: f32 = table.col_widths.iter().sum();
         // When the nested table has an explicit tblInd and the gridCol
@@ -591,6 +566,7 @@ pub(super) fn auto_fit_columns(
                 // the stored gridCol hints (§17.18.87 derives purely from cell
                 // content). Only when it overflows does Word squeeze below
                 // natural width; the 0.9 factor approximates that squeeze.
+                let spacer = spacer_widths(table);
                 let full: Vec<f32> = (0..ncols)
                     .map(|i| natural_widths[i].max(min_widths[i].max(min_cell)).max(spacer[i]))
                     .collect();
@@ -791,9 +767,9 @@ pub(super) struct CellParagraphLayout {
     pub(super) float_indent_left: f32,
     /// `w:keepLines`: the paragraph never splits over a row break.
     pub(super) keep_lines: bool,
-    /// Lines a row break keeps on each side of this paragraph: 2 in Word
-    /// 2013+ layout (compatibilityMode 15), 1 before (0 = unset, as 1).
-    pub(super) widow_lines: usize,
+    /// Word 2013+ layout (compatibilityMode 15): a row break keeps two lines
+    /// of this paragraph on each side; earlier layout lets a row start with one.
+    pub(super) two_line_widow: bool,
     pub(super) list_label: String,
     pub(super) label_font_key: Option<String>,
     pub(super) label_font_size: f32,
@@ -840,8 +816,6 @@ impl CellParagraphLayout {
 // Synthetic Word controls switch between 18.75 pt and 18.70 pt of free
 // right strip; the transition is unchanged for 8–12 pt marks and no borders.
 const MIN_NESTED_FLOAT_STRIP: f32 = 18.75;
-/// See the `para_content_h` note in `compute_row_layouts`.
-const HR_CELL_LINE_H: f32 = 5.25;
 
 pub(super) enum CellContentItem {
     Paragraph(CellParagraphLayout),
@@ -1150,8 +1124,8 @@ pub(super) fn compute_row_layouts(
                                 // where the hidden mark would otherwise collapse it.
                                 // ponytail: one measurement; Word's rule for the
                                 // shape's line box is unknown.
-                                let para_content_h = if para.horizontal_rule.is_some() && is_text_empty(&para.runs) {
-                                    HR_CELL_LINE_H
+                                let para_content_h = if cell.hide_mark && para.horizontal_rule.is_some() && is_text_empty(&para.runs) {
+                                    5.25
                                 } else {
                                     para.content_height
                                 };
@@ -1626,7 +1600,7 @@ pub(super) fn compute_row_layouts(
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
                                     keep_lines: para.keep_lines,
-                                    widow_lines: if ctx.compat_mode >= 15 { 2 } else { 1 },
+                                    two_line_widow: ctx.compat_mode >= 15,
                                     list_label: para.list_label.clone(),
                                     sole_formula: super::sole_formula(para),
                                     label_font_key: (!para.list_label.is_empty())
@@ -2273,7 +2247,7 @@ pub(super) fn find_cell_split(
                 .count();
             // ponytail: the one-line start is only taken where the row itself
             // starts (the probes' case); later paragraphs keep two lines.
-            let keep = if pi == 0 && *start == CELL_START { p.widow_lines.max(1) } else { 2 };
+            let keep = if first && *start == CELL_START && !p.two_line_widow { 1 } else { 2 };
             let fit = room.min(remaining.saturating_sub(keep));
             if fit >= keep && !p.keep_lines {
                 return CellCursor::at(pi, l0 + fit);

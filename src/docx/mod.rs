@@ -1080,7 +1080,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         }
         match node.tag_name().name() {
             "tbl" => {
-                ctx.fields.reset();
+                ctx.fields = Default::default();
                 let table = parse_table_node(node, &mut ctx, &mut lists);
                 blocks.push(Block::Table(table));
                 prev_list_num_id = None;

@@ -496,10 +496,12 @@ fn render_cell_content(
                     // A VML horizontal rule (o:hr) rides an otherwise empty
                     // paragraph, in cells as in the body (advocacy's story
                     // separators).
-                    if let Some((sp, hr)) = source_para.and_then(|p| p.horizontal_rule.as_ref().map(|hr| (p, hr))) {
+                    if let Some(p) = source_para
+                        && let Some(hr) = &p.horizontal_rule
+                    {
                         super::helpers::draw_horizontal_rule(
                             content,
-                            sp,
+                            p,
                             hr,
                             cell_x + cm.left,
                             col_w - cm.left - cm.right,
@@ -2154,14 +2156,18 @@ pub(super) fn render_table(
                     }
                 })
         });
+        // A row starts with `start_lines` lines of a cell's first paragraph:
+        // two in Word 2013+ layout or for a row taller than the page
+        // (croatian_grant's 776pt row waits for the next page rather than put
+        // one line in the 21.8pt above a footnote), else one.
+        let start_lines = if widow == 2 || row_h > page_content_h { 2 } else { 1 };
         // Whether every cell's first chunk fits in the room left: its first
-        // paragraph (`chunk` lines of one at least `long_min` lines long) or
-        // first nested row, with the opening space before that
-        // find_cell_split charges.
-        let first_chunks_fit_with = |long_min: usize, chunk: usize| layout.cells.iter().all(|c| {
+        // paragraph (`start_lines` of a longer one) or first nested row, with
+        // the opening space before that find_cell_split charges.
+        let first_chunks_fit = layout.cells.iter().all(|c| {
             c.items.first().is_none_or(|it| {
                 let end = match it {
-                    CellContentItem::Paragraph(p) if p.lines.len() >= long_min && !p.keep_lines => Some(chunk),
+                    CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines && !p.keep_lines => Some(start_lines),
                     CellContentItem::Paragraph(_) => None,
                     CellContentItem::NestedTable { .. } => Some(1),
                 };
@@ -2181,14 +2187,6 @@ pub(super) fn render_table(
                     <= available_h
             })
         });
-        // A row taller than the page keeps the two-line start in either mode
-        // (croatian_grant's 776pt row waits for the next page rather than put
-        // one line in the 21.8pt above a footnote).
-        let first_chunks_fit = if widow == 2 || row_h > page_content_h {
-            first_chunks_fit_with(4, 2)
-        } else {
-            first_chunks_fit_with(2, 1)
-        };
         // A nested table may split within its first row. Requiring that whole
         // row above would reject a fitting first paragraph and move the outer
         // row early. Use the same recursive cursors as the actual split, and

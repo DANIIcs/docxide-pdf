@@ -120,13 +120,12 @@ pub(super) fn drops_contextual_spacing(para: &Paragraph, neighbour: Option<&Para
 /// collapses `<li>` margins: federal_design_services' ten 9pt items step
 /// 10.25, not 24.3, while the first keeps 14pt above and the last 14pt below.
 fn same_list(para: &Paragraph, neighbour: Option<&Paragraph>) -> bool {
-    match (para.list_item, neighbour.and_then(|n| n.list_item)) {
-        (Some(a), Some(b)) => a.list_id == b.list_id,
-        _ => false,
-    }
+    para.list_item
+        .zip(neighbour.and_then(|n| n.list_item))
+        .is_some_and(|(a, b)| a.list_id == b.list_id)
 }
 
-pub(super) fn drops_space_before(para: &Paragraph, prev: Option<&Paragraph>) -> bool {
+fn drops_space_before(para: &Paragraph, prev: Option<&Paragraph>) -> bool {
     drops_contextual_spacing(para, prev) || (para.space_before_auto && same_list(para, prev))
 }
 

@@ -46,8 +46,7 @@ use header_footer::{
 pub(super) use helpers::resolve_line_h;
 use helpers::{
     align_offset, auto_ascent_scale, border_band, collect_paras, draw_horizontal_rule,
-    drops_space_after, drops_space_before, joins_border_group, para_runs_with_textboxes,
-    spacing_leading,
+    joins_border_group, para_runs_with_textboxes, spacing_leading,
 };
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
@@ -1573,37 +1572,35 @@ impl PageBuilder {
     /// 0 and +30pt land at the 56.7pt margin and 30pt below it, while the
     /// text sits under the letterhead; a header of flowing text moves both).
     fn anchor_slot_top(&self, sp: &SectionProperties, ctx: &RenderContext) -> f32 {
+        match self.page_top_header(sp, ctx) {
+            Some(is_first) => self
+                .slot_top
+                .max(header_footer::flow_slot_top(sp, is_first, self.page_count(), ctx)),
+            None => self.slot_top,
+        }
+    }
+
+    /// Which header variant (first page or not) opened this page, when the
+    /// cursor still sits at its top: the one whose body top matches.
+    fn page_top_header(&self, sp: &SectionProperties, ctx: &RenderContext) -> Option<bool> {
         if !self.is_at_page_top(sp) {
-            return self.slot_top;
+            return None;
         }
         let page = self.page_count();
-        for is_first in [true, false] {
-            if (effective_slot_top(sp, is_first, page, ctx) - self.page_top_y).abs() < 0.01 {
-                return self
-                    .slot_top
-                    .max(header_footer::flow_slot_top(sp, is_first, page, ctx));
-            }
-        }
-        self.slot_top
+        [true, false].into_iter().find(|&is_first| {
+            (effective_slot_top(sp, is_first, page, ctx) - self.page_top_y).abs() < 0.01
+        })
     }
 
     /// Where a table spanning `left..right` starts: a page-top table drops
     /// below the header's wrapping floats it would overlap, see
-    /// `header_float_obstacles`.
+    /// `header_float_floor`.
     fn below_header_floats(&self, sp: &SectionProperties, ctx: &RenderContext, left: f32, right: f32) -> f32 {
-        if !self.is_at_page_top(sp) {
-            return self.slot_top;
-        }
-        let page = self.page_count();
-        for is_first in [true, false] {
-            if (effective_slot_top(sp, is_first, page, ctx) - self.page_top_y).abs() < 0.01 {
-                return header_footer::header_float_obstacles(sp, is_first, page, ctx)
-                    .iter()
-                    .filter(|(l, r, _)| *l < right && *r > left)
-                    .fold(self.slot_top, |y, (_, _, bottom)| y.min(*bottom));
-            }
-        }
-        self.slot_top
+        self.page_top_header(sp, ctx)
+            .and_then(|is_first| {
+                header_footer::header_float_floor(sp, is_first, self.page_count(), ctx, left, right)
+            })
+            .map_or(self.slot_top, |floor| self.slot_top.min(floor))
     }
 
     fn is_at_page_top(&self, sp: &SectionProperties) -> bool {
@@ -1712,13 +1709,12 @@ impl PageBuilder {
         self.flush_page(sect_idx);
         let page = self.page_count();
         self.slot_top = effective_slot_top(sp, first_page, page, ctx);
-        self.column_top_y = self.slot_top;
         self.page_top_y = self.slot_top;
         if let Some((left, right)) = self.table_extent {
             self.slot_top = self.below_header_floats(sp, ctx, left, right);
-            self.column_top_y = self.slot_top;
-            self.page_top_y = self.slot_top;
         }
+        self.column_top_y = self.slot_top;
+        self.page_top_y = self.slot_top;
         *effective_margin_bottom = compute_effective_margin_bottom(sp, first_page, page, ctx);
         self.is_first_page_of_section = first_page;
     }
@@ -2298,21 +2294,13 @@ fn compute_bookmark_positions(
                     } else {
                         num_lines as f32 * line_h
                     };
-                    let effective_sb = if drops_space_before(para, prev_para) {
-                        0.0
-                    } else {
-                        para.space_before
-                    };
+                    let effective_sb = helpers::effective_space_before(para, prev_para);
                     let next_para = match blocks.get(bi + 1) {
                         Some(Block::Paragraph(p)) => Some(p),
                         Some(Block::Table(t)) => first_cell_paragraph(t),
                         None => None,
                     };
-                    let effective_sa = if drops_space_after(para, next_para) {
-                        0.0
-                    } else {
-                        para.space_after
-                    };
+                    let effective_sa = helpers::effective_space_after(para, next_para);
                     let inter_gap = f32::max(prev_space_after, effective_sb);
                     let needed = inter_gap + content_h;
                     if slot_top - needed < margin_bottom
@@ -2610,18 +2598,12 @@ fn render_paragraph_block(
         && state.pb.is_at_page_top(sp)
         && block_idx.checked_sub(1).and_then(|i| section_blocks.get(i))
             .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()));
-    let effective_space_before = if drops_space_before(para, context_prev)
-        || empty_anchor_after_float
-    {
+    let effective_space_before = if empty_anchor_after_float {
         0.0
     } else {
-        para.space_before
+        helpers::effective_space_before(para, context_prev)
     };
-    let effective_space_after = if drops_space_after(para, context_next) {
-        0.0
-    } else {
-        para.space_after
-    };
+    let effective_space_after = helpers::effective_space_after(para, context_next);
 
     // Word overlaps the space after and the next space before (the larger
     // wins) under its HTML spacing rule; doNotUseHTMLParagraphAutoSpacing

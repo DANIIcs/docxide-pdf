@@ -110,13 +110,6 @@ pub(in crate::docx) struct FieldCarry {
     age: usize,
 }
 
-impl FieldCarry {
-    /// Fields never cross a cell or table boundary.
-    pub(in crate::docx) fn reset(&mut self) {
-        *self = Self::default();
-    }
-}
-
 // ponytail: a stray begin in a broken document would hide everything after
 // it; the carry is dropped after this many paragraphs instead.
 const MAX_FIELD_CODE_PARAGRAPHS: usize = 12;
@@ -1574,20 +1567,18 @@ pub(super) fn parse_runs<R: Read + Seek>(
         }
     }
 
-    let mark_in_field_code = !fields_visible(&field_stack);
-    if field_stack.is_empty() {
-        ctx.fields.age = 0;
-    } else if ctx.fields.age >= MAX_FIELD_CODE_PARAGRAPHS {
-        ctx.fields.reset();
+    if field_stack.is_empty() || ctx.fields.age >= MAX_FIELD_CODE_PARAGRAPHS {
         field_stack.clear();
+        ctx.fields.age = 0;
     } else {
         ctx.fields.age += 1;
     }
+    let mark_in_field_code = !fields_visible(&field_stack);
     ctx.fields.frames = field_stack;
 
     ParsedRuns {
         runs,
-        mark_in_field_code: mark_in_field_code && !ctx.fields.frames.is_empty(),
+        mark_in_field_code,
         has_explicit_page_break_before: page_break_before_content,
         has_page_break_after,
         column_break_at,

@@ -181,7 +181,11 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         });
         tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
     }
-    add_hanging_tab_stop(&mut tab_stops, indent_left, indent_hanging);
+    // doNotUseIndentAsNumberingTabStop: the indent is no tab stop either
+    // (`list_label::text_hanging` skips it too).
+    if !ctx.styles.defaults.no_indent_as_num_tab {
+        add_hanging_tab_stop(&mut tab_stops, indent_left, indent_hanging);
+    }
 
     let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
     let inline_image_count = runs.iter().filter(|r| r.inline_image.is_some()).count();
@@ -355,28 +359,25 @@ fn mirrored(alignment: crate::model::Alignment) -> crate::model::Alignment {
     }
 }
 
-/// OOXML 17.3.1.38: a hanging indent implicitly sets a tab stop at the indent.
 /// A paragraph whose mark lies inside a field's code continues into the next
 /// one: Word shows neither the code nor the mark (geneva_waste's letterhead
 /// cell lays out two lines, not six).
 // ponytail: the first paragraph's properties win; Word uses the surviving mark's.
 pub(super) fn merge_field_code_paragraphs(blocks: &mut Vec<Block>) {
-    let n = blocks.len();
-    if n < 2 || !matches!(&blocks[n - 2], Block::Paragraph(p) if p.field_code_mark) {
+    let [.., Block::Paragraph(prev), Block::Paragraph(next)] = &mut blocks[..] else {
+        return;
+    };
+    if !prev.field_code_mark {
         return;
     }
-    let Some(Block::Paragraph(next)) = blocks.pop() else {
-        return;
-    };
-    let Some(Block::Paragraph(prev)) = blocks.last_mut() else {
-        return;
-    };
-    prev.runs.extend(next.runs);
-    prev.floating_images.extend(next.floating_images);
-    prev.textboxes.extend(next.textboxes);
+    prev.runs.append(&mut next.runs);
+    prev.floating_images.append(&mut next.floating_images);
+    prev.textboxes.append(&mut next.textboxes);
     prev.field_code_mark = next.field_code_mark;
+    blocks.pop();
 }
 
+/// OOXML 17.3.1.38: a hanging indent implicitly sets a tab stop at the indent.
 pub(super) fn add_hanging_tab_stop(tab_stops: &mut Vec<TabStop>, indent_left: f32, hanging: f32) {
     if hanging > 0.0
         && !tab_stops
@@ -410,6 +411,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         indent_right: para.indent_right,
         contextual_spacing: para.contextual_spacing,
         keep_next: std::mem::take(&mut para.keep_next),
+        field_code_mark: std::mem::take(&mut para.field_code_mark),
         keep_lines: para.keep_lines,
         widow_control: para.widow_control,
         line_spacing: para.line_spacing,
