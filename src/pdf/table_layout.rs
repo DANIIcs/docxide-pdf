@@ -1020,6 +1020,40 @@ fn spacers_clear_nested_registration(
     visible_seen
 }
 
+/// The single-line width of a paragraph of plain visible text with its
+/// indents; None for anything else or a missing font.
+fn plain_line_width(p: &crate::model::Paragraph, fonts: &HashMap<String, FontEntry>) -> Option<f32> {
+    if p.frame_props.is_some()
+        || p.list_item.is_some()
+        || p.image.is_some()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || !p.runs.iter().any(|r| !r.text.trim().is_empty())
+        || p.runs.iter().any(|r| {
+            r.is_tab
+                || r.is_line_break
+                || r.inline_image.is_some()
+                || r.field_code.is_some()
+                || r.math.is_some()
+                || r.vanish
+        })
+    {
+        return None;
+    }
+    let mut width = p.indent_left + p.indent_right + p.indent_first_line.max(0.0);
+    let mut key = String::new();
+    for run in &p.runs {
+        let font = fonts.get(font_key_buf(run, &mut key))?;
+        let text = if run.caps {
+            std::borrow::Cow::Owned(run.text.to_uppercase())
+        } else {
+            std::borrow::Cow::Borrowed(run.text.as_str())
+        };
+        width += word_width_for_run(font, run, &text, run.font_size, run.kerns_at(run.font_size), 0.0, 1.0);
+    }
+    Some(width)
+}
+
 fn plain_text_fits_nested_strip(
     cell: &crate::model::TableCell,
     idx: usize,
@@ -1042,47 +1076,11 @@ fn plain_text_fits_nested_strip(
     let [Block::Paragraph(p)] = &cell.content[idx + 1..] else {
         return false;
     };
-    if p.frame_props.is_some()
-        || p.list_item.is_some()
-        || p.image.is_some()
-        || !p.floating_images.is_empty()
-        || !p.textboxes.is_empty()
-        || p.runs.iter().any(|r| {
-            r.is_tab
-                || r.is_line_break
-                || r.inline_image.is_some()
-                || r.field_code.is_some()
-                || r.math.is_some()
-                || r.vanish
-                || r.caps
-        })
-    {
-        return false;
-    }
-    if !p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+    if p.runs.iter().any(|r| r.caps) {
         return false;
     }
     let strip = cell_text_w - widths.iter().sum::<f32>() - pos.right_from_text;
-    if strip < MIN_NESTED_FLOAT_STRIP {
-        return false;
-    }
-    let mut text_w = p.indent_left + p.indent_right + p.indent_first_line.max(0.0);
-    let mut key = String::new();
-    for run in &p.runs {
-        let Some(font) = ctx.fonts.get(font_key_buf(run, &mut key)) else {
-            return false;
-        };
-        text_w += word_width_for_run(
-            font,
-            run,
-            &run.text,
-            run.font_size,
-            run.kerns_at(run.font_size),
-            0.0,
-            1.0,
-        );
-    }
-    text_w <= strip
+    strip >= MIN_NESTED_FLOAT_STRIP && plain_line_width(p, ctx.fonts).is_some_and(|w| w <= strip)
 }
 
 // A single cell heading can precede positive-offset floating tables even
@@ -1103,24 +1101,12 @@ fn text_fits_above_nested_floats(
     let Some((Block::Paragraph(p), prefix)) = cell.content.split_last() else {
         return false;
     };
-    if prefix.is_empty()
-        || p.frame_props.is_some()
-        || p.list_item.is_some()
-        || p.image.is_some()
-        || !p.floating_images.is_empty()
-        || !p.textboxes.is_empty()
-        || !p.runs.iter().any(|r| !r.text.trim().is_empty())
-        || p.runs.iter().any(|r| {
-            r.is_tab
-                || r.is_line_break
-                || r.inline_image.is_some()
-                || r.field_code.is_some()
-                || r.math.is_some()
-                || r.vanish
-        })
-    {
+    if prefix.is_empty() {
         return false;
     }
+    let Some(width) = plain_line_width(p, fonts) else {
+        return false;
+    };
     let mut first_top = f32::INFINITY;
     for block in prefix {
         let Block::Table(t) = block else {
@@ -1140,27 +1126,6 @@ fn text_fits_above_nested_floats(
             return false;
         }
         first_top = first_top.min(pos.v_offset_pt - pos.top_from_text);
-    }
-    let mut width = p.indent_left + p.indent_right + p.indent_first_line.max(0.0);
-    let mut key = String::new();
-    for run in &p.runs {
-        let Some(font) = fonts.get(font_key_buf(run, &mut key)) else {
-            return false;
-        };
-        let text = if run.caps {
-            std::borrow::Cow::Owned(run.text.to_uppercase())
-        } else {
-            std::borrow::Cow::Borrowed(run.text.as_str())
-        };
-        width += word_width_for_run(
-            font,
-            run,
-            &text,
-            run.font_size,
-            run.kerns_at(run.font_size),
-            0.0,
-            1.0,
-        );
     }
     let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, fonts);
     let height = p.space_before.max(0.0)
@@ -1243,6 +1208,8 @@ pub(super) fn compute_row_layouts(
                     let mut negative_anchor_shift = 0.0f32;
                     let mut final_float_mark_hidden = false;
                     let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
+                    let text_above_floats =
+                        text_fits_above_nested_floats(cell, cell_text_w, ctx.fonts, ctx.doc_line_spacing, hf_sub);
                     let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
                     let block_count = cell.content.len();
@@ -1843,9 +1810,9 @@ pub(super) fn compute_row_layouts(
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
                                         }) || plain_side_text
+                                            || text_above_floats
                                             || (top_aligned && (spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)
                                                 || interleaved_spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)))
-                                            || text_fits_above_nested_floats(cell, cell_text_w, ctx.fonts, ctx.doc_line_spacing, hf_sub)
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
