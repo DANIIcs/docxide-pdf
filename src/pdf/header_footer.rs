@@ -673,6 +673,51 @@ pub(super) fn flow_slot_top(
     }
 }
 
+/// A page header's wrapping floats as obstacles in page coordinates:
+/// `(left, right, bottom)`, text distances included. Body text flows beside
+/// them; a table cannot, so one at the page top starts below them
+/// (cote_dazur: two logos end 81.2pt from the top, where Word starts the
+/// body table 10.4pt below the top margin).
+// ponytail: floats anchor at the header's top line; a letterhead rarely
+// anchors its logo in a later header paragraph.
+pub(super) fn header_float_obstacles(
+    sp: &SectionProperties,
+    is_first: bool,
+    page_idx: usize,
+    ctx: &RenderContext,
+) -> Vec<(f32, f32, f32)> {
+    let Some(hf) = layout_hf(sp, is_first, page_idx, true, ctx) else {
+        return Vec::new();
+    };
+    let text_width = sp.text_width();
+    let slot_top = sp.page_height - sp.header_margin;
+    let mut out = Vec::new();
+    for block in &hf.blocks {
+        let Block::Paragraph(para) = block else { continue };
+        for fi in &para.floating_images {
+            if !fi.wrap_type.wraps_beside() && !matches!(fi.wrap_type, WrapType::TopAndBottom) {
+                continue;
+            }
+            let fi_x = super::resolve_h_position(
+                fi.h_relative_from,
+                &fi.h_position,
+                fi.image.display_width,
+                sp,
+                sp.margin_left,
+                text_width,
+                text_width,
+            );
+            let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
+            out.push((
+                fi_x - fi.dist_left,
+                fi_x + fi.image.display_width + fi.dist_right,
+                fi_y_top - fi.image.display_height - fi.dist_bottom,
+            ));
+        }
+    }
+    out
+}
+
 pub(super) fn compute_effective_margin_bottom(
     sp: &SectionProperties,
     is_first: bool,

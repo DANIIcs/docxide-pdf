@@ -1189,6 +1189,9 @@ impl FloatingTablePos {
 }
 
 pub(super) struct PageBuilder {
+    /// The body table being rendered, as `(left, right)`: a page it opens
+    /// starts below the header floats it would overlap.
+    pub(super) table_extent: Option<(f32, f32)>,
     // Current page state
     pub(super) content: Content,
     pub(super) links: Vec<LinkAnnotation>,
@@ -1326,6 +1329,7 @@ impl PageBuilder {
             float_table_extent: None,
             frame_bands: Vec::new(),
             pending_float_anchor: None,
+            table_extent: None,
             next_text_below_picture: None,
             deferred_shapes: Vec::new(),
             all_contents: Vec::new(),
@@ -1583,6 +1587,25 @@ impl PageBuilder {
         self.slot_top
     }
 
+    /// Where a table spanning `left..right` starts: a page-top table drops
+    /// below the header's wrapping floats it would overlap, see
+    /// `header_float_obstacles`.
+    fn below_header_floats(&self, sp: &SectionProperties, ctx: &RenderContext, left: f32, right: f32) -> f32 {
+        if !self.is_at_page_top(sp) {
+            return self.slot_top;
+        }
+        let page = self.page_count();
+        for is_first in [true, false] {
+            if (effective_slot_top(sp, is_first, page, ctx) - self.page_top_y).abs() < 0.01 {
+                return header_footer::header_float_obstacles(sp, is_first, page, ctx)
+                    .iter()
+                    .filter(|(l, r, _)| *l < right && *r > left)
+                    .fold(self.slot_top, |y, (_, _, bottom)| y.min(*bottom));
+            }
+        }
+        self.slot_top
+    }
+
     fn is_at_page_top(&self, sp: &SectionProperties) -> bool {
         // nabl's 47.49pt header ends below its 36pt top margin: Word still
         // drops the space before the first paragraph under it.
@@ -1691,6 +1714,11 @@ impl PageBuilder {
         self.slot_top = effective_slot_top(sp, first_page, page, ctx);
         self.column_top_y = self.slot_top;
         self.page_top_y = self.slot_top;
+        if let Some((left, right)) = self.table_extent {
+            self.slot_top = self.below_header_floats(sp, ctx, left, right);
+            self.column_top_y = self.slot_top;
+            self.page_top_y = self.slot_top;
+        }
         *effective_margin_bottom = compute_effective_margin_bottom(sp, first_page, page, ctx);
         self.is_first_page_of_section = first_page;
     }
@@ -5061,6 +5089,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             }
                             resolved
                         });
+                        if table.position.is_none() {
+                            let (col_x, col_w) = col_geometry[state.current_col];
+                            let w: f32 = table.col_widths.iter().sum();
+                            let left = col_x + table.table_indent;
+                            let right = if w > 0.0 { left + w } else { col_x + col_w };
+                            state.pb.slot_top = state.pb.below_header_floats(sp, &ctx, left, right);
+                            state.pb.table_extent = Some((left, right));
+                        }
                         let col_bounds =
                             (cols > 1 || frame.is_some()).then(|| geometry[state.current_col]);
                         let table_tags =
@@ -5078,6 +5114,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             &mut state.effective_margin_bottom,
                             col_bounds,
                         );
+                        state.pb.table_extent = None;
                         // A full-width, negatively positioned text float displaces
                         // its preceding empty anchor line below the table in Word.
                         // Keep the table's measured position, but reserve that line
