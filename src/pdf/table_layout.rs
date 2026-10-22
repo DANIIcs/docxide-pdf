@@ -820,6 +820,105 @@ pub(super) struct HfSubstitution<'a> {
     pub(super) page_num_format: Option<&'a str>,
 }
 
+// Interleaved empty anchors contribute flow height; their floating tables do
+// not, provided that the accumulated spacer lines clear every table's extent.
+fn interleaved_spacers_clear_nested_registration(
+    cell: &crate::model::TableCell,
+    block_idx: usize,
+    cell_text_w: f32,
+    ctx: &RenderContext,
+    hf_sub: Option<&HfSubstitution>,
+) -> bool {
+    if hf_sub.is_some() || cell.text_direction != TextDirection::LrTb {
+        return false;
+    }
+    let mut flow = 0.0f32;
+    let mut occupied = 0.0f32;
+    let mut prev_after = 0.0f32;
+    let mut tables = 0;
+    let mut interleaved = false;
+    let mut selected = false;
+    for (index, block) in cell.content.iter().enumerate() {
+        match block {
+            Block::Table(table) => {
+                tables += 1;
+                if tables > 2 {
+                    return false;
+                }
+                interleaved |= tables > 1 && flow > 0.0;
+                selected |= index == block_idx;
+                let Some(pos) = &table.position else {
+                    return false;
+                };
+                if table.rows.len() != 1
+                    || pos.v_anchor != "text"
+                    || pos.h_anchor != "margin"
+                    || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
+                    || table.table_indent != 0.0
+                    || table.alignment != crate::model::TableAlignment::Left
+                {
+                    return false;
+                }
+                let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
+                apply_pct_width(table, &mut widths, cell_text_w, ctx.compat_mode);
+                if cell_text_w
+                    - widths.iter().sum::<f32>()
+                    - pos.left_from_text
+                    - pos.right_from_text
+                    < MIN_NESTED_FLOAT_STRIP
+                {
+                    return false;
+                }
+                let height = compute_row_layouts(table, &widths, ctx, hf_sub)
+                    .iter()
+                    .map(|r| r.height)
+                    .sum::<f32>();
+                occupied = occupied.max(
+                    flow + prev_after
+                        + pos.v_offset_pt.max(0.0)
+                        + height
+                        + pos.top_from_text
+                        + pos.bottom_from_text,
+                );
+            }
+            Block::Paragraph(p) => {
+                if p.frame_props.is_some()
+                    || p.paragraph_mark_vanish
+                    || p.image.is_some()
+                    || p.inline_chart.is_some()
+                    || !p.smartart.is_empty()
+                    || !p.floating_images.is_empty()
+                    || !p.textboxes.is_empty()
+                    || !p.connectors.is_empty()
+                    || p.contextual_spacing
+                    || p.space_before_auto
+                    || p.space_after_auto
+                    || p.runs.iter().any(|r| {
+                        r.is_tab
+                            || r.is_line_break
+                            || r.inline_image.is_some()
+                            || r.field_code.is_some()
+                            || r.math.is_some()
+                            || r.vanish
+                            || r.footnote_id.is_some()
+                            || r.endnote_id.is_some()
+                    })
+                {
+                    return false;
+                }
+                flow += prev_after.max(p.space_before);
+                if p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+                    return selected && interleaved && flow >= occupied;
+                }
+                let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
+                flow += resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+                prev_after = p.space_after;
+            }
+        }
+    }
+    false
+}
+
 // Leading margin-anchored registration tables may precede visible cell text
 // without contributing to flow height when measured empty paragraphs already
 // clear their entire extent. Keep the old narrow path for all other layouts.
@@ -1639,6 +1738,7 @@ pub(super) fn compute_row_layouts(
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
                                         }) || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
+                                            || (top_aligned && interleaved_spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
                                             || plain_side_text
                                     })
                                     // Word keeps a table at the cell's top when its first
