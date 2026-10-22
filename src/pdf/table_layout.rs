@@ -1097,6 +1097,8 @@ pub(super) fn compute_row_layouts(
         .iter()
         .map(|row| {
             let mut max_h: f32 = 0.0;
+            let row_keeps_next = row.cells.iter().flat_map(|cell| &cell.content)
+                .any(|block| matches!(block, Block::Paragraph(p) if p.keep_next));
             // Word uses the largest top/bottom cell margins across a row,
             // even when the cell carrying the margin has only a hidden mark.
             // Left/right margins remain specific to each cell.
@@ -1655,8 +1657,11 @@ pub(super) fn compute_row_layouts(
                                     text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
-                                    keep_lines: para.keep_lines,
-                                    two_line_widow: ctx.compat_mode >= 15,
+                                    // Word 2010 layout splits a keepLines cell paragraph too.
+                                    keep_lines: para.keep_lines && ctx.compat_mode >= 15,
+                                    // Without widow control (and nothing keeping the row
+                                    // with the next) Word 2013+ also lets one line stand.
+                                    two_line_widow: ctx.compat_mode >= 15 && (para.widow_control || row_keeps_next),
                                     list_label: para.list_label.clone(),
                                     sole_formula: super::sole_formula(para),
                                     label_font_key: (!para.list_label.is_empty())
