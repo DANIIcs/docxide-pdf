@@ -83,15 +83,9 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     // Word never splits display math over pages: a wrapped equation that
     // doesn't fit moves whole (probe `mp20_relpos`).
-    let keep_lines = ppr
-        .and_then(|ppr| wml_bool(ppr, "keepLines"))
-        .unwrap_or_else(|| para_style.and_then(|s| s.keep_lines).unwrap_or(false))
-        || super::runs::display_math(node).is_some();
+    let keep_lines = keep_lines(ppr, para_style) || super::runs::display_math(node).is_some();
 
-    let widow_control = ppr
-        .and_then(|ppr| wml_bool(ppr, "widowControl"))
-        .or_else(|| para_style.and_then(|s| s.widow_control))
-        .unwrap_or(ctx.styles.defaults.widow_control);
+    let widow_control = widow_control(ppr, para_style, &ctx.styles.defaults);
 
     let snap_to_grid = ppr
         .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
@@ -442,6 +436,24 @@ pub(super) fn paragraph_mark_position(
         .and_then(|rpr| half_points(rpr, "position"))
         .or_else(|| para_style.and_then(|s| s.position))
         .unwrap_or(0.0)
+}
+
+/// `w:widowControl`, direct, from the style or the document defaults.
+pub(super) fn widow_control(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+    defaults: &StyleDefaults,
+) -> bool {
+    ppr.and_then(|ppr| wml_bool(ppr, "widowControl"))
+        .or_else(|| para_style.and_then(|s| s.widow_control))
+        .unwrap_or(defaults.widow_control)
+}
+
+/// `w:keepLines`, direct or from the style.
+pub(super) fn keep_lines(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> bool {
+    ppr.and_then(|ppr| wml_bool(ppr, "keepLines"))
+        .or_else(|| para_style.and_then(|s| s.keep_lines))
+        .unwrap_or(false)
 }
 
 /// `w:contextualSpacing`, direct or from the style. Shared by body and
