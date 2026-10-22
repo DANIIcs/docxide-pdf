@@ -877,6 +877,21 @@ fn table_right_text_region(
 }
 
 impl FloatZone {
+    /// The text region right of the wrap edge `float_right`.
+    // Images retain wrap-edge-relative indents (the French
+    // youth strategy's arrow list beside its logo). Tables
+    // instead intersect the margin-relative paragraph box.
+    fn right_region(&self, col_x: f32, col_right: f32, float_right: f32, para: &Paragraph) -> (f32, f32) {
+        if self.from_table {
+            table_right_text_region(col_x, col_right, float_right, para)
+        } else {
+            (
+                float_right + para.indent_left,
+                (col_right - float_right - para.indent_left - para.indent_right).max(0.0),
+            )
+        }
+    }
+
     /// The exclusion zone of a wrapping float whose frame's left edge is `fi_x`
     /// and top edge `fi_y_top` (page coordinates, y from the bottom).
     fn for_float(fi: &crate::model::FloatingImage, fi_x: f32, fi_y_top: f32) -> Self {
@@ -954,18 +969,11 @@ impl FloatZone {
             // For bothSides, use the wider region as primary text width (dual
             // geometry handles both regions per-line).
             let lw = (space_left - para.indent_left).max(0.0);
-            let table_region = self.from_table.then(|| {
-                table_right_text_region(col_x, col_right, ex_right + self.right_from_text, para)
-            });
-            let rw = table_region.map_or_else(
-                || (space_right - para.indent_left - para.indent_right).max(0.0),
-                |(_, w)| w,
-            );
+            let (rx, rw) = self.right_region(col_x, col_right, ex_right + self.right_from_text, para);
             if rw > lw {
-                let new_left = ex_right + self.right_from_text;
                 *text_w = rw.max(1.0);
-                *text_x = table_region.map_or(new_left + para.indent_left, |(x, _)| x);
-                *label_x = *text_x - para.indent_hanging + para.indent_first_line;
+                *text_x = rx;
+                *label_x = rx - para.indent_hanging + para.indent_first_line;
             } else if lw > 0.0 {
                 *text_w = lw.max(1.0);
             }
@@ -3029,17 +3037,7 @@ fn render_paragraph_block(
                         let float_right = ex_right + fz.right_from_text;
                         let sr = col_right - float_right;
                         let sl = (ex_left - fz.left_from_text) - col_x;
-                        // Images retain wrap-edge-relative indents (the French
-                        // youth strategy's arrow list beside its logo). Tables
-                        // instead intersect the margin-relative paragraph box.
-                        let right_of_float = if fz.from_table {
-                            table_right_text_region(col_x, col_right, float_right, para)
-                        } else {
-                            (
-                                float_right + para.indent_left,
-                                (sr - para.indent_left - para.indent_right).max(0.0),
-                            )
-                        };
+                        let right_of_float = fz.right_region(col_x, col_right, float_right, para);
 
                         if is_both_sides {
                             // BothSides: provide both regions
