@@ -598,6 +598,7 @@ fn render_cell_content(
                 let block_h = para_block_height(para);
                 let picture_clip =
                     clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, block_h);
+                let geometry = beside_float_geometry(para, text_x, text_w);
                 render_paragraph_lines(
                     content,
                     &para.lines,
@@ -612,7 +613,7 @@ fn render_cell_content(
                     links,
                     first_line_hanging,
                     ctx.fonts,
-                    None,
+                    geometry.as_deref(),
                     gradient_specs,
                     Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,
@@ -891,6 +892,26 @@ fn render_simple_textbox(
 /// Render a nested table inline within a parent cell at the given cursor position.
 /// Render every row of `table` — cell backgrounds and content, then borders —
 /// advancing `cursor_y`. Shared by nested and header/footer table rendering.
+/// Per-line (x, width) for a cell paragraph whose first lines run beside a
+/// left floating nested table (`CellParagraphLayout::beside_lines`).
+fn beside_float_geometry(
+    para: &super::table_layout::CellParagraphLayout,
+    text_x: f32,
+    text_w: f32,
+) -> Option<Vec<(f32, f32)>> {
+    (para.beside_lines > 0).then(|| {
+        (0..para.lines.len())
+            .map(|i| {
+                if i < para.beside_lines {
+                    (text_x + para.beside_indent, (text_w - para.beside_indent).max(1.0))
+                } else {
+                    (text_x, text_w)
+                }
+            })
+            .collect()
+    })
+}
+
 fn render_table_rows(
     table: &Table,
     row_layouts: &[RowLayout],
@@ -1198,6 +1219,7 @@ fn render_partial_cell_content(
                 let lines_h = super::table_layout::cell_lines_h(para, l0..l1);
                 let picture_clip =
                     clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, lines_h);
+                let geometry = beside_float_geometry(para, text_x, text_w);
                 render_paragraph_lines(
                     content,
                     &para.lines[l0..l1],
@@ -1212,7 +1234,7 @@ fn render_partial_cell_content(
                     links,
                     first_line_hanging,
                     ctx.fonts,
-                    None,
+                    geometry.as_deref(),
                     gradient_specs,
                     Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,

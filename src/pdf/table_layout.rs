@@ -789,6 +789,15 @@ pub(super) struct CellParagraphLayout {
     /// Extra left indent from wrapSquare/Tight floating images in this paragraph.
     /// Text lines are laid out narrower and rendered further right to avoid the image.
     pub(super) float_indent_left: f32,
+    /// The first `beside_lines` lines start `beside_indent` further right,
+    /// level with a left floating nested table.
+    pub(super) beside_indent: f32,
+    pub(super) beside_lines: usize,
+    /// `w:keepLines`: the paragraph never splits over a row break.
+    pub(super) keep_lines: bool,
+    /// Lines a row break keeps on each side of this paragraph: 2 in Word
+    /// 2013+ layout (compatibilityMode 15), 1 before (0 = unset, as 1).
+    pub(super) widow_lines: usize,
     pub(super) list_label: String,
     pub(super) label_font_key: Option<String>,
     pub(super) label_font_size: f32,
@@ -835,6 +844,8 @@ impl CellParagraphLayout {
 // Synthetic Word controls switch between 18.75 pt and 18.70 pt of free
 // right strip; the transition is unchanged for 8–12 pt marks and no borders.
 const MIN_NESTED_FLOAT_STRIP: f32 = 18.75;
+/// See the `para_content_h` note in `compute_row_layouts`.
+const HR_CELL_LINE_H: f32 = 5.25;
 
 pub(super) enum CellContentItem {
     Paragraph(CellParagraphLayout),
@@ -1068,6 +1079,17 @@ pub(super) fn compute_row_layouts(
                     for (block_idx, block) in cell.content.iter().enumerate() {
                         match block {
                             Block::Paragraph(para) => {
+                                // An HTML rule (o:hr) alone in a hideMark cell keeps a
+                                // 5.25pt line in Word (advocacy's story separators:
+                                // 0.75pt margins, the 0.5pt rule 2.5pt below the top),
+                                // where the hidden mark would otherwise collapse it.
+                                // ponytail: one measurement; Word's rule for the
+                                // shape's line box is unknown.
+                                let para_content_h = if para.horizontal_rule.is_some() && is_text_empty(&para.runs) {
+                                    HR_CELL_LINE_H
+                                } else {
+                                    para.content_height
+                                };
                                 let nested_float_clearance = if left_float_right_gap < MIN_NESTED_FLOAT_STRIP
                                     && para.runs.iter().all(|r| r.text.trim().is_empty() && !r.is_tab && !r.is_line_break)
                                 { (left_float_bottom - total_h).max(0.0) } else { 0.0 };
@@ -1093,7 +1115,7 @@ pub(super) fn compute_row_layouts(
                                 // padding spaces has the paragraph mark's line
                                 // metrics in Word, not the spaces' run format.
                                 let padding_mark;
-                                let runs = if para.content_height == 0.0
+                                let runs = if para_content_h == 0.0
                                     && runs.iter().any(|run| !run.text.is_empty())
                                     && runs.iter().all(|run| !run.is_tab
                                         && !run.is_line_break && run.math.is_none()
@@ -1194,7 +1216,7 @@ pub(super) fn compute_row_layouts(
                                         line_h,
                                         grid_pitch,
                                     )
-                                } else if is_text_empty(runs) && para.content_height == 0.0 {
+                                } else if is_text_empty(runs) && para_content_h == 0.0 {
                                     line_h + super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
                                 } else {
                                     line_h
@@ -1227,7 +1249,7 @@ pub(super) fn compute_row_layouts(
                                 // after (Word probes).
                                 let mark_hidden = cell.hide_mark
                                     && block_idx == block_count - 1
-                                    && para.content_height == 0.0
+                                    && para_content_h == 0.0
                                     && is_text_empty(runs)
                                     && !para.paragraph_mark_vanish;
                                 // A cell drops HTML auto spacing at its edges.
@@ -1299,18 +1321,22 @@ pub(super) fn compute_row_layouts(
                                         left_edge + fi.image.display_width + fi.dist_right
                                     })
                                     .fold(0.0f32, f32::max);
-                                // Text beside a left floating nested table keeps
-                                // clear of it, as beside a wrapping picture.
-                                // ponytail: the whole paragraph is indented, not
-                                // only its lines level with the table.
-                                let float_indent_left = if left_float_right_gap.is_finite()
+                                // Lines level with a left floating nested table
+                                // keep clear of it, the rest run full width
+                                // (Word: "Public" beside the table, "visible
+                                // topic" below it in nested-floats-spaced-text-
+                                // short-spacers).
+                                let (beside_indent, beside_lines) = if left_float_right_gap.is_finite()
                                     && left_float_right_gap >= MIN_NESTED_FLOAT_STRIP
                                     && total_h < left_float_bottom
                                     && !is_text_empty(runs)
                                 {
-                                    float_indent_left.max(cell_text_w - left_float_right_gap)
+                                    (
+                                        cell_text_w - left_float_right_gap,
+                                        ((left_float_bottom - total_h) / line_h.max(1.0)).ceil().max(1.0) as usize,
+                                    )
                                 } else {
-                                    float_indent_left
+                                    (0.0, 0)
                                 };
 
                                 // An inline-image paragraph whose only other run
@@ -1319,7 +1345,7 @@ pub(super) fn compute_row_layouts(
                                 // come from the image's content_height, not a stray
                                 // text line — otherwise the cell collapses and a
                                 // tall header logo fails to push the body down.
-                                let image_only = para.content_height > 0.0
+                                let image_only = para_content_h > 0.0
                                     && runs.iter().all(|r| r.text.is_empty() && !r.is_tab);
                                 let mut break_mark_hidden = false;
                                 let lines = if !is_text_empty(runs) && !image_only {
@@ -1353,6 +1379,7 @@ pub(super) fn compute_row_layouts(
                                             ctx.cjk(false, para),
                                         )
                                     } else {
+                                        let beside_widths = vec![(para_text_w - beside_indent).max(1.0); beside_lines];
                                         build_paragraph_lines(
                                             runs,
                                             ctx.fonts,
@@ -1361,7 +1388,7 @@ pub(super) fn compute_row_layouts(
                                             &inline_images,
                                             &inline_effects,
                                             None,
-                                            None,
+                                            (beside_lines > 0).then_some(beside_widths.as_slice()),
                                             None,
                                             ctx.cjk(para.auto_space_de || para.auto_space_dn, para),
                                         )
@@ -1423,13 +1450,13 @@ pub(super) fn compute_row_layouts(
                                         // contributes no height
                                     } else if prev_was_nested_table
                                         && block_idx == block_count - 1
-                                        && para.content_height == 0.0
+                                        && para_content_h == 0.0
                                     {
                                         // End-of-cell mark directly after a nested
                                         // table: Word hides it; space_after is
                                         // suppressed in the trailing-space block
                                         // below.
-                                    } else if para.content_height > 0.0 {
+                                    } else if para_content_h > 0.0 {
                                         // Image paragraph: the image is line 1; each
                                         // trailing w:br adds a further blank line
                                         // (matches the non-table header height path).
@@ -1437,7 +1464,7 @@ pub(super) fn compute_row_layouts(
                                             .iter()
                                             .filter(|r| r.is_line_break)
                                             .count();
-                                        total_h += para.content_height
+                                        total_h += para_content_h
                                             + br_count as f32 * line_h;
                                     } else {
                                         total_h += line_h;
@@ -1543,6 +1570,10 @@ pub(super) fn compute_row_layouts(
                                     text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
+                                    beside_indent,
+                                    beside_lines,
+                                    keep_lines: para.keep_lines,
+                                    widow_lines: if ctx.compat_mode >= 15 { 2 } else { 1 },
                                     list_label: para.list_label.clone(),
                                     sole_formula: super::sole_formula(para),
                                     label_font_key: (!para.list_label.is_empty())
@@ -1566,7 +1597,7 @@ pub(super) fn compute_row_layouts(
                                     image_glow: img_glow,
                                     image_glow_xobj: img_glow_xobj,
                                     image_clip: para.image.as_ref().and_then(|img| img.clip_geometry.clone()),
-                                    content_height: para.content_height,
+                                    content_height: para_content_h,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,
                                     space_after,
