@@ -220,6 +220,7 @@ pub(super) struct ParagraphStyle {
     pub(super) ind_over_numbering: bool,
     pub(super) outline_level: Option<u8>,
     pub(super) snap_to_grid: Option<bool>,
+    pub(super) text_align_top: Option<bool>,
     pub(super) auto_space_de: Option<bool>,
     pub(super) auto_space_dn: Option<bool>,
     pub(super) text_outline: Option<TextOutline>,
@@ -1091,6 +1092,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
 
                 let bidi = ppr.and_then(|ppr| wml_bool(ppr, "bidi"));
                 let snap_to_grid = ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"));
+                let text_align_top = ppr
+                    .and_then(|ppr| wml_attr(ppr, "textAlignment"))
+                    .map(|v| v == "top");
                 let auto_space_de = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDE"));
                 let auto_space_dn = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDN"));
                 let frame_attrs = ppr.and_then(|ppr| wml(ppr, "framePr")).map(frame_attrs);
@@ -1147,6 +1151,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         ind_over_numbering: false,
                         outline_level,
                         snap_to_grid,
+                        text_align_top,
                         auto_space_de,
                         auto_space_dn,
                         text_outline,
@@ -1394,6 +1399,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     num_ilvl,
                     outline_level,
                     snap_to_grid,
+                    text_align_top,
                     auto_space_de,
                     auto_space_dn,
                     shading,

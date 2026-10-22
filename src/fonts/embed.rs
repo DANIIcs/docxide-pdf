@@ -225,6 +225,7 @@ pub(super) fn embed_truetype(
             .filter(|&(_, t)| t > 0.0),
         east_asian: lm.east_asian,
         plain_ascender_ratio: lm.plain_ascender_ratio,
+        leading_ratio: lm.leading_ratio,
         char_to_gid,
         char_widths_1000,
         char_ink_1000,
@@ -464,6 +465,7 @@ pub(super) struct LineMetrics {
     /// in an East Asian font (`pdf::layout::run_line_metrics`).
     pub(super) plain_line_h_ratio: f32,
     pub(super) plain_ascender_ratio: f32,
+    pub(super) leading_ratio: f32,
     /// How far below a docGrid cell's centre Word puts the baseline, per em.
     pub(super) grid_baseline_shift: f32,
     /// Laid out by Word's East Asian rules (1.3× leading, see above).
@@ -518,7 +520,16 @@ fn compute_line_metrics(face: &Face, units: f32) -> LineMetrics {
         }
         None => (face.ascender() + face.descender()) as f32 / 2.0 / units,
     };
+    // ponytail: East Asian faces report none; their 1.3× leading is split
+    // around the glyphs, so probe them before top alignment relies on it.
+    let leading_ratio = match face.tables().os2 {
+        Some(os2) if !os2.use_typographic_metrics() && east_asian.is_none() => {
+            external_leading(face, os2) as f32 / units
+        }
+        _ => 0.0,
+    };
     LineMetrics {
+        leading_ratio,
         line_h_ratio: east_asian.map_or(plain_line_h_ratio, |(h, _)| h),
         ascender_ratio: east_asian.map_or(plain_ascender_ratio, |(_, a)| a),
         grid_line_ratio: east_asian.map(|(h, _)| h).or(typo_ratio),

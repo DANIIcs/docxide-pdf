@@ -335,6 +335,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         paragraph_mark_font_size,
         paragraph_mark_font_name,
         paragraph_mark_position,
+        text_align_top: text_align_top(ppr, para_style),
         snap_to_grid,
         auto_space_de,
         auto_space_dn,
@@ -396,6 +397,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         paragraph_mark_font_size: para.paragraph_mark_font_size,
         paragraph_mark_font_name: para.paragraph_mark_font_name.clone(),
         paragraph_mark_position: para.paragraph_mark_position,
+        text_align_top: para.text_align_top,
         snap_to_grid: para.snap_to_grid,
         auto_space_de: para.auto_space_de,
         auto_space_dn: para.auto_space_dn,
@@ -419,6 +421,16 @@ pub(super) fn paragraph_mark_position(
 
 /// `w:contextualSpacing`, direct or from the style. Shared by body and
 /// table-cell paragraphs.
+pub(super) fn text_align_top(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> bool {
+    ppr.and_then(|ppr| wml_attr(ppr, "textAlignment"))
+        .map(|v| v == "top")
+        .or_else(|| para_style.and_then(|s| s.text_align_top))
+        .unwrap_or(false)
+}
+
 pub(super) fn contextual_spacing(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,

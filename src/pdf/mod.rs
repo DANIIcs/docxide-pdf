@@ -671,18 +671,22 @@ fn mark_position_stretch(
     if grid_snapped || matches!(ls, LineSpacing::Exact(_)) || para.paragraph_mark_position == 0.0 {
         return 0.0;
     }
-    let metrics = para
+    let font = para
         .paragraph_mark_font_name
         .as_deref()
-        .and_then(|name| fonts.get(name))
-        .map(|font| run_line_metrics(font, ""));
-    let (Some(lhr), Some(ar)) = metrics.unwrap_or((None, None)) else {
+        .and_then(|name| fonts.get(name));
+    let metrics = font.map(|font| run_line_metrics(font, ""));
+    let (Some(font), (Some(lhr), Some(ar))) = (font, metrics.unwrap_or((None, None))) else {
         return para.paragraph_mark_position.abs();
     };
     let size = para.paragraph_mark_font_size.unwrap_or(11.0);
     let pos = para.paragraph_mark_position;
     let natural = size * lhr;
-    let shifted = (size * ar + pos).max(0.0) + (size * (lhr - ar).max(0.0) - pos).max(0.0);
+    let shifted = if para.text_align_top {
+        natural + layout::top_aligned_drop(font, size, pos)
+    } else {
+        (size * ar + pos).max(0.0) + (size * (lhr - ar).max(0.0) - pos).max(0.0)
+    };
     match ls {
         LineSpacing::Auto(multiplier) => (shifted - natural).max(0.0) * multiplier,
         LineSpacing::AtLeast(minimum) => shifted.max(minimum) - natural.max(minimum),
@@ -3128,7 +3132,7 @@ fn render_paragraph_block(
             * auto_ascent_scale(effective_ls);
     // A grid or an exact rule gives every line the same box.
     if !grid_snapped && !matches!(effective_ls, LineSpacing::Exact(_)) {
-        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent);
+        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_align_top);
         // A line holding only a w:br is as tall as the break run, wherever it
         // falls: pasto's title opens with an unformatted <w:br/> (11pt) above
         // its 12pt bold text, and Word steps 12.65 for that line, not 13.80.

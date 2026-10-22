@@ -24,6 +24,8 @@ pub(crate) struct FontMetrics {
     /// Latin-rule metrics without the East Asian 1.3× leading (`embed::compute_line_metrics`).
     pub(crate) plain_line_h_ratio: f32,
     pub(crate) plain_ascender_ratio: f32,
+    /// External leading per em, above the win box (`embed::external_leading`).
+    pub(crate) leading_ratio: f32,
     pub(crate) grid_baseline_shift: f32,
     /// OS/2 ySuperscriptYSize / ySubscriptYSize per em (`pdf::layout::effective_font_size`).
     pub(crate) superscript_ratio: Option<f32>,
@@ -63,6 +65,7 @@ pub(crate) struct FontEntry {
     /// empty paragraph marks (`pdf::layout::run_line_metrics`).
     pub(crate) plain_line_h_ratio: Option<f32>,
     pub(crate) plain_ascender_ratio: Option<f32>,
+    pub(crate) leading_ratio: Option<f32>,
     /// See `embed::LineMetrics::grid_baseline_shift`.
     pub(crate) grid_baseline_shift: Option<f32>,
     /// OS/2 ySuperscriptYSize / ySubscriptYSize per em, sizing raised and
@@ -120,6 +123,7 @@ impl FontEntry {
             strikeout: None,
             east_asian: false,
             plain_ascender_ratio: None,
+            leading_ratio: None,
             char_to_gid: None,
             char_widths_1000: None,
             char_ink_1000: None,
@@ -862,6 +866,7 @@ pub(crate) fn register_font(
             strikeout: r.metrics.strikeout,
             east_asian: r.metrics.east_asian,
             plain_ascender_ratio: Some(r.metrics.plain_ascender_ratio),
+            leading_ratio: Some(r.metrics.leading_ratio),
             char_to_gid: Some(r.metrics.char_to_gid),
             char_widths_1000: Some(r.metrics.char_widths_1000),
             char_ink_1000: Some(r.metrics.char_ink_1000),
@@ -912,6 +917,7 @@ pub(crate) fn register_font(
                 strikeout: None,
                 east_asian: false,
                 plain_ascender_ratio: None,
+                leading_ratio: None,
                 char_to_gid: None,
                 char_widths_1000: None,
                 char_ink_1000: None,

@@ -528,6 +528,8 @@ pub struct Paragraph {
     pub paragraph_mark_font_name: Option<String>,
     /// The mark's `w:position` in points (negative = lowered).
     pub paragraph_mark_position: f32,
+    /// `w:textAlignment="top"`: raised and lowered runs size the line differently.
+    pub text_align_top: bool,
     pub snap_to_grid: bool,
     pub auto_space_de: bool,
     pub auto_space_dn: bool,

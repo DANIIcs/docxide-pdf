@@ -977,6 +977,7 @@ pub(super) fn size_lines_by_own_runs(
     line_spacing: LineSpacing,
     para_pitch: f32,
     para_ascent: f32,
+    top_aligned: bool,
 ) {
     let by_pdf_name: HashMap<&str, &FontEntry> =
         fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
@@ -1022,8 +1023,13 @@ pub(super) fn size_lines_by_own_runs(
             // Position shifts both edges. A wholly raised line can lose its
             // descent before growing taller; an unshifted run alongside it
             // retains that descent. Do not stretch both sides independently.
-            ascent = ascent.max((c.line_font_size * ar + pad + c.raise).max(0.0));
-            below = below.max((c.line_font_size * (lhr - ar).max(0.0) + pad - c.raise).max(0.0));
+            if top_aligned {
+                ascent = ascent.max(c.line_font_size * ar + pad);
+                below = below.max(c.line_font_size * (lhr - ar).max(0.0) + pad + top_aligned_drop(entry, c.line_font_size, c.raise));
+            } else {
+                ascent = ascent.max((c.line_font_size * ar + pad + c.raise).max(0.0));
+                below = below.max((c.line_font_size * (lhr - ar).max(0.0) + pad - c.raise).max(0.0));
+            }
             sized = true;
         }
         if !sized {
@@ -1040,6 +1046,15 @@ pub(super) fn size_lines_by_own_runs(
             line.ascent_shift = ascent + above_extra - para_ascent;
         }
     }
+}
+
+/// How far a run moved by `raise` stretches a `w:textAlignment="top"` line
+/// below. Word hangs the glyphs from the line top there, so the external
+/// leading sits under them and absorbs a drop first; raising never grows the
+/// line. Probes (2026-10-22, online export) of Calibri, Arial and Times New
+/// Roman at 11 and 24pt lowered 0.5-7pt: growth = drop − leading, ≥ 0.
+pub(super) fn top_aligned_drop(entry: &FontEntry, size: f32, raise: f32) -> f32 {
+    (-raise - size * entry.leading_ratio.unwrap_or(0.0)).max(0.0)
 }
 
 /// How far a line's math boxes reach past its text box (`ascent` above,
@@ -4529,6 +4544,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn top_aligned_drop_spends_external_leading_first() {
+        // Times New Roman's leading is 87/2048 em; Calibri has none.
+        let tnr = FontEntry { leading_ratio: Some(87.0 / 2048.0), ..FontEntry::stub() };
+        let calibri = FontEntry { leading_ratio: Some(0.0), ..FontEntry::stub() };
+        assert!(top_aligned_drop(&tnr, 11.0, -0.5) < 0.05);
+        assert!((top_aligned_drop(&tnr, 24.0, -7.0) - 5.98).abs() < 0.01);
+        assert_eq!(top_aligned_drop(&calibri, 11.0, -0.5), 0.5);
+        assert_eq!(top_aligned_drop(&calibri, 11.0, 7.0), 0.0);
+    }
+
+    #[test]
     fn leading_space_wrap_uses_space_font_pitch() {
         let mut lines = vec![
             TextLine {
@@ -4549,6 +4575,7 @@ mod tests {
             LineSpacing::Auto(1.0),
             14.0,
             10.0,
+            false,
         );
         assert!((lines[0].pitch.unwrap() - 9.0).abs() < 0.001);
         assert!(

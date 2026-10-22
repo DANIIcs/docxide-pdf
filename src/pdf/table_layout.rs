@@ -1308,6 +1308,7 @@ pub(super) fn compute_row_layouts(
                                             effective_ls,
                                             line_h,
                                             font_size * ascender_ratio,
+                                            para.text_align_top,
                                         );
                                         // A final empty line after a break contains the
                                         // paragraph mark, rather than the preceding text.

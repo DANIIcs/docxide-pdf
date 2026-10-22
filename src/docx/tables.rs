@@ -870,6 +870,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
                             .or_else(|| para_style.and_then(|s| s.snap_to_grid))
                             .unwrap_or(true),
+                        text_align_top: super::paragraph::text_align_top(ppr, para_style),
                         floating_images: parsed.floating_images,
                         textboxes: parsed.textboxes,
                         connectors: parsed.connectors,
