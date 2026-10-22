@@ -1049,6 +1049,7 @@ pub(super) fn compute_row_layouts(
                     let mut left_float_bottom: f32 = 0.0;
                     let mut left_float_top: f32 = 0.0;
                     let mut left_float_indent: f32 = 0.0;
+                    let mut first_positive_float = false;
                     let mut left_float_right_gap: f32 = f32::INFINITY;
                     let mut max_rotated_line_w: f32 = 0.0;
                     let mut items: Vec<CellContentItem> = Vec::new();
@@ -1056,6 +1057,7 @@ pub(super) fn compute_row_layouts(
                     let mut para_idx = 0usize;
                     let mut prev_was_nested_table = false;
                     let mut negative_anchor_shift = 0.0f32;
+                    let mut final_float_mark_hidden = false;
                     let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
                     let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
@@ -1076,7 +1078,11 @@ pub(super) fn compute_row_layouts(
                             Block::Paragraph(para) => {
                                 let nested_float_clearance = if left_float_right_gap < MIN_NESTED_FLOAT_STRIP
                                     && para.runs.iter().all(|r| r.text.trim().is_empty() && !r.is_tab && !r.is_line_break)
-                                { (left_float_bottom - total_h).max(0.0) } else { 0.0 };
+                                {
+                                    let (fs,lhr,_) = super::layout::tallest_run_metrics(&para.runs,ctx.fonts);
+                                    let pitch=resolve_line_h(para.line_spacing.unwrap_or(ctx.doc_line_spacing),fs,lhr);
+                                    if !first_positive_float || total_h + pitch > left_float_top { (left_float_bottom-total_h).max(0.0) } else { 0.0 }
+                                } else { 0.0 };
                                 let substituted;
                                 let runs = if let Some(sub) = hf_sub {
                                     substituted = substitute_hf_runs(
@@ -1658,6 +1664,7 @@ pub(super) fn compute_row_layouts(
                                         left_float_bottom = total_h + space_before + offset + nested_h;
                                         left_float_top = total_h + space_before + offset;
                                         left_float_indent = if plain_side_text { nested_cw.iter().sum::<f32>() + nested_table.position.as_ref().unwrap().right_from_text } else { 0.0 };
+                                        first_positive_float = block_idx == 0 && nested_table.position.as_ref().is_some_and(|p| p.v_offset_pt >= 0.0);
                                         left_float_right_gap = cell_text_w - nested_cw.iter().sum::<f32>()
                                             - nested_table.position.as_ref().unwrap().right_from_text;
                                     }
@@ -1672,8 +1679,14 @@ pub(super) fn compute_row_layouts(
                                     floating_x_offset,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
+                                // A lone end-of-cell mark directly anchoring a
+                                // wide float does not add a line below that float.
+                                final_float_mark_hidden = block_idx + 2 == block_count
+                                    && auto_left_float && left_float_right_gap < MIN_NESTED_FLOAT_STRIP
+                                    && floating_offset.is_some_and(|offset| offset >= 0.0)
+                                    && matches!(cell.content.get(block_idx+1),Some(Block::Paragraph(p)) if is_text_empty(&p.runs));
                                 // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
-                                prev_was_nested_table = floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
                                     || suppress_negative_mark(block_idx, floating_offset)
                                     || (negative_anchor_shift > 0.0 && floating_offset.is_some());
                                 para_idx += 1;
@@ -1688,7 +1701,7 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                            if final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
                                 || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset)
                                 || (negative_anchor_shift > 0.0 && floating_offset.is_some()))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
