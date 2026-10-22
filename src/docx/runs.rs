@@ -810,6 +810,15 @@ fn collect_run_nodes<'a>(
     }
 }
 
+fn anchor_precedes_text(runs: &[Run]) -> bool {
+    runs.iter().all(|run| {
+        run.text.trim().is_empty()
+            && !run.is_line_break
+            && !run.is_tab
+            && run.inline_image.is_none()
+    })
+}
+
 pub(super) fn push_floating(fis: &mut Vec<FloatingImage>, tbs: &[Textbox], mut fi: FloatingImage) {
     fi.anchor_seq = (fis.len() + tbs.len()) as u32;
     fis.push(fi);
@@ -822,7 +831,7 @@ pub(super) fn push_textbox(fis: &[FloatingImage], tbs: &mut Vec<Textbox>, mut tb
 
 macro_rules! handle_drawing_result {
     ($result:expr, $fmt:expr, $runs:expr, $floating_images:expr, $textboxes:expr,
-     $inline_chart:expr, $smartart:expr, $connectors:expr) => {
+     $inline_chart:expr, $smartart:expr, $connectors:expr, $pending:expr) => {
         match $result {
             Some(RunDrawingResult::Inline(img)) => {
                 $runs.push(Run {
@@ -830,7 +839,8 @@ macro_rules! handle_drawing_result {
                     ..$fmt.minimal_run()
                 });
             }
-            Some(RunDrawingResult::Floating(fi)) => {
+            Some(RunDrawingResult::Floating(mut fi)) => {
+                fi.anchor_at_start = $pending.is_empty() && anchor_precedes_text(&$runs);
                 push_floating(&mut $floating_images, &$textboxes, fi)
             }
             Some(RunDrawingResult::TextBox(tb)) => {
@@ -849,7 +859,9 @@ macro_rules! handle_drawing_result {
                                 ..$fmt.minimal_run()
                             });
                         }
-                        RunDrawingResult::Floating(fi) => {
+                        RunDrawingResult::Floating(mut fi) => {
+                            fi.anchor_at_start =
+                                $pending.is_empty() && anchor_precedes_text(&$runs);
                             push_floating(&mut $floating_images, &$textboxes, fi)
                         }
                         RunDrawingResult::TextBox(tb) => {
@@ -1166,7 +1178,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             textboxes,
                             inline_chart,
                             smartart,
-                            connectors
+                            connectors,
+                            pending_text
                         );
                     }
                 } else if let Some(branch) = child
@@ -1379,7 +1392,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         textboxes,
                         inline_chart,
                         smartart,
-                        connectors
+                        connectors,
+                        pending_text
                     );
                 }
                 "pict" if field_stack.is_empty() => {
@@ -1387,7 +1401,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         horizontal_rule = Some(hr);
                     } else if is_vml_picture(child) {
                         flush_pending(&mut pending_text, &mut runs);
-                        if let Some(fi) = parse_object_floating_image(child, ctx) {
+                        if let Some(mut fi) = parse_object_floating_image(child, ctx) {
+                            fi.anchor_at_start = anchor_precedes_text(&runs);
                             push_floating(&mut floating_images, &textboxes, fi);
                         } else if let Some(img) = parse_object_inline_image(child, ctx) {
                             runs.push(Run {
@@ -1401,7 +1416,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 }
                 "object" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
-                    if let Some(fi) = parse_object_floating_image(child, ctx) {
+                    if let Some(mut fi) = parse_object_floating_image(child, ctx) {
+                        fi.anchor_at_start = anchor_precedes_text(&runs);
                         push_floating(&mut floating_images, &textboxes, fi);
                     } else if let Some(img) = parse_object_inline_image(child, ctx) {
                         runs.push(Run {
@@ -1779,5 +1795,31 @@ mod tests {
                 (d, -d, false)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod leading_anchor_tests {
+    use super::*;
+
+    #[test]
+    fn leading_anchor_ignores_blank_text_but_not_flow_content() {
+        assert!(anchor_precedes_text(&[]));
+        assert!(anchor_precedes_text(&[Run {
+            text: "  ".into(),
+            ..Run::default()
+        }]));
+        assert!(!anchor_precedes_text(&[Run {
+            text: "Text".into(),
+            ..Run::default()
+        }]));
+        assert!(!anchor_precedes_text(&[Run {
+            is_line_break: true,
+            ..Run::default()
+        }]));
+        assert!(!anchor_precedes_text(&[Run {
+            is_tab: true,
+            ..Run::default()
+        }]));
     }
 }

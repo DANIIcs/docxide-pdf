@@ -2064,6 +2064,26 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
         && !para.column_break_after
 }
 
+/// Whether a leading picture leaves no usable text strip on either side.
+fn leading_full_width_picture(
+    fi: &crate::model::FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> bool {
+    if !fi.anchor_at_start
+        || fi.v_relative_from != VRelativeFrom::Paragraph
+        || !matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
+        || !matches!(fi.wrap_type, WrapType::Square | WrapType::Tight)
+    {
+        return false;
+    }
+    let x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+    (x - fi.dist_left - col_x).max(col_x + col_w - x - fi.image.display_width - fi.dist_right)
+        < MIN_EMPTY_STRIP
+}
+
 /// Compute effective first-line hanging indent for a paragraph.
 fn compute_text_hanging(
     para: &Paragraph,
@@ -3322,7 +3342,9 @@ fn render_paragraph_block(
             }
             _ => fi.dist_top + fi.image.display_height + fi.dist_bottom,
         };
-        if reserve {
+        if reserve && !text_empty && leading_full_width_picture(fi, sp, col_x, col_w, text_width) {
+            float_overflow_h = float_overflow_h.max(fi_h);
+        } else if reserve {
             // Wide images block all text — add to content_h. An empty anchor
             // paragraph's own line moves below such a float when the float
             // covers it: cyprus' page-wide letterhead (margin-relative, top
@@ -3658,6 +3680,7 @@ fn render_paragraph_block(
             }
         }
 
+        let text_would_split = lines_h > available;
         if para.widow_control {
             // Ensure at least 2 lines remain on next page (orphan prevention)
             if lines_that_fit > 0 && lines.len().saturating_sub(lines_that_fit) < 2 {
@@ -3666,7 +3689,14 @@ fn render_paragraph_block(
         }
 
         // keepLines: don't split — move entire paragraph to next column/page
-        if para.keep_lines {
+        let leading_picture_keeps_text = content_h
+            <= sp.page_height - sp.margin_top - sp.margin_bottom
+            && text_would_split
+            && para
+                .floating_images
+                .iter()
+                .any(|fi| leading_full_width_picture(fi, sp, col_x, col_w, text_width));
+        if para.keep_lines || leading_picture_keeps_text {
             lines_that_fit = 0;
         }
 
@@ -3811,7 +3841,8 @@ fn render_paragraph_block(
                 let trailing_images_fit = fit >= remaining.len()
                     && !para.floating_images.is_empty()
                     && para.floating_images.iter().all(|fi| {
-                        fi.v_relative_from == VRelativeFrom::Paragraph
+                        !fi.anchor_at_start
+                            && fi.v_relative_from == VRelativeFrom::Paragraph
                             && matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
                             && fi.wrap_type.wraps_beside()
                             && {
@@ -4113,6 +4144,15 @@ fn render_paragraph_block(
         let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
         let fi_y_top = anchor.fi_y_top(fi, sp);
         state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
+        if !text_empty && leading_full_width_picture(fi, sp, col_x, col_w, text_width) {
+            let bottom = fi_y_top - fi.image.display_height - fi.dist_bottom;
+            state.pb.next_text_below_picture = Some(
+                state
+                    .pb
+                    .next_text_below_picture
+                    .map_or(bottom, |old| old.min(bottom)),
+            );
+        }
     }
 
     if debug_wrap && let Some(ref fz) = state.pb.float_zone {
