@@ -862,6 +862,106 @@ pub(super) struct HfSubstitution<'a> {
     pub(super) page_num_format: Option<&'a str>,
 }
 
+/// A one-row, text-anchored table floated at the cell's left margin with room
+/// for text beside it: its vertical extent below its anchor.
+fn registration_table_extent(table: &Table, cell_text_w: f32, ctx: &RenderContext) -> Option<f32> {
+    let pos = table.position.as_ref()?;
+    if table.rows.len() != 1
+        || pos.v_anchor != "text"
+        || pos.h_anchor != "margin"
+        || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
+        || table.table_indent != 0.0
+        || table.alignment != crate::model::TableAlignment::Left
+    {
+        return None;
+    }
+    let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
+    apply_nested_pct_width(table, &mut widths, cell_text_w);
+    let strip = cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
+    if strip < MIN_NESTED_FLOAT_STRIP {
+        return None;
+    }
+    let height = compute_row_layouts(table, &widths, ctx, None)
+        .iter()
+        .map(|r| r.height)
+        .sum::<f32>();
+    Some(height + pos.v_offset_pt.max(0.0) + pos.top_from_text + pos.bottom_from_text)
+}
+
+/// A paragraph whose height is only its lines and spacing.
+fn plain_spacer(p: &crate::model::Paragraph) -> bool {
+    !(p.frame_props.is_some()
+        || p.paragraph_mark_vanish
+        || p.image.is_some()
+        || p.inline_chart.is_some()
+        || !p.smartart.is_empty()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || !p.connectors.is_empty()
+        || p.contextual_spacing
+        || p.space_before_auto
+        || p.space_after_auto
+        || p.runs.iter().any(|r| {
+            r.is_tab
+                || r.is_line_break
+                || r.inline_image.is_some()
+                || r.field_code.is_some()
+                || r.math.is_some()
+                || r.vanish
+                || r.footnote_id.is_some()
+                || r.endnote_id.is_some()
+        }))
+}
+
+fn spacer_line_h(p: &crate::model::Paragraph, ctx: &RenderContext) -> f32 {
+    let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
+    resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
+}
+
+// Interleaved empty anchors contribute flow height; their floating tables do
+// not, provided that the accumulated spacer lines clear every table's extent.
+fn interleaved_spacers_clear_nested_registration(
+    cell: &crate::model::TableCell,
+    block_idx: usize,
+    cell_text_w: f32,
+    ctx: &RenderContext,
+    hf_sub: Option<&HfSubstitution>,
+) -> bool {
+    if hf_sub.is_some() || cell.text_direction != TextDirection::LrTb {
+        return false;
+    }
+    let mut flow = 0.0f32;
+    let mut occupied = 0.0f32;
+    let mut prev_after = 0.0f32;
+    let mut tables = 0;
+    for (index, block) in cell.content.iter().enumerate() {
+        match block {
+            Block::Table(table) => {
+                tables += 1;
+                if tables > 2 || (tables == 2 && flow <= 0.0) {
+                    return false;
+                }
+                let Some(extent) = registration_table_extent(table, cell_text_w, ctx) else {
+                    return false;
+                };
+                occupied = occupied.max(flow + prev_after + extent);
+            }
+            Block::Paragraph(p) => {
+                if !plain_spacer(p) {
+                    return false;
+                }
+                flow += prev_after.max(p.space_before);
+                if p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+                    return tables == 2 && block_idx < index && flow >= occupied;
+                }
+                flow += spacer_line_h(p, ctx);
+                prev_after = p.space_after;
+            }
+        }
+    }
+    false
+}
+
 // Leading margin-anchored registration tables may precede visible cell text
 // without contributing to flow height when measured empty paragraphs already
 // clear their entire extent. Keep the old narrow path for all other layouts.
@@ -888,32 +988,10 @@ fn spacers_clear_nested_registration(
     }
     let mut occupied = 0.0f32;
     for table in &tables {
-        let Some(pos) = &table.position else {
+        let Some(extent) = registration_table_extent(table, cell_text_w, ctx) else {
             return false;
         };
-        if table.rows.len() != 1
-            || pos.v_anchor != "text"
-            || pos.h_anchor != "margin"
-            || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
-            || table.table_indent != 0.0
-            || table.alignment != crate::model::TableAlignment::Left
-        {
-            return false;
-        }
-        let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
-        apply_nested_pct_width(table, &mut widths, cell_text_w);
-        let strip =
-            cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
-        if strip < MIN_NESTED_FLOAT_STRIP {
-            return false;
-        }
-        occupied += compute_row_layouts(table, &widths, ctx, hf_sub)
-            .iter()
-            .map(|r| r.height)
-            .sum::<f32>()
-            + pos.v_offset_pt.max(0.0)
-            + pos.top_from_text
-            + pos.bottom_from_text;
+        occupied += extent;
     }
     let mut empty_space = 0.0f32;
     let mut prev_after = 0.0f32;
@@ -922,28 +1000,7 @@ fn spacers_clear_nested_registration(
         let Block::Paragraph(p) = block else {
             return false;
         };
-        if p.frame_props.is_some()
-            || p.paragraph_mark_vanish
-            || p.image.is_some()
-            || p.inline_chart.is_some()
-            || !p.smartart.is_empty()
-            || !p.floating_images.is_empty()
-            || !p.textboxes.is_empty()
-            || !p.connectors.is_empty()
-            || p.contextual_spacing
-            || p.space_before_auto
-            || p.space_after_auto
-            || p.runs.iter().any(|r| {
-                r.is_tab
-                    || r.is_line_break
-                    || r.inline_image.is_some()
-                    || r.field_code.is_some()
-                    || r.math.is_some()
-                    || r.vanish
-                    || r.footnote_id.is_some()
-                    || r.endnote_id.is_some()
-            })
-        {
+        if !plain_spacer(p) {
             return false;
         }
         if visible_seen {
@@ -956,8 +1013,7 @@ fn spacers_clear_nested_registration(
             }
             visible_seen = true;
         } else {
-            let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
-            empty_space += resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+            empty_space += spacer_line_h(p, ctx);
             prev_after = p.space_after;
         }
     }
@@ -1697,8 +1753,9 @@ pub(super) fn compute_row_layouts(
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
-                                        }) || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
-                                            || plain_side_text
+                                        }) || plain_side_text
+                                            || (top_aligned && (spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)
+                                                || interleaved_spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)))
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
