@@ -659,14 +659,34 @@ fn unsized_line_metrics(
     (para.paragraph_mark_font_size.unwrap_or(font_size), lhr)
 }
 
-/// A raised or lowered mark stretches its empty line, as a positioned run
-/// stretches a text line (czech_municipal's 0.5pt-lowered Normal spacers are
-/// 14.54, not 14.04). Fixed-height lines don't stretch.
-fn mark_position_stretch(para: &Paragraph, ls: LineSpacing, grid_snapped: bool) -> f32 {
-    if grid_snapped || matches!(ls, LineSpacing::Exact(_)) {
-        0.0
-    } else {
-        para.paragraph_mark_position.abs()
+/// Size the shifted mark's box before applying the paragraph's line rule.
+/// Moving the entire mark also moves its descent, so a small lowering can
+/// leave the occupied height unchanged rather than stretching both sides.
+fn mark_position_stretch(
+    para: &Paragraph,
+    ls: LineSpacing,
+    grid_snapped: bool,
+    fonts: &HashMap<String, FontEntry>,
+) -> f32 {
+    if grid_snapped || matches!(ls, LineSpacing::Exact(_)) || para.paragraph_mark_position == 0.0 {
+        return 0.0;
+    }
+    let metrics = para
+        .paragraph_mark_font_name
+        .as_deref()
+        .and_then(|name| fonts.get(name))
+        .map(|font| run_line_metrics(font, ""));
+    let (Some(lhr), Some(ar)) = metrics.unwrap_or((None, None)) else {
+        return para.paragraph_mark_position.abs();
+    };
+    let size = para.paragraph_mark_font_size.unwrap_or(11.0);
+    let pos = para.paragraph_mark_position;
+    let natural = size * lhr;
+    let shifted = (size * ar + pos).max(0.0) + (size * (lhr - ar).max(0.0) - pos).max(0.0);
+    match ls {
+        LineSpacing::Auto(multiplier) => (shifted - natural).max(0.0) * multiplier,
+        LineSpacing::AtLeast(minimum) => shifted.max(minimum) - natural.max(minimum),
+        LineSpacing::Exact(_) => 0.0,
     }
 }
 
@@ -3191,7 +3211,7 @@ fn render_paragraph_block(
         } else if para.content_height > 0.0 {
             para.content_height
         } else {
-            line_h + mark_position_stretch(para, effective_ls, grid_snapped)
+            line_h + mark_position_stretch(para, effective_ls, grid_snapped, ctx.fonts)
         }
     } else {
         let num_lines = lines.len();

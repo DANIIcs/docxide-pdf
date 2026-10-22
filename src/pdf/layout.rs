@@ -1019,11 +1019,11 @@ pub(super) fn size_lines_by_own_runs(
             // Small caps' 80% letters and raised/lowered runs keep the run's
             // own size: italian_project_proposal's small-caps cell lines step
             // 14.64 like full-size ones.
-            // `w:position` does stretch the box, on its side only: a 6pt raise
-            // makes polish_building's formula line 5.95pt taller, and
-            // czech_municipal's Normal lowered 0.5pt steps 14.0 for 13.43.
-            ascent = ascent.max(c.line_font_size * ar + pad + c.raise.max(0.0));
-            below = below.max(c.line_font_size * (lhr - ar).max(0.0) + pad + (-c.raise).max(0.0));
+            // Position shifts both edges. A wholly raised line can lose its
+            // descent before growing taller; an unshifted run alongside it
+            // retains that descent. Do not stretch both sides independently.
+            ascent = ascent.max((c.line_font_size * ar + pad + c.raise).max(0.0));
+            below = below.max((c.line_font_size * (lhr - ar).max(0.0) + pad - c.raise).max(0.0));
             sized = true;
         }
         if !sized {
@@ -1033,7 +1033,9 @@ pub(super) fn size_lines_by_own_runs(
         let pitch = super::helpers::resolve_line_h(line_spacing, 1.0, Some(ascent + below))
             + above_extra
             + below_extra;
-        if (pitch - para_pitch).abs() > 0.01 {
+        if (pitch - para_pitch).abs() > 0.01
+            || (line.chunks.iter().any(|c| c.raise != 0.0) && (ascent - para_ascent).abs() > 0.01)
+        {
             line.pitch = Some(pitch);
             line.ascent_shift = ascent + above_extra - para_ascent;
         }

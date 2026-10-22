@@ -508,7 +508,7 @@ fn measure_header_height(
                 // Positioned runs and marks stretch their lines as in the render.
                 let line_h = line_h
                     + if is_text_empty(&para.runs) {
-                        super::mark_position_stretch(para, effective_ls, false)
+                        super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
                     } else {
                         position_stretch(&para.runs, effective_ls)
                     };
@@ -1455,7 +1455,7 @@ pub(super) fn render_header_footer(
 
                 if text_empty {
                     let mut advance = line_h
-                        + super::mark_position_stretch(para, effective_ls, false)
+                        + super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
                         + bottom_border_band(para);
                     // TopAndBottom textboxes push content below them
                     for tb in &para.textboxes {
