@@ -1042,6 +1042,24 @@ fn render_nested_table(
         TableAlignment::Left => available_x + table.table_indent,
     };
 
+    let table_left = if let Some(pos) = table
+        .position
+        .as_ref()
+        .filter(|p| p.h_anchor == "margin" && p.v_anchor == "text")
+    {
+        match pos.h_position {
+            crate::model::HorizontalPosition::AlignCenter => {
+                available_x + (available_w - table_total_w) / 2.0
+            }
+            crate::model::HorizontalPosition::AlignRight => {
+                available_x + available_w - table_total_w
+            }
+            _ => table_left,
+        }
+    } else {
+        table_left
+    };
+
     let merge_spans = compute_merge_spans(table, row_layouts);
 
     let mut tag = tagger.as_mut().map(|t| t.nested_table(table, chunk.item));
