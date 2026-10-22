@@ -6858,6 +6858,10 @@
     "a11y_struct": 0.9815,
     "a11y_text": 1.0
   },
+  "scraped/advocacy_initiative_newsletter_2013": {
+    "jaccard": 0.3092,
+    "ssim": 0.2863
+  },
   "scraped/air_pollution_permit_form": {
     "jaccard": 0.386,
     "ssim": 0.6403,
@@ -7133,6 +7137,10 @@
     "a11y_struct": 0.9803,
     "a11y_text": 0.9978
   },
+  "scraped/cote_dazur_phd_grants_call": {
+    "jaccard": 0.6829,
+    "ssim": 0.9172
+  },
   "scraped/covid_insomnia_mental_health": {
     "jaccard": 0.4735,
     "ssim": 0.7222,
@@ -7247,6 +7255,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "scraped/czech_maturita_oral_reading_list": {
+    "jaccard": 0.6754,
+    "ssim": 0.8574
+  },
   "scraped/czech_municipal_grant_form": {
     "jaccard": 0.7396,
     "ssim": 0.8972,
@@ -7280,7 +7292,7 @@
     "a11y_text": 1.0
   },
   "scraped/czech_wastewater_discharge_permit": {
-    "jaccard": 0.537,
+    "jaccard": 0.5928,
     "ssim": 0.8126,
     "text_boundary": 0.9451,
     "ua_fail": 2,
@@ -7458,6 +7470,10 @@
     "a11y_struct": 0.95,
     "a11y_text": 1.0
   },
+  "scraped/federal_design_services_letter_interest": {
+    "jaccard": 0.692,
+    "ssim": 0.9131
+  },
   "scraped/federal_procurement_terms": {
     "jaccard": 0.7176,
     "ssim": 0.9004,
@@ -7499,6 +7515,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.8049,
     "a11y_text": 1.0
+  },
+  "scraped/geneva_waste_facility_permit_request": {
+    "jaccard": 0.5555,
+    "ssim": 0.832
   },
   "scraped/german_mezzo_soprano_bio": {
     "jaccard": 0.7592,
@@ -7583,6 +7603,10 @@
     "a11y_struct": 0.9764,
     "a11y_text": 0.994
   },
+  "scraped/interview_question_guide": {
+    "jaccard": 0.8253,
+    "ssim": 0.9492
+  },
   "scraped/irish_school_enrollment_form": {
     "jaccard": 0.7388,
     "ssim": 0.8769,
@@ -7612,6 +7636,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.9632,
     "a11y_text": 0.7331
+  },
+  "scraped/italian_boat_hoist_association_notice": {
+    "jaccard": 0.8004,
+    "ssim": 0.9304
   },
   "scraped/italian_evaluation_minutes": {
     "jaccard": 0.7575,
@@ -7687,8 +7715,8 @@
     "a11y_text": 1.0
   },
   "scraped/learning_cultures_dissertation": {
-    "jaccard": 0.589,
-    "ssim": 0.7392,
+    "jaccard": 0.604,
+    "ssim": 0.7589,
     "text_boundary": 0.8192,
     "convert_ms": 1027.5,
     "ua_fail": 3,
@@ -7760,8 +7788,8 @@
     "a11y_text": 1.0
   },
   "scraped/maine_criminal_history_record": {
-    "jaccard": 0.3938,
-    "ssim": 0.51,
+    "jaccard": 0.401,
+    "ssim": 0.5184,
     "text_boundary": 0.4773,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -7820,6 +7848,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.9467,
     "a11y_text": 0.9806
+  },
+  "scraped/oahu_burial_council_minutes": {
+    "jaccard": 0.7474,
+    "ssim": 0.8885
   },
   "scraped/old_blue_truck_guitar_tabs": {
     "jaccard": 0.8309,
@@ -8018,6 +8050,10 @@
     "a11y_struct": 0.9717,
     "a11y_text": 1.0
   },
+  "scraped/romanian_candidate_declaration_form_f2": {
+    "jaccard": 0.3658,
+    "ssim": 0.9147
+  },
   "scraped/romanian_quality_evaluation_strategy": {
     "jaccard": 0.5924,
     "ssim": 0.7666,
@@ -8214,8 +8250,8 @@
     "a11y_text": 0.8876
   },
   "scraped/slovak_fuel_pricing_report": {
-    "jaccard": 0.7999,
-    "ssim": 0.9197,
+    "jaccard": 0.8027,
+    "ssim": 0.922,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -8347,6 +8383,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.9758,
     "a11y_text": 0.9381
+  },
+  "scraped/turkish_association_expulsion_precedent": {
+    "jaccard": 0.57,
+    "ssim": 0.7566
   },
   "scraped/turkish_chemistry_course_plan": {
     "jaccard": 0.6631,
