@@ -219,6 +219,15 @@ fn step_below_bands(
                 .filter_map(|tb| blocking_textbox_band(tb, sp, col, text_width, ctx)),
         );
     }
+    step_below_existing_bands(state, block, sp, ctx);
+}
+
+fn step_below_existing_bands(
+    state: &mut LayoutState,
+    block: &Block,
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+) {
     let top = sp.page_height - state.pb.slot_top;
     let Some(p) = leading_para(block) else { return };
     if state
@@ -5005,6 +5014,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                 }
 
+                let before_float_clearance = state.pb.slot_top;
                 let mut table_cleared_float = false;
                 // If a float zone is active, decide whether to wrap text beside
                 // the object or push it below.
@@ -5093,6 +5103,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                         // Otherwise leave zone active — paragraph layout adjusts width
                     }
+                }
+
+                // Clearing a floating table may move the first body line into
+                // a later frame band. Recheck the existing bands at that cursor.
+                if frame.is_none() && state.pb.slot_top != before_float_clearance {
+                    step_below_existing_bands(state, block, sp, &ctx);
                 }
 
                 match block {
