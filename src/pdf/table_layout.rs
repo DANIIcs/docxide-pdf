@@ -100,6 +100,60 @@ pub(super) fn apply_nested_pct_width(table: &Table, widths: &mut [f32], availabl
     }
 }
 
+/// A spacer column (every cell empty) keeps its written `tcW`: Word's
+/// AutoFit has no content to size it by (advocacy's 225-twip gutter beside
+/// a picture; content-fitting left it 4.5pt wide and the story 7.7pt left).
+fn spacer_widths(table: &Table) -> Vec<f32> {
+    let ncols = table.col_widths.len();
+    let mut pref = vec![0.0f32; ncols];
+    let mut empty = vec![true; ncols];
+    for row in &table.rows {
+        for (grid_col, span, cell) in row.grid_cells() {
+            if grid_col >= ncols || span > 1 {
+                continue;
+            }
+            let has_content = cell.content.iter().any(|b| match b {
+                Block::Table(_) => true,
+                Block::Paragraph(p) => {
+                    p.image.is_some()
+                        || p.runs.iter().any(|r| !r.text.trim().is_empty() || r.inline_image.is_some())
+                }
+            });
+            empty[grid_col] &= !has_content;
+            pref[grid_col] = pref[grid_col].max(cell.width);
+        }
+    }
+    (0..ncols).map(|i| if empty[i] { pref[i] } else { 0.0 }).collect()
+}
+
+/// Each grid column's widest picture plus its cell padding (nested tables
+/// excluded: they fit their column, case51).
+fn picture_widths(table: &Table) -> Vec<f32> {
+    let mut min = vec![0.0f32; table.col_widths.len()];
+    for row in &table.rows {
+        for (grid_col, span, cell) in row.grid_cells() {
+            if grid_col >= min.len() || span > 1 {
+                continue;
+            }
+            let pad = cell.cell_margins.as_ref().unwrap_or(&table.cell_margins);
+            let w = cell
+                .content
+                .iter()
+                .filter_map(|b| match b {
+                    Block::Paragraph(p) => Some(p),
+                    Block::Table(_) => None,
+                })
+                .flat_map(|p| p.image.iter().chain(p.runs.iter().filter_map(|r| r.inline_image.as_ref())))
+                .map(|i| i.layout_size().0)
+                .fold(0.0, f32::max);
+            if w > 0.0 {
+                min[grid_col] = min[grid_col].max(w + pad.left + pad.right);
+            }
+        }
+    }
+    min
+}
+
 /// Each grid column's widest nested table or picture plus its cell padding:
 /// content that never wraps narrower.
 fn hard_content_widths(table: &Table) -> Vec<f32> {
@@ -425,7 +479,13 @@ pub(super) fn auto_fit_columns(
     }
 
     let cm = &table.cell_margins;
-    let min_widths = min_content_widths(table, fonts);
+    // A picture never wraps: its column is at least that wide (advocacy's
+    // nested picture table collapsed to its padding, the picture clipped away).
+    let min_widths: Vec<f32> = min_content_widths(table, fonts)
+        .iter()
+        .zip(picture_widths(table))
+        .map(|(text, hard)| text.max(hard))
+        .collect();
 
     // Word's AutoFit (tblLayout=autofit, the default) ignores the stored
     // gridCol widths for a `tblW type="auto"` table and re-derives column
@@ -508,6 +568,7 @@ pub(super) fn auto_fit_columns(
         // below the full natural paragraph width. Scale down by 0.9 to
         // approximate Word's sizing, ensuring text wraps where Word wraps it.
         let min_cell = cm.left + cm.right;
+        let spacer = spacer_widths(table);
         let avail = available_width.unwrap_or(0.0);
         let preferred_total: f32 = table.col_widths.iter().sum();
         // When the nested table has an explicit tblInd and the gridCol
@@ -531,7 +592,7 @@ pub(super) fn auto_fit_columns(
                 // content). Only when it overflows does Word squeeze below
                 // natural width; the 0.9 factor approximates that squeeze.
                 let full: Vec<f32> = (0..ncols)
-                    .map(|i| natural_widths[i].max(min_widths[i].max(min_cell)))
+                    .map(|i| natural_widths[i].max(min_widths[i].max(min_cell)).max(spacer[i]))
                     .collect();
                 if full.iter().sum::<f32>() <= avail {
                     full
@@ -1238,6 +1299,19 @@ pub(super) fn compute_row_layouts(
                                         left_edge + fi.image.display_width + fi.dist_right
                                     })
                                     .fold(0.0f32, f32::max);
+                                // Text beside a left floating nested table keeps
+                                // clear of it, as beside a wrapping picture.
+                                // ponytail: the whole paragraph is indented, not
+                                // only its lines level with the table.
+                                let float_indent_left = if left_float_right_gap.is_finite()
+                                    && left_float_right_gap >= MIN_NESTED_FLOAT_STRIP
+                                    && total_h < left_float_bottom
+                                    && !is_text_empty(runs)
+                                {
+                                    float_indent_left.max(cell_text_w - left_float_right_gap)
+                                } else {
+                                    float_indent_left
+                                };
 
                                 // An inline-image paragraph whose only other run
                                 // is a trailing line break (Word's logo-in-cell
@@ -1546,8 +1620,23 @@ pub(super) fn compute_row_layouts(
                                         && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
                                         && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty()
                                 };
+                                // A left float leaving a text strip of at least
+                                // MIN_NESTED_FLOAT_STRIP beside it may be followed by
+                                // text: the text flows beside it (advocacy's picture
+                                // tables with their stories to the right).
+                                // Only for a cell's sole table: a later nested table
+                                // cannot flow beside it and drops below (nested-floats-
+                                // spaced-text-inline-reference), and under an earlier
+                                // float Word stacks it instead (nonzero-x).
+                                let beside_strip = top_aligned
+                                    && cell.content.iter().enumerate().all(|(i, b)| i == block_idx || matches!(b, Block::Paragraph(_)))
+                                    && nested_table.position.as_ref().is_some_and(|p| {
+                                        matches!(p.h_position, HorizontalPosition::Offset(v) if v == 0.0)
+                                            && cell_text_w - nested_cw.iter().sum::<f32>() - p.right_from_text
+                                                >= MIN_NESTED_FLOAT_STRIP
+                                    });
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
+                                    .filter(|pos| pos.v_anchor == "text" && (nested_table.rows.len() == 1 || beside_strip) && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
@@ -1560,7 +1649,7 @@ pub(super) fn compute_row_layouts(
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
-                                        }) || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
+                                        }) || beside_strip || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
@@ -1569,7 +1658,7 @@ pub(super) fn compute_row_layouts(
                                 let space_before = prev_space_after;
                                 let mut floating_x_offset = None;
                                 let auto_left_float = nested_table.position.as_ref().is_some_and(|p|
-                                    p.h_anchor == "margin" && matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if v == 0.0))
+                                    (p.h_anchor == "margin" || p.h_anchor == "column") && matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if v == 0.0))
                                     && nested_table.alignment == crate::model::TableAlignment::Left
                                     && nested_table.table_indent == 0.0;
                                 if auto_left_float && let Some(offset) = floating_offset {

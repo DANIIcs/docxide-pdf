@@ -493,6 +493,19 @@ fn render_cell_content(
                 let para_top = cursor_y;
                 if !para_has_visible_content(para) && !para.has_textboxes && !para.has_connectors {
                     cursor_y -= para.space_before + para_block_height(para);
+                    // A VML horizontal rule (o:hr) rides an otherwise empty
+                    // paragraph, in cells as in the body (advocacy's story
+                    // separators).
+                    if let Some((sp, hr)) = source_para.and_then(|p| p.horizontal_rule.as_ref().map(|hr| (p, hr))) {
+                        super::helpers::draw_horizontal_rule(
+                            content,
+                            sp,
+                            hr,
+                            cell_x + cm.left,
+                            col_w - cm.left - cm.right,
+                            cursor_y,
+                        );
+                    }
                     end_cell_tag(content, &tagger);
                     continue;
                 }
