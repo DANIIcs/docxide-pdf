@@ -1648,7 +1648,8 @@ pub(super) fn compute_row_layouts(
                                 let space_before = prev_space_after;
                                 let mut floating_x_offset = None;
                                 let auto_left_float = nested_table.position.as_ref().is_some_and(|p|
-                                    (p.h_anchor == "margin" || (p.h_anchor == "column" && plain_side_text)) && matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if v == 0.0))
+                                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if (p.h_anchor == "margin" && v <= 0.0 && v + nested_cw.iter().sum::<f32>() > 0.0)
+                                        || (p.h_anchor == "column" && plain_side_text && v == 0.0)))
                                     && nested_table.alignment == crate::model::TableAlignment::Left
                                     && nested_table.table_indent == 0.0;
                                 if auto_left_float && let Some(offset) = floating_offset {
@@ -1665,7 +1666,8 @@ pub(super) fn compute_row_layouts(
                                         left_float_top = total_h + space_before + offset;
                                         left_float_indent = if plain_side_text { nested_cw.iter().sum::<f32>() + nested_table.position.as_ref().unwrap().right_from_text } else { 0.0 };
                                         first_positive_float = block_idx == 0 && nested_table.position.as_ref().is_some_and(|p| p.v_offset_pt >= 0.0);
-                                        left_float_right_gap = cell_text_w - nested_cw.iter().sum::<f32>()
+                                        let float_x = match nested_table.position.as_ref().unwrap().h_position { crate::model::HorizontalPosition::Offset(x) => x, _ => 0.0 };
+                                        left_float_right_gap = cell_text_w - float_x - nested_cw.iter().sum::<f32>()
                                             - nested_table.position.as_ref().unwrap().right_from_text;
                                     }
                                 } else {
