@@ -1085,6 +1085,90 @@ fn plain_text_fits_nested_strip(
     text_w <= strip
 }
 
+// A single cell heading can precede positive-offset floating tables even
+// when the tables are serialized before its anchor paragraph.
+fn text_fits_above_nested_floats(
+    cell: &crate::model::TableCell,
+    cell_text_w: f32,
+    fonts: &HashMap<String, FontEntry>,
+    doc_line_spacing: crate::model::LineSpacing,
+    hf_sub: Option<&HfSubstitution>,
+) -> bool {
+    if hf_sub.is_some()
+        || cell.text_direction != TextDirection::LrTb
+        || !matches!(cell.v_align, crate::model::CellVAlign::Top)
+    {
+        return false;
+    }
+    let Some((Block::Paragraph(p), prefix)) = cell.content.split_last() else {
+        return false;
+    };
+    if prefix.is_empty()
+        || p.frame_props.is_some()
+        || p.list_item.is_some()
+        || p.image.is_some()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || !p.runs.iter().any(|r| !r.text.trim().is_empty())
+        || p.runs.iter().any(|r| {
+            r.is_tab
+                || r.is_line_break
+                || r.inline_image.is_some()
+                || r.field_code.is_some()
+                || r.math.is_some()
+                || r.vanish
+        })
+    {
+        return false;
+    }
+    let mut first_top = f32::INFINITY;
+    for block in prefix {
+        let Block::Table(t) = block else {
+            return false;
+        };
+        let Some(pos) = &t.position else {
+            return false;
+        };
+        if t.rows.len() != 1
+            || pos.v_anchor != "text"
+            || pos.h_anchor != "margin"
+            || pos.v_offset_pt <= 0.0
+            || t.table_indent != 0.0
+            || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
+            || t.alignment != crate::model::TableAlignment::Left
+        {
+            return false;
+        }
+        first_top = first_top.min(pos.v_offset_pt - pos.top_from_text);
+    }
+    let mut width = p.indent_left + p.indent_right + p.indent_first_line.max(0.0);
+    let mut key = String::new();
+    for run in &p.runs {
+        let Some(font) = fonts.get(font_key_buf(run, &mut key)) else {
+            return false;
+        };
+        let text = if run.caps {
+            std::borrow::Cow::Owned(run.text.to_uppercase())
+        } else {
+            std::borrow::Cow::Borrowed(run.text.as_str())
+        };
+        width += word_width_for_run(
+            font,
+            run,
+            &text,
+            run.font_size,
+            run.kerns_at(run.font_size),
+            0.0,
+            1.0,
+        );
+    }
+    let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, fonts);
+    let height = p.space_before.max(0.0)
+        + resolve_line_h(p.line_spacing.unwrap_or(doc_line_spacing), fs, lhr)
+        + p.space_after.max(0.0);
+    width <= cell_text_w && height <= first_top
+}
+
 pub(super) fn compute_row_layouts(
     table: &Table,
     col_widths: &[f32],
@@ -1761,6 +1845,7 @@ pub(super) fn compute_row_layouts(
                                         }) || plain_side_text
                                             || (top_aligned && (spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)
                                                 || interleaved_spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)))
+                                            || text_fits_above_nested_floats(cell, cell_text_w, ctx.fonts, ctx.doc_line_spacing, hf_sub)
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
@@ -2374,6 +2459,44 @@ pub(super) fn find_cell_split(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_above_float_requires_both_horizontal_and_vertical_room() {
+        let mut doc = crate::docx::parse_bytes(include_bytes!(
+            "../../tests/fixtures/cases/cell-text-above-floats-y1200-n1-long0/input.docx"
+        ))
+        .unwrap();
+        let Block::Table(table) = &mut doc.sections[0].blocks[0] else {
+            panic!("outer table");
+        };
+        let cell = &mut table.rows[0].cells[0];
+        let fonts = HashMap::from([("Times New Roman".into(), FontEntry::stub())]);
+        let fits = |cell: &crate::model::TableCell, width| {
+            text_fits_above_nested_floats(
+                cell,
+                width,
+                &fonts,
+                crate::model::LineSpacing::Auto(1.0),
+                None,
+            )
+        };
+        assert!(fits(cell, 230.0));
+        assert!(!fits(cell, 10.0));
+        let Block::Table(float) = &mut cell.content[0] else {
+            panic!("float");
+        };
+        float.position.as_mut().unwrap().v_offset_pt = 1.0;
+        assert!(!fits(cell, 230.0));
+        let Block::Table(float) = &mut cell.content[0] else {
+            unreachable!();
+        };
+        float.position.as_mut().unwrap().v_offset_pt = 60.0;
+        let Some(Block::Paragraph(heading)) = cell.content.last_mut() else {
+            panic!("heading");
+        };
+        heading.runs[0].is_line_break = true;
+        assert!(!fits(cell, 230.0));
+    }
 
     #[test]
     fn natural_width_includes_merged_cell_text() {
