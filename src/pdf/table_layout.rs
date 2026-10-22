@@ -2129,11 +2129,14 @@ pub(super) fn chunk_space_before(item: &CellContentItem, pi: usize, start: &Cell
 }
 
 /// Where the cell content from `start` must break to fit `available_h`.
-/// Word breaks a row's paragraph between lines, keeping two lines on each
-/// side (widow control; annotation #237: a 10-line cell paragraph moved whole
-/// to the next page, leaving 90pt of the row empty). A paragraph that cannot
-/// split that way moves whole. Always progresses by at least one item.
-/// ponytail: widowControl is assumed on, not read from the paragraph.
+/// Word breaks a row's paragraph between lines. In Word 2013+ layout
+/// (compatibilityMode 15) two lines stay on each side (strategi, italian,
+/// carbon_farming: two-line cell paragraphs move whole; croatian's three-
+/// line one leaves no single line above the footer). In Word 2010 layout
+/// (mode 14) a row starts with as many lines as fit, one included, and one
+/// may follow alone (Word online probes 2026-10-22 with 1-3 lines of room,
+/// widowControl set or absent; advocacy's two-line heading splits 1/1).
+/// A keepLines paragraph moves whole. Always progresses by at least one item.
 pub(super) fn find_cell_split(
     cell: &CellLayout,
     start: &CellCursor,
@@ -2213,8 +2216,11 @@ pub(super) fn find_cell_split(
                     used <= available_h
                 })
                 .count();
-            let fit = room.min(remaining.saturating_sub(2));
-            if fit >= 2 {
+            // ponytail: the one-line start is only taken where the row itself
+            // starts (the probes' case); later paragraphs keep two lines.
+            let keep = if pi == 0 && *start == CELL_START { p.widow_lines.max(1) } else { 2 };
+            let fit = room.min(remaining.saturating_sub(keep));
+            if fit >= keep && !p.keep_lines {
                 return CellCursor::at(pi, l0 + fit);
             }
         }

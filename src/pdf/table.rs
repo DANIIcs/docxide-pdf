@@ -2147,27 +2147,31 @@ pub(super) fn render_table(
         // trHeight (exact or atLeast) never breaks in Word; it migrates whole
         // (arizona_physical / traditional_skills vs isla / master_thesis).
         // A cell must have somewhere to break — several items, or a paragraph
-        // long enough to leave two lines on each side — for the split to
+        // of two lines or more (one may stay, one may follow) — for the split to
         // produce anything, and every cell's first chunk must genuinely fit
         // in the remaining space (otherwise find_cell_split's force-included
         // first item would overflow the footer and the row migrates whole
         // instead).
+        // Word 2013+ layout keeps two lines of a paragraph on each side of a
+        // row break, Word 2010 layout one (`find_cell_split`).
+        let widow = if ctx.compat_mode >= 15 { 2 } else { 1 };
         let any_cell_multi_item = layout.cells.iter().any(|c| {
             c.items.len() > 1
                 || c.items.iter().any(|it| match it {
-                    CellContentItem::Paragraph(p) => p.lines.len() >= 4,
+                    CellContentItem::Paragraph(p) => p.lines.len() >= 2 * widow && !p.keep_lines,
                     CellContentItem::NestedTable { rows, .. } => {
                         rows.len() >= 2 || rows.iter().any(|r| r.split_min.is_some())
                     }
                 })
         });
         // Whether every cell's first chunk fits in the room left: its first
-        // paragraph (two lines of a long one) or first nested row, with the
-        // opening space before that find_cell_split charges.
-        let first_chunks_fit = layout.cells.iter().all(|c| {
+        // paragraph (`chunk` lines of one at least `long_min` lines long) or
+        // first nested row, with the opening space before that
+        // find_cell_split charges.
+        let first_chunks_fit_with = |long_min: usize, chunk: usize| layout.cells.iter().all(|c| {
             c.items.first().is_none_or(|it| {
                 let end = match it {
-                    CellContentItem::Paragraph(p) if p.lines.len() >= 4 => Some(2),
+                    CellContentItem::Paragraph(p) if p.lines.len() >= long_min && !p.keep_lines => Some(chunk),
                     CellContentItem::Paragraph(_) => None,
                     CellContentItem::NestedTable { .. } => Some(1),
                 };
@@ -2187,6 +2191,14 @@ pub(super) fn render_table(
                     <= available_h
             })
         });
+        // A row taller than the page keeps the two-line start in either mode
+        // (croatian_grant's 776pt row waits for the next page rather than put
+        // one line in the 21.8pt above a footnote).
+        let first_chunks_fit = if widow == 2 || row_h > page_content_h {
+            first_chunks_fit_with(4, 2)
+        } else {
+            first_chunks_fit_with(2, 1)
+        };
         // A nested table may split within its first row. Requiring that whole
         // row above would reject a fitting first paragraph and move the outer
         // row early. Use the same recursive cursors as the actual split, and
