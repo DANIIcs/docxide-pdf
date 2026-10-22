@@ -3189,7 +3189,7 @@ fn render_paragraph_block(
             }
         }
     }
-    let para_metrics = (
+    let mut para_metrics = (
         para_ascent,
         if max_inline_img_h > 0.0 {
             picture_line_bottom(&effective_runs, para, ctx.fonts, effective_ls)
@@ -3197,6 +3197,21 @@ fn render_paragraph_block(
             0.0
         },
     );
+
+    // Legacy Word puts the mark's extra automatic leading only after the
+    // last picture line. Modern Word adds it after every picture line.
+    let legacy_picture_leading = if ctx.compat_mode < 15
+        && max_inline_img_h > 0.0
+        && matches!(effective_ls, LineSpacing::Auto(factor) if factor > 1.0)
+        && !effective_runs.is_empty()
+        && effective_runs
+            .iter()
+            .all(|r| r.vanish || r.inline_image.is_some())
+    {
+        std::mem::replace(&mut para_metrics.1, 0.0)
+    } else {
+        0.0
+    };
 
     // One line of the mark's font at single spacing: a picture-only line's
     // baseline below its top (and the base its leading is measured from).
@@ -3316,6 +3331,14 @@ fn render_paragraph_block(
             h
         }
     };
+
+    if legacy_picture_leading > 0.0
+        && lines
+            .last()
+            .is_some_and(|line| line_max_image_h(line) > para_ascent)
+    {
+        content_h += legacy_picture_leading;
+    }
 
     // A tall inline picture on the first line lowers that line's baseline; the
     // list label sits on the lowered one (render_paragraph_lines drops the text
