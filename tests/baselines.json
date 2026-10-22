@@ -3111,6 +3111,126 @@
     "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
+  "cases/continuous-context-after-same0-ctx0": {
+    "jaccard": 0.795,
+    "ssim": 0.9746,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-after-same0-ctx1": {
+    "jaccard": 0.795,
+    "ssim": 0.9746,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-after-same1-ctx0": {
+    "jaccard": 0.795,
+    "ssim": 0.9746,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-after-same1-ctx1": {
+    "jaccard": 0.795,
+    "ssim": 0.9753,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame0-same0-ctx0": {
+    "jaccard": 0.795,
+    "ssim": 0.9746,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame0-same0-ctx1": {
+    "jaccard": 0.795,
+    "ssim": 0.9746,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame0-same1-ctx0": {
+    "jaccard": 0.795,
+    "ssim": 0.9746,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame0-same1-ctx1": {
+    "jaccard": 0.795,
+    "ssim": 0.9753,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame1-same0-ctx0": {
+    "jaccard": 0.7392,
+    "ssim": 0.9846,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame1-same0-ctx1": {
+    "jaccard": 0.7392,
+    "ssim": 0.9846,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame1-same1-ctx0": {
+    "jaccard": 0.7392,
+    "ssim": 0.9846,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/continuous-context-frame1-same1-ctx1": {
+    "jaccard": 0.7392,
+    "ssim": 0.9846,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/displaced-anchor-narrow-compat12-overlap0-offset0": {
     "jaccard": 0.7749,
     "ssim": 0.9389,
@@ -4831,6 +4951,56 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/negative-x-nested-x-142-y-33-w4820-n0": {
+    "jaccard": 0.9167,
+    "ssim": 0.9664,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6429,
+    "a11y_text": 1.0
+  },
+  "cases/negative-x-nested-x-142-y-33-w4820-n4": {
+    "jaccard": 0.9167,
+    "ssim": 0.965,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5556,
+    "a11y_text": 1.0
+  },
+  "cases/negative-x-nested-x-142-y1-w4820-n4": {
+    "jaccard": 0.7509,
+    "ssim": 0.9633,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7222,
+    "a11y_text": 1.0
+  },
+  "cases/negative-x-nested-x0-y-33-w4820-n4": {
+    "jaccard": 0.9167,
+    "ssim": 0.965,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5556,
+    "a11y_text": 1.0
+  },
+  "cases/negative-x-nested-x142-y-33-w4820-n0": {
+    "jaccard": 0.5593,
+    "ssim": 0.7006,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4286,
+    "a11y_text": 1.0
+  },
   "cases/nested-adjacent-expanded-anchor": {
     "jaccard": 0.8846,
     "ssim": 0.9513,
@@ -4859,6 +5029,86 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.6087,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-modern-y-33-n1": {
+    "jaccard": 0.9167,
+    "ssim": 0.9664,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4286,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-modern-y363-n2": {
+    "jaccard": 0.9167,
+    "ssim": 0.9615,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-spaces1-y1": {
+    "jaccard": 0.9167,
+    "ssim": 0.9646,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6429,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-spaces10-y363": {
+    "jaccard": 0.9167,
+    "ssim": 0.9611,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6429,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-w5100-y1-h400-n1": {
+    "jaccard": 0.9167,
+    "ssim": 0.9664,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6429,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-w5100-y1-h400-n2": {
+    "jaccard": 0.9167,
+    "ssim": 0.9616,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4667,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-w5100-y363-h400-n2": {
+    "jaccard": 0.9167,
+    "ssim": 0.9615,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4667,
+    "a11y_text": 1.0
+  },
+  "cases/nested-final-mark-w5100-y363-h800-n1": {
+    "jaccard": 0.726,
+    "ssim": 0.9621,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6429,
     "a11y_text": 1.0
   },
   "cases/nested-first-row-prefix300-cant0": {
@@ -5239,6 +5489,66 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.5833,
+    "a11y_text": 1.0
+  },
+  "cases/picture-mark-leading-compat14-line480": {
+    "jaccard": 0.7946,
+    "ssim": 0.5959,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/picture-mark-leading-compat15-line480": {
+    "jaccard": 0.7944,
+    "ssim": 0.6716,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/picture-mark-leading-mark22-line360-text0": {
+    "jaccard": 0.7946,
+    "ssim": 0.5987,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/picture-mark-leading-mark28-line480-text0": {
+    "jaccard": 0.7946,
+    "ssim": 0.5959,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/picture-mark-leading-same-line-line480": {
+    "jaccard": 0.7693,
+    "ssim": 0.7742,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/picture-mark-leading-three-lines-line480": {
+    "jaccard": 0.7933,
+    "ssim": 0.6127,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
   "cases/picture-padding-mixed": {
@@ -6259,6 +6569,86 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s20-h200-y0": {
+    "jaccard": 0.6409,
+    "ssim": 0.8219,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s20-h400-y0": {
+    "jaccard": 0.6409,
+    "ssim": 0.8121,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s20-h400-y1": {
+    "jaccard": 0.5685,
+    "ssim": 0.8121,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s28-h400-y0": {
+    "jaccard": 0.6263,
+    "ssim": 0.8087,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s28-h400-y1": {
+    "jaccard": 0.6909,
+    "ssim": 0.809,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s28-h600-y0": {
+    "jaccard": 0.6263,
+    "ssim": 0.8218,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s28-h600-y1": {
+    "jaccard": 0.6909,
+    "ssim": 0.8221,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/trailing-table-clear-s28-h800-y1": {
+    "jaccard": 0.6909,
+    "ssim": 0.8127,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
   "cases/vml-front-rule-over-background": {

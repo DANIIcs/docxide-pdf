@@ -1031,6 +1031,42 @@
     "42034a93bb4ed7752c64a4bc8467011ffe285034cf0261f5a3518a329d18a4d7",
     "0d55d3cbbfd4141a3977b57851f8ccdbac12b0a4faf355f5d05351d0b53fc7c5"
   ],
+  "cases/continuous-context-after-same0-ctx0": [
+    "2902265ba291437043ab2a0d7e2a7454ef8f02344444711fedd2d31ea1a3f764"
+  ],
+  "cases/continuous-context-after-same0-ctx1": [
+    "2902265ba291437043ab2a0d7e2a7454ef8f02344444711fedd2d31ea1a3f764"
+  ],
+  "cases/continuous-context-after-same1-ctx0": [
+    "2902265ba291437043ab2a0d7e2a7454ef8f02344444711fedd2d31ea1a3f764"
+  ],
+  "cases/continuous-context-after-same1-ctx1": [
+    "7dd17546f38c0d25434779581e16fdbab30164142dadc7ebdc6e59a94e0df6ae"
+  ],
+  "cases/continuous-context-frame0-same0-ctx0": [
+    "2902265ba291437043ab2a0d7e2a7454ef8f02344444711fedd2d31ea1a3f764"
+  ],
+  "cases/continuous-context-frame0-same0-ctx1": [
+    "2902265ba291437043ab2a0d7e2a7454ef8f02344444711fedd2d31ea1a3f764"
+  ],
+  "cases/continuous-context-frame0-same1-ctx0": [
+    "2902265ba291437043ab2a0d7e2a7454ef8f02344444711fedd2d31ea1a3f764"
+  ],
+  "cases/continuous-context-frame0-same1-ctx1": [
+    "7dd17546f38c0d25434779581e16fdbab30164142dadc7ebdc6e59a94e0df6ae"
+  ],
+  "cases/continuous-context-frame1-same0-ctx0": [
+    "d8d131fc118a5fc37dbc9e7c0cb06e9297f549c84e3296f87096631624b9b039"
+  ],
+  "cases/continuous-context-frame1-same0-ctx1": [
+    "d8d131fc118a5fc37dbc9e7c0cb06e9297f549c84e3296f87096631624b9b039"
+  ],
+  "cases/continuous-context-frame1-same1-ctx0": [
+    "d8d131fc118a5fc37dbc9e7c0cb06e9297f549c84e3296f87096631624b9b039"
+  ],
+  "cases/continuous-context-frame1-same1-ctx1": [
+    "b37707dc8b4d8ab984579d1b7a1e405aec9dc105aeecd2aa8ae4f9a102d9d600"
+  ],
   "cases/displaced-anchor-narrow-compat12-overlap0-offset0": [
     "676a98f137dbe08a69733e11c2aadbe08c9010a538ea0618eae686d095bcc529"
   ],
@@ -1565,6 +1601,21 @@
   "cases/nbsp-space-split-runs": [
     "d73efe864bf809f3723d6c96f8a69cb2b8cc95c1e8181cbfe81123f6ed2b8f1b"
   ],
+  "cases/negative-x-nested-x-142-y-33-w4820-n0": [
+    "f84f87b79688cfbc94ac93816f552c93f1b1e00aa80f5300c57463419c3c4dc3"
+  ],
+  "cases/negative-x-nested-x-142-y-33-w4820-n4": [
+    "8db85cc37444d6d6960cc0de301d22092304637cdd91fb427a5391c4ccbc3e3c"
+  ],
+  "cases/negative-x-nested-x-142-y1-w4820-n4": [
+    "b2b879e8d752c9696580e72d8f70d3416d6cb8012e1329c0e196a569c71a0726"
+  ],
+  "cases/negative-x-nested-x0-y-33-w4820-n4": [
+    "8db85cc37444d6d6960cc0de301d22092304637cdd91fb427a5391c4ccbc3e3c"
+  ],
+  "cases/negative-x-nested-x142-y-33-w4820-n0": [
+    "f84f87b79688cfbc94ac93816f552c93f1b1e00aa80f5300c57463419c3c4dc3"
+  ],
   "cases/nested-adjacent-expanded-anchor": [
     "5276f01a875f9da8095cc1bb2fe7ad579ced3c60aad447bf8753bf726981e8e7"
   ],
@@ -1573,6 +1624,30 @@
   ],
   "cases/nested-adjacent-negative-positive": [
     "09d1b6840f2d6252e025dd65263c331055da1af8bf6a31d3b5ac5eeb9448e232"
+  ],
+  "cases/nested-final-mark-modern-y-33-n1": [
+    "f84f87b79688cfbc94ac93816f552c93f1b1e00aa80f5300c57463419c3c4dc3"
+  ],
+  "cases/nested-final-mark-modern-y363-n2": [
+    "97b6eb1786a2719e9a36224a4f4e5b26d674b0a89cae445c4801b8d8ad476bed"
+  ],
+  "cases/nested-final-mark-spaces1-y1": [
+    "5c09ee08f04d9a82179a7046d0e27a707876c9e2053ee88c805d6378180fb324"
+  ],
+  "cases/nested-final-mark-spaces10-y363": [
+    "42c590422cb654e99cc0289862b91802da2d3784d5eb2d62d1e15c343e1acc40"
+  ],
+  "cases/nested-final-mark-w5100-y1-h400-n1": [
+    "f84f87b79688cfbc94ac93816f552c93f1b1e00aa80f5300c57463419c3c4dc3"
+  ],
+  "cases/nested-final-mark-w5100-y1-h400-n2": [
+    "3dac53ed37639dfaa4f5719f0c058a08a8e2217181f4d7c14d0c3cf07fd9a096"
+  ],
+  "cases/nested-final-mark-w5100-y363-h400-n2": [
+    "97b6eb1786a2719e9a36224a4f4e5b26d674b0a89cae445c4801b8d8ad476bed"
+  ],
+  "cases/nested-final-mark-w5100-y363-h800-n1": [
+    "855f95e4abaf053d50b5fa6202d99b3a2947b461e94cafeddc48848a002b144d"
   ],
   "cases/nested-first-row-prefix300-cant0": [
     "248678541d4a2ca3ea254fc02e54febf6169f0e23b33a5f7b94562fa109f349b",
@@ -1691,6 +1766,24 @@
   ],
   "cases/paragraph-offset-frame-no-frame": [
     "79c9b739fd62d0e7cf85dbf6e637a14d2b41bf2518d5a5013b798b1247cbb368"
+  ],
+  "cases/picture-mark-leading-compat14-line480": [
+    "d4e7a23d167ab4fb43d4fe9d92ce6dba8fec6a37e69f8c08f0b6cf87d04e215f"
+  ],
+  "cases/picture-mark-leading-compat15-line480": [
+    "cdccee49c3251dc9f22eb6a94c242e12b242fec8f1f5e11c1d5fb983896ad3c3"
+  ],
+  "cases/picture-mark-leading-mark22-line360-text0": [
+    "a61a18becffb1d64167d736f8f6ef3351d4d5ac33490c0abb201f5e79424290d"
+  ],
+  "cases/picture-mark-leading-mark28-line480-text0": [
+    "d4e7a23d167ab4fb43d4fe9d92ce6dba8fec6a37e69f8c08f0b6cf87d04e215f"
+  ],
+  "cases/picture-mark-leading-same-line-line480": [
+    "4a6d7198bffeb6d48d7c98fed429f19ff6bf049eae6c72574b0e371918ea32af"
+  ],
+  "cases/picture-mark-leading-three-lines-line480": [
+    "62b4cb1181f619c7e80534ef5f1f396005096fe38c0c37b708cee63bc33a79f5"
   ],
   "cases/picture-padding-mixed": [
     "acce985fb957c62e209845a8d59ae694a9a08361c191c410fae789830fd4af8a"
@@ -2003,6 +2096,30 @@
   "cases/trailing-anchor-prefix330-offset80-behind1": [
     "e49bcf580b797eb56a4b1446a2f2ee0bb58358d5c5860b3eec4d8891971f03e0",
     "f75d5a73ea24c6ee736001d44781c394ddd85a0422ae3bfe2a91f82221717928"
+  ],
+  "cases/trailing-table-clear-s20-h200-y0": [
+    "5f20a1a506632fdd6a4e80f2bb52507a59768cb5d330b2205b923c4bdc47deda"
+  ],
+  "cases/trailing-table-clear-s20-h400-y0": [
+    "ea6e49c3c3d8a9728e78d3b6e88b6e498f5c9ee9f4a7fa95003a519432dfad75"
+  ],
+  "cases/trailing-table-clear-s20-h400-y1": [
+    "3ca0c8ed5fd7cfea243191a7aecba82d1ce50ab43d40e254d47fa610f6099c2c"
+  ],
+  "cases/trailing-table-clear-s28-h400-y0": [
+    "2e08b64b13ec259bf420d52697725a8ab1fb7edace08f20409a4f15667cd2021"
+  ],
+  "cases/trailing-table-clear-s28-h400-y1": [
+    "2e08b64b13ec259bf420d52697725a8ab1fb7edace08f20409a4f15667cd2021"
+  ],
+  "cases/trailing-table-clear-s28-h600-y0": [
+    "7b6bf70675c9cf3726d61d8899d7c36bc03c03d3d31045ef38cf73aefb84104e"
+  ],
+  "cases/trailing-table-clear-s28-h600-y1": [
+    "7b6bf70675c9cf3726d61d8899d7c36bc03c03d3d31045ef38cf73aefb84104e"
+  ],
+  "cases/trailing-table-clear-s28-h800-y1": [
+    "10cb175d46d8670a6d33583690535d324744ba1c75f19b3a94b580ca8d07eadb"
   ],
   "cases/vml-front-rule-over-background": [
     "8e4421b2b727605f24a141c2e2d3f38bea955a2f2c4f4891fad6f03d4a39c1ba"
