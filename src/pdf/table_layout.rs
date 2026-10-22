@@ -203,6 +203,7 @@ pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize
 /// gridCol preferred widths.
 /// Per-column natural (unwrapped, single-line) content width including cell
 /// horizontal padding. This is the "max" width input to Word's AutoFit.
+/// Columns holding nested tables are raised to fit them.
 fn natural_widths(
     table: &Table,
     fonts: &HashMap<String, FontEntry>,
@@ -253,6 +254,7 @@ fn natural_widths(
             }
         }
     }
+    raise_natural_for_nested_tables(table, fonts, cm, &mut natural);
     natural
 }
 
@@ -277,8 +279,7 @@ fn raise_natural_for_nested_tables(
             for block in &cell.content {
                 if let Block::Table(nt) = block {
                     let ncm = &nt.cell_margins;
-                    let mut nat = natural_widths(nt, fonts, ncm);
-                    raise_natural_for_nested_tables(nt, fonts, ncm, &mut nat);
+                    let nat = natural_widths(nt, fonts, ncm);
                     let min_cell = ncm.left + ncm.right;
                     let w: f32 = nat.iter().map(|&x| x.max(min_cell)).sum();
                     natural[grid_col] = natural[grid_col].max(w + h_pad);
@@ -497,8 +498,7 @@ pub(super) fn auto_fit_columns(
         && has_nested_table
         && let Some(avail) = fill_width.filter(|a| *a > 0.0)
     {
-        let mut natural = natural_widths(table, fonts, cm);
-        raise_natural_for_nested_tables(table, fonts, cm, &mut natural);
+        let natural = natural_widths(table, fonts, cm);
         let min_cell = cm.left + cm.right;
         let maxw: Vec<f32> = (0..ncols)
             .map(|i| natural[i].max(min_widths[i]).max(min_cell))
@@ -539,8 +539,7 @@ pub(super) fn auto_fit_columns(
     }
 
     if available_width.is_some() && !table.fixed_layout {
-        let mut natural_widths = natural_widths(table, fonts, cm);
-        raise_natural_for_nested_tables(table, fonts, cm, &mut natural_widths);
+        let natural_widths = natural_widths(table, fonts, cm);
         // Word's auto-fit for nested tables produces column widths slightly
         // below the full natural paragraph width. Scale down by 0.9 to
         // approximate Word's sizing, ensuring text wraps where Word wraps it.
