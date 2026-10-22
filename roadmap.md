@@ -23,21 +23,33 @@ derived from the five weakest and verified on the suite (snapshots
   VML horizontal rules draw inside cells (advocacy_initiative 31.3 -> 32.8,
   visually most of the way).
 
+Second pass (same day, `new10-fix4`, scraped mean 65.2 -> 65.9, nothing
+else moved):
+
+- Fields spanning paragraphs: the open field stack is carried from one
+  paragraph to the next (`ParseContext::fields`); paragraphs whose mark lies
+  inside a field's code are merged into the next one, as Word hides them
+  (geneva_waste's IF/REF letterhead lays out two lines, not six).
+- Text beside a nested floating table is wrapped per line: lines level with
+  the table take the strip, the rest the full width (`beside_lines`).
+- An HTML rule alone in a hideMark cell keeps Word's 5.25pt line
+  (advocacy's separators; one measurement, see `HR_CELL_LINE_H`).
+- Row splits: Word online probes (`tests/output/probe_widow`) show no widow
+  control inside table cells in compatibilityMode 14 (a row starts with as
+  many lines as fit, one included), while mode 15 keeps two lines each side
+  (strategi, italian_evaluation, carbon_farming, croatian). Body paragraphs
+  keep widow control even when no style sets it. advocacy 32.8 -> 36.7
+  (its heading splits 1/1 like Word), geneva 55.4 -> 55.6.
+
 Still open on these fixtures:
 
-- **advocacy_initiative_newsletter_2013 (32.8)**: Word splits the two-line
-  story heading 1/1 at the page bottom; the document's styles never set
-  `widowControl` (our default is on; ~100 fixtures lack it too, so probe
-  Word before flipping the default). Text beside a nested float is indented
-  as a whole paragraph; Word wraps per line (short-spacers shows "Public"
-  beside, "visible topic" below). Our standard `o:hr` draws 1.5pt, Word 0.75.
-- **geneva_waste (55.4)**: page 1 has an IF/REF field whose code spans six
-  paragraphs; Word hides the paragraphs lying wholly inside the field code
-  (and the marks ending inside it), we render them as empty lines (41pt).
-  Needs cross-paragraph field state in `docx/runs.rs`.
+- **advocacy_initiative_newsletter_2013 (36.7)**: our nested picture table
+  is 1.4pt narrower than Word's grid, so the stories wrap a word earlier or
+  later and pages 2-3 end 24pt off; the standard `o:hr` draws 1.5pt, Word 0.5.
 - **romanian_candidate_declaration_form_f2 (36.6, SSIM 91.5)**: layout is
   right to within 0.3pt; thin borders drift 0.1-0.3pt per row and miss the
-  reference pixels. A rounding study, not a rule.
+  reference pixels. Word quantizes baselines to a 0.25pt grid (memory
+  `line_height_grid`); nothing short of that grid will move this score.
 - **cote_dazur (68.3)**: body text does not wrap around header floats (Word
   does, per line); only tables are pushed.
 
