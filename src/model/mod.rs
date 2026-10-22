@@ -524,6 +524,9 @@ pub struct Paragraph {
     /// Diagrams drawn at their anchor over the text (`SmartArtDiagram::anchor`).
     pub floating_smartart: Vec<SmartArtDiagram>,
     pub horizontal_rule: Option<HorizontalRule>,
+    /// The paragraph mark sits inside a field's code (hidden): the next
+    /// paragraph's runs were merged into this one at parse time.
+    pub field_code_mark: bool,
     pub is_section_break: bool,
     pub bookmarks: Vec<String>,
     pub outline_level: Option<u8>,

@@ -694,6 +694,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
 
             let mut cell_blocks: Vec<Block> = Vec::new();
             let block_nodes = collect_block_nodes(tc);
+            ctx.fields.reset();
             for n in &block_nodes {
                 if n.has_tag_name((WML_NS, "p")) {
                     let p = *n;
@@ -855,6 +856,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         num_level_tab_stop: num_tab_stop,
                         no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,
                         horizontal_rule: parsed.horizontal_rule,
+                        field_code_mark: parsed.mark_in_field_code,
                         list_label_font,
                         list_label_font_size,
                         list_label_bold,
@@ -895,7 +897,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         ),
                         ..Paragraph::default()
                     }));
+                    super::paragraph::merge_field_code_paragraphs(&mut cell_blocks);
                 } else if n.has_tag_name((WML_NS, "tbl")) {
+                    ctx.fields.reset();
                     let nested = parse_table_node(*n, ctx, cell_lists);
                     cell_blocks.push(Block::Table(nested));
                 }

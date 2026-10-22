@@ -1,4 +1,4 @@
-use crate::model::{Paragraph, TabAlignment, TabStop};
+use crate::model::{Block, Paragraph, TabAlignment, TabStop};
 
 use super::images::compute_drawing_info;
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
@@ -329,6 +329,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         smartart,
         floating_smartart,
         horizontal_rule: parsed.horizontal_rule,
+        field_code_mark: parsed.mark_in_field_code,
         is_section_break: false,
         bookmarks,
         outline_level,
@@ -355,6 +356,27 @@ fn mirrored(alignment: crate::model::Alignment) -> crate::model::Alignment {
 }
 
 /// OOXML 17.3.1.38: a hanging indent implicitly sets a tab stop at the indent.
+/// A paragraph whose mark lies inside a field's code continues into the next
+/// one: Word shows neither the code nor the mark (geneva_waste's letterhead
+/// cell lays out two lines, not six).
+// ponytail: the first paragraph's properties win; Word uses the surviving mark's.
+pub(super) fn merge_field_code_paragraphs(blocks: &mut Vec<Block>) {
+    let n = blocks.len();
+    if n < 2 || !matches!(&blocks[n - 2], Block::Paragraph(p) if p.field_code_mark) {
+        return;
+    }
+    let Some(Block::Paragraph(next)) = blocks.pop() else {
+        return;
+    };
+    let Some(Block::Paragraph(prev)) = blocks.last_mut() else {
+        return;
+    };
+    prev.runs.extend(next.runs);
+    prev.floating_images.extend(next.floating_images);
+    prev.textboxes.extend(next.textboxes);
+    prev.field_code_mark = next.field_code_mark;
+}
+
 pub(super) fn add_hanging_tab_stop(tab_stops: &mut Vec<TabStop>, indent_left: f32, hanging: f32) {
     if hanging > 0.0
         && !tab_stops

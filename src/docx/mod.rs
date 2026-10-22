@@ -201,6 +201,8 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     /// The body's comment ranges (`comment_ranges`); empty for headers,
     /// footers and notes.
     pub(in crate::docx) comments: CommentRanges,
+    /// Fields left open by the previous paragraph (`runs::FieldCarry`).
+    pub(in crate::docx) fields: runs::FieldCarry,
 }
 
 #[derive(Default)]
@@ -1063,6 +1065,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         zip,
         numbering: &numbering,
         comments: comment_ranges,
+        fields: Default::default(),
     };
 
     let mut sections: Vec<Section> = Vec::new();
@@ -1077,6 +1080,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         }
         match node.tag_name().name() {
             "tbl" => {
+                ctx.fields.reset();
                 let table = parse_table_node(node, &mut ctx, &mut lists);
                 blocks.push(Block::Table(table));
                 prev_list_num_id = None;
@@ -1122,6 +1126,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let continuation = paragraph::split_at_page_break(&mut para);
                 blocks.push(Block::Paragraph(para));
                 blocks.extend(continuation.map(Block::Paragraph));
+                paragraph::merge_field_code_paragraphs(&mut blocks);
 
                 // Mid-document section break: sectPr inside pPr ends the current section
                 if let Some(sect_node) = ppr.and_then(|ppr| wml(ppr, "sectPr")) {

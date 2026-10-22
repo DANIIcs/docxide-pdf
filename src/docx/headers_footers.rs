@@ -138,6 +138,7 @@ fn parse_notes_simple<R: Read + Seek>(
         zip,
         numbering,
         comments: Default::default(),
+        fields: Default::default(),
     };
     let mut lists = ListCounters::default();
 
@@ -331,6 +332,7 @@ fn parse_notes_rich<R: Read + Seek>(
         zip,
         numbering,
         comments: Default::default(),
+        fields: Default::default(),
     };
 
     let mut lists = ListCounters::default();

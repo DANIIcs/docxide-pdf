@@ -100,6 +100,32 @@ struct FieldFrame {
     checkbox: Option<FormCheckbox>,
 }
 
+/// Fields still open when a paragraph ends, carried into the next one: a
+/// field's code (or result) may span paragraphs. Paragraph marks inside the
+/// code are hidden with it (geneva_waste's six-paragraph IF/REF letterhead).
+#[derive(Default)]
+pub(in crate::docx) struct FieldCarry {
+    frames: Vec<FieldFrame>,
+    /// Paragraphs the open code has spanned so far.
+    age: usize,
+}
+
+impl FieldCarry {
+    /// Fields never cross a cell or table boundary.
+    pub(in crate::docx) fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
+// ponytail: a stray begin in a broken document would hide everything after
+// it; the carry is dropped after this many paragraphs instead.
+const MAX_FIELD_CODE_PARAGRAPHS: usize = 12;
+
+/// Visible content: every open field has reached its result part.
+fn fields_visible(stack: &[FieldFrame]) -> bool {
+    stack.iter().all(|f| f.seen_sep)
+}
+
 impl FieldFrame {
     fn new(visible: bool) -> Self {
         Self {
@@ -211,6 +237,9 @@ pub(super) struct ParsedRuns {
     pub(super) inline_chart: Option<InlineChart>,
     pub(super) smartart: Vec<SmartArtDiagram>,
     pub(super) horizontal_rule: Option<HorizontalRule>,
+    /// The paragraph mark lies inside a field's code: hidden, the next
+    /// paragraph continues this one.
+    pub(super) mark_in_field_code: bool,
 }
 
 /// A `Run` doubles as the resolved formatting of one `w:r`: every run the
@@ -1077,7 +1106,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut column_break_at = false;
     let mut has_column_break = false;
     let mut has_clear_break = false;
-    let mut field_stack: Vec<FieldFrame> = Vec::new();
+    let mut field_stack: Vec<FieldFrame> = std::mem::take(&mut ctx.fields.frames);
 
     for (node_idx, (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids)) in
         run_nodes.into_iter().enumerate()
@@ -1193,7 +1222,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         // A field is visible content unless the innermost open
                         // field is still in its instruction region — in which
                         // case this is a field argument and never displays.
-                        let parent_visible = field_stack.last().is_none_or(|f| f.seen_sep);
+                        let parent_visible = fields_visible(&field_stack);
                         if field_stack.is_empty() {
                             flush_pending(&mut pending_text, &mut runs);
                         }
@@ -1280,7 +1309,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     }
                 }
                 "t" => {
-                    let visible = field_stack.last().is_none_or(|f| f.seen_sep);
+                    let visible = fields_visible(&field_stack);
                     let dyn_result = field_stack
                         .last()
                         .is_some_and(|f| f.seen_sep && f.dynamic());
@@ -1298,7 +1327,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     pending_text.push('-');
                 }
                 "tab" => {
-                    let visible = field_stack.last().is_none_or(|f| f.seen_sep);
+                    let visible = fields_visible(&field_stack);
                     let dyn_result = field_stack
                         .last()
                         .is_some_and(|f| f.seen_sep && f.dynamic());
@@ -1310,7 +1339,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 "ptab" => {
                     // Positional tab: alignment positions the FOLLOWING text against the
                     // margin box (left/center/right), independent of paragraph tab stops.
-                    let visible = field_stack.last().is_none_or(|f| f.seen_sep);
+                    let visible = fields_visible(&field_stack);
                     let dyn_result = field_stack
                         .last()
                         .is_some_and(|f| f.seen_sep && f.dynamic());
@@ -1529,8 +1558,20 @@ pub(super) fn parse_runs<R: Read + Seek>(
         }
     }
 
+    let mark_in_field_code = !fields_visible(&field_stack);
+    if field_stack.is_empty() {
+        ctx.fields.age = 0;
+    } else if ctx.fields.age >= MAX_FIELD_CODE_PARAGRAPHS {
+        ctx.fields.reset();
+        field_stack.clear();
+    } else {
+        ctx.fields.age += 1;
+    }
+    ctx.fields.frames = field_stack;
+
     ParsedRuns {
         runs,
+        mark_in_field_code: mark_in_field_code && !ctx.fields.frames.is_empty(),
         has_explicit_page_break_before: page_break_before_content,
         has_page_break_after,
         column_break_at,
