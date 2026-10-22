@@ -185,7 +185,7 @@ pub(super) fn text_hanging(
         .iter()
         .map(|t| t.position)
         .chain(para.num_level_tab_stop)
-        .chain((para.indent_hanging > 0.0).then_some(start))
+        .chain((para.indent_hanging > 0.0 && !para.no_indent_num_tab).then_some(start))
         .filter(|p| *p > end + 0.01)
         .min_by(f32::total_cmp)
         .unwrap_or_else(|| {

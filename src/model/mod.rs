@@ -485,6 +485,10 @@ pub struct Paragraph {
     pub starts_toc_field: bool,
     /// Numbering level tab stop (pts from paragraph left edge)
     pub num_level_tab_stop: Option<f32>,
+    /// `doNotUseIndentAsNumberingTabStop`: the hanging indent is no tab stop
+    /// for the label's tab (geneva_waste's "-" items: text at the 709-twip
+    /// default stop, 14pt before the indent).
+    pub no_indent_num_tab: bool,
     pub contextual_spacing: bool,
     pub keep_next: bool,
     pub keep_lines: bool,

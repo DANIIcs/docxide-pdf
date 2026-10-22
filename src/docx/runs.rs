@@ -1223,6 +1223,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             runs.push(Run {
                                 text: FormCheckbox::TEXT.to_string(),
                                 checkbox: Some(cb),
+                                // The box is a glyph of its own `w:size`: a 12pt
+                                // check box lifts a 10pt line to 12pt metrics
+                                // (geneva_waste's Non/Oui lines, +1.5pt).
+                                font_size: cb.size,
                                 hyperlink_url: hyperlink_url.clone(),
                                 ..fmt.styled_run()
                             });

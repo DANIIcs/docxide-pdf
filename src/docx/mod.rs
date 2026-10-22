@@ -1024,6 +1024,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     );
     let mut styles = parse_styles(zip, &theme, settings.styles_from_normal_template);
     styles.defaults.no_html_auto_spacing = settings.no_html_auto_spacing;
+    styles.defaults.no_indent_as_num_tab = settings.no_indent_as_num_tab;
     let numbering = parse_numbering(zip);
     let rels = parse_relationships(zip);
     let ft = parse_font_table(zip);

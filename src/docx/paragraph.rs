@@ -295,6 +295,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
                 && n.text().is_some_and(|t| t.trim_start().starts_with("TOC"))
         }),
         num_level_tab_stop: num_tab_stop,
+        no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,
         contextual_spacing,
         keep_next,
         keep_lines,

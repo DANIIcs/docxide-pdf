@@ -853,6 +853,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         indent_first_line,
                         list_label,
                         num_level_tab_stop: num_tab_stop,
+                        no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,
                         list_label_font,
                         list_label_font_size,
                         list_label_bold,
