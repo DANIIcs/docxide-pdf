@@ -1,5 +1,46 @@
 # Roadmap
 
+## New fixtures round (2026-10-22, branch `new-fixtures`)
+
+Ten new scraped fixtures with Word online references (`a05e5f00`), rules
+derived from the five weakest and verified on the suite (snapshots
+`new10-base` / `new10-fix2`, scraped mean 65.2 -> 65.8, nothing else moved):
+
+- HTML auto spacing (`beforeAutospacing`/`afterAutospacing`) collapses
+  between two items of the same list, as `<li>` margins do; the first item
+  keeps its 14pt above and the last its 14pt below (federal_design_services
+  43.8 -> 69.2).
+- `w:compat/w:doNotUseIndentAsNumberingTabStop`: the label's tab runs to the
+  next default or custom stop, never to the hanging indent. A form check box
+  (`FORMCHECKBOX`) is a glyph of its own `w:size`: a 12pt box lifts a 10pt line
+  to 12pt metrics (geneva_waste 15.8 -> 55.4 together).
+- A body table at the page top drops below the header's wrapping floats it
+  would overlap, also on pages the table opens itself; text keeps flowing
+  beside them (cote_dazur 39.5 -> 68.3).
+- A nested floating table that is its cell's only table floats with the
+  following paragraphs beside it when the strip is wide enough; a picture
+  sets its column's minimum width and an empty spacer column keeps its tcW;
+  VML horizontal rules draw inside cells (advocacy_initiative 31.3 -> 32.8,
+  visually most of the way).
+
+Still open on these fixtures:
+
+- **advocacy_initiative_newsletter_2013 (32.8)**: Word splits the two-line
+  story heading 1/1 at the page bottom; the document's styles never set
+  `widowControl` (our default is on; ~100 fixtures lack it too, so probe
+  Word before flipping the default). Text beside a nested float is indented
+  as a whole paragraph; Word wraps per line (short-spacers shows "Public"
+  beside, "visible topic" below). Our standard `o:hr` draws 1.5pt, Word 0.75.
+- **geneva_waste (55.4)**: page 1 has an IF/REF field whose code spans six
+  paragraphs; Word hides the paragraphs lying wholly inside the field code
+  (and the marks ending inside it), we render them as empty lines (41pt).
+  Needs cross-paragraph field state in `docx/runs.rs`.
+- **romanian_candidate_declaration_form_f2 (36.6, SSIM 91.5)**: layout is
+  right to within 0.3pt; thin borders drift 0.1-0.3pt per row and miss the
+  reference pixels. A rounding study, not a rule.
+- **cote_dazur (68.3)**: body text does not wrap around header floats (Word
+  does, per line); only tables are pushed.
+
 ## WordCraft head-to-head round (2026-10-13)
 
 Fresh comparison with WordCraft (storytold/wordcraft, own DOCX parser and
