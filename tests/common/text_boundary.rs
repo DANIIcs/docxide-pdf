@@ -14,6 +14,11 @@ fn extract_all_pages(pdf: &Path) -> Vec<Vec<String>> {
         .args(["draw", "-F", "text", pdf.to_str().unwrap()])
         .output()
         .expect("Failed to run mutool draw");
+    assert!(
+        output.status.success(),
+        "mutool draw -F text failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let text = String::from_utf8_lossy(&output.stdout);
     let mut pages: Vec<Vec<String>> = text
         .split('\x0c')
@@ -32,50 +37,51 @@ fn extract_all_page_lines(pdf: &Path) -> Vec<Vec<String>> {
         .args(["draw", "-F", "stext", pdf.to_str().unwrap()])
         .output()
         .expect("Failed to run mutool draw -F stext");
-    let xml = String::from_utf8_lossy(&output.stdout);
-    let mut pages = Vec::new();
-    let mut page: Option<Vec<&str>> = None;
-    for xml_line in xml.lines() {
-        let trimmed = xml_line.trim();
-        if trimmed.starts_with("<page ") {
-            page = Some(Vec::new());
-        } else if trimmed == "</page>" {
-            if let Some(p) = page.take() {
-                pages.push(stext_lines(p));
-            }
-        } else if let Some(p) = page.as_mut() {
-            p.push(trimmed);
-        }
-    }
-    pages
+    assert!(
+        output.status.success(),
+        "mutool draw -F stext failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    parse_stext_pages(&String::from_utf8_lossy(&output.stdout))
+        .expect("mutool returned invalid structured-text XML")
 }
 
-/// The text lines of one stext page, in reading order: lines sorted by y, clustered within an
-/// 8pt y-tolerance, each cluster sorted by x so super/subscript fragments recombine
-/// left-to-right (e.g. "xi" + "2 + yj" + "3 = zk").
-fn stext_lines(xml_lines: Vec<&str>) -> Vec<String> {
-    let mut lines: Vec<(f64, f64, String)> = Vec::new(); // (x_left, y_top, text)
-    for trimmed in xml_lines {
-        if let Some(rest) = trimmed.strip_prefix("<line ") {
-            let bbox_vals: Option<(f64, f64)> = rest.strip_prefix("bbox=\"").and_then(|b| {
-                let mut parts = b.split_whitespace();
-                let x = parts.next()?.parse::<f64>().ok()?;
-                let y = parts.next()?.parse::<f64>().ok()?;
-                Some((x, y))
-            });
-            let (x_left, y_top) = bbox_vals.unwrap_or((0.0, 0.0));
-            if let Some(start) = rest.find("text=\"") {
-                let after_quote = &rest[start + 6..];
-                if let Some(end) = after_quote.find('"') {
-                    let text = &after_quote[..end];
+/// MuPDF emits character nodes inside each line. Also accept the compact
+/// line-level text attribute used by older metric inputs.
+fn parse_stext_pages(xml: &str) -> Result<Vec<Vec<String>>, roxmltree::Error> {
+    let doc = roxmltree::Document::parse(xml)?;
+    Ok(doc
+        .descendants()
+        .filter(|n| n.has_tag_name("page"))
+        .map(|page| {
+            let lines = page
+                .descendants()
+                .filter(|n| n.has_tag_name("line"))
+                .filter_map(|line| {
+                    let mut bbox = line.attribute("bbox").unwrap_or("").split_whitespace();
+                    let x = bbox.next().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+                    let y = bbox.next().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+                    let text = line
+                        .attribute("text")
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| {
+                            line.descendants()
+                                .filter(|n| n.has_tag_name("char"))
+                                .filter_map(|n| n.attribute("c"))
+                                .collect()
+                        });
                     let text = text.trim();
-                    if !text.is_empty() {
-                        lines.push((x_left, y_top, text.to_string()));
-                    }
-                }
-            }
-        }
-    }
+                    (!text.is_empty()).then(|| (x, y, text.to_owned()))
+                })
+                .collect();
+            merge_stext_lines(lines)
+        })
+        .collect())
+}
+
+/// Sort line fragments by y, cluster within 8pt, then order each cluster by x
+/// so superscripts/subscripts and adjacent font runs retain reading order.
+fn merge_stext_lines(mut lines: Vec<(f64, f64, String)>) -> Vec<String> {
     lines.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
     let mut clusters: Vec<Vec<(f64, f64, String)>> = Vec::new();
     for item in lines {
@@ -214,5 +220,44 @@ pub fn analyze(reference_pdf: &Path, generated_pdf: &Path) -> TextBoundary {
         total_words,
         total_lines,
         matching_lines,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_stext_pages;
+
+    #[test]
+    fn character_nodes_decode_entities_and_font_fragments() {
+        let xml = r#"<document><page id="p1"><line dir="1 0" bbox="10 20 80 40">
+            <font><char c="A"/><char c="&amp;"/></font><font><char c="Б"/><char c="&#x20;"/><char c="4"/></font>
+            </line></page></document>"#;
+        assert_eq!(parse_stext_pages(xml).unwrap(), vec![vec!["A&Б 4"]]);
+    }
+
+    #[test]
+    fn compact_line_attributes_keep_existing_support() {
+        let xml = r#"<document><page id="p1"><line text=" A &amp; B " bbox="10 20 80 40"/></page></document>"#;
+        assert_eq!(parse_stext_pages(xml).unwrap(), vec![vec!["A & B"]]);
+    }
+
+    #[test]
+    fn page_order_and_empty_pages_are_preserved() {
+        let xml = r#"<document><page id="p1"><line text="first"/></page><page id="p2"/><page id="p3"><line text="last"/></page></document>"#;
+        assert_eq!(
+            parse_stext_pages(xml).unwrap(),
+            vec![vec!["first".to_owned()], vec![], vec!["last".to_owned()]]
+        );
+    }
+
+    #[test]
+    fn superscript_fragments_are_sorted_left_to_right() {
+        let xml = r#"<document><page id="p1"><line bbox="30 6 40 16" text="2"/><line bbox="10 10 20 20" text="x"/><line bbox="10 30 40 40" text="next"/></page></document>"#;
+        assert_eq!(parse_stext_pages(xml).unwrap(), vec![vec!["x 2", "next"]]);
+    }
+
+    #[test]
+    fn invalid_xml_is_an_error_instead_of_a_zero_line_measurement() {
+        assert!(parse_stext_pages("<document><page>").is_err());
     }
 }
