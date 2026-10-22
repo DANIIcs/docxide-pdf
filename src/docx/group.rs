@@ -334,6 +334,7 @@ fn emit_pic<R: Read + Seek>(
             dist_right: 0.0,
             z_index: base.z_index,
             anchor_seq: 0,
+            anchor_at_start: false,
             on_line: base.on_line,
         }));
     }
