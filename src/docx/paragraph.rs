@@ -88,6 +88,12 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .unwrap_or_else(|| para_style.and_then(|s| s.keep_lines).unwrap_or(false))
         || super::runs::display_math(node).is_some();
 
+    let text_alignment_center = ppr
+        .and_then(|ppr| wml_attr(ppr, "textAlignment"))
+        .map(|v| v == "center")
+        .or_else(|| para_style.and_then(|s| s.text_alignment_center))
+        .unwrap_or(ctx.styles.defaults.text_alignment_center);
+
     let widow_control = ppr
         .and_then(|ppr| wml_bool(ppr, "widowControl"))
         .or_else(|| para_style.and_then(|s| s.widow_control))
@@ -304,6 +310,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         keep_next,
         keep_lines,
         widow_control,
+        text_alignment_center,
         line_spacing,
         image: para_image,
         borders,
@@ -414,6 +421,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         field_code_mark: std::mem::take(&mut para.field_code_mark),
         keep_lines: para.keep_lines,
         widow_control: para.widow_control,
+        text_alignment_center: para.text_alignment_center,
         line_spacing: para.line_spacing,
         borders: para.borders.clone(),
         shading: para.shading,

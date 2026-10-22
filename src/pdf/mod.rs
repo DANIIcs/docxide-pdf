@@ -590,6 +590,13 @@ pub(super) fn label_boosted_line_h(
     // not 15.5), while a Courier New "o" or a Symbol bullet on Arial, whose
     // descents are deeper than the text's, leave the line at the text height
     // (streamnet p5, dialysis). Measured against Word, not from the spec.
+    if para.text_alignment_center {
+        return if matches!(effective_ls, LineSpacing::Exact(_)) {
+            text_line_h
+        } else {
+            text_line_h.max(label_fs * entry.line_h_ratio.unwrap_or(1.0))
+        };
+    }
     let text_ascent = text_font_size * text_ar.unwrap_or(0.75);
     let label_ascent = label_fs * label_ar;
     let natural = match effective_ls {
@@ -623,7 +630,7 @@ fn label_boosted_baseline_offset(
     text_offset: f32,
     text_font_size: f32,
 ) -> f32 {
-    if para.list_label.is_empty() {
+    if para.list_label.is_empty() || para.text_alignment_center {
         return text_offset;
     }
     let label_fs = para.list_label_font_size.unwrap_or(text_font_size);
@@ -5911,6 +5918,25 @@ mod tests {
         // Courier New's deeper descent does not count (streamnet p5 sub-bullets).
         para.list_label_font = Some("Courier New".to_string());
         assert_eq!(boosted(&para), text_line_h);
+        para.list_label_font = Some("Symbol".to_string());
+        para.text_alignment_center = true;
+        assert_eq!(boosted(&para), text_line_h);
+        assert_eq!(
+            label_boosted_baseline_offset(&para, &fonts, 11.0 * cal_ar, 11.0),
+            11.0 * cal_ar
+        );
+        assert_eq!(
+            label_boosted_line_h(
+                &para,
+                &fonts,
+                8.0,
+                LineSpacing::Exact(8.0),
+                11.0,
+                Some(cal_lhr),
+                Some(cal_ar)
+            ),
+            8.0
+        );
     }
 }
 

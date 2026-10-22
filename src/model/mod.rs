@@ -493,6 +493,8 @@ pub struct Paragraph {
     pub keep_next: bool,
     pub keep_lines: bool,
     pub widow_control: bool,
+    /// Vertical centering of mixed fonts (w:textAlignment=center).
+    pub text_alignment_center: bool,
     pub line_spacing: Option<LineSpacing>,
     pub image: Option<EmbeddedImage>,
     pub borders: ParagraphBorders,
