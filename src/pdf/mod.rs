@@ -46,7 +46,8 @@ use header_footer::{
 pub(super) use helpers::resolve_line_h;
 use helpers::{
     align_offset, auto_ascent_scale, border_band, collect_paras, draw_horizontal_rule,
-    drops_contextual_spacing, joins_border_group, para_runs_with_textboxes, spacing_leading,
+    drops_space_after, drops_space_before, joins_border_group, para_runs_with_textboxes,
+    spacing_leading,
 };
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
@@ -2249,7 +2250,7 @@ fn compute_bookmark_positions(
                     } else {
                         num_lines as f32 * line_h
                     };
-                    let effective_sb = if drops_contextual_spacing(para, prev_para) {
+                    let effective_sb = if drops_space_before(para, prev_para) {
                         0.0
                     } else {
                         para.space_before
@@ -2259,7 +2260,7 @@ fn compute_bookmark_positions(
                         Some(Block::Table(t)) => first_cell_paragraph(t),
                         None => None,
                     };
-                    let effective_sa = if drops_contextual_spacing(para, next_para) {
+                    let effective_sa = if drops_space_after(para, next_para) {
                         0.0
                     } else {
                         para.space_after
@@ -2543,14 +2544,14 @@ fn render_paragraph_block(
         && state.pb.is_at_page_top(sp)
         && block_idx.checked_sub(1).and_then(|i| section_blocks.get(i))
             .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()));
-    let effective_space_before = if drops_contextual_spacing(para, prev_para)
+    let effective_space_before = if drops_space_before(para, prev_para)
         || empty_anchor_after_float
     {
         0.0
     } else {
         para.space_before
     };
-    let effective_space_after = if drops_contextual_spacing(para, next_para) {
+    let effective_space_after = if drops_space_after(para, next_para) {
         0.0
     } else {
         para.space_after

@@ -115,18 +115,37 @@ pub(super) fn drops_contextual_spacing(para: &Paragraph, neighbour: Option<&Para
     para.contextual_spacing && neighbour.is_some_and(|n| n.style_id == para.style_id)
 }
 
-/// `space_before` unless contextual spacing drops it beside `prev`.
+/// Word drops a list item's HTML auto spacing (`beforeAutospacing` /
+/// `afterAutospacing`) beside another item of the same list, as HTML
+/// collapses `<li>` margins: federal_design_services' ten 9pt items step
+/// 10.25, not 24.3, while the first keeps 14pt above and the last 14pt below.
+fn same_list(para: &Paragraph, neighbour: Option<&Paragraph>) -> bool {
+    match (para.list_item, neighbour.and_then(|n| n.list_item)) {
+        (Some(a), Some(b)) => a.list_id == b.list_id,
+        _ => false,
+    }
+}
+
+pub(super) fn drops_space_before(para: &Paragraph, prev: Option<&Paragraph>) -> bool {
+    drops_contextual_spacing(para, prev) || (para.space_before_auto && same_list(para, prev))
+}
+
+pub(super) fn drops_space_after(para: &Paragraph, next: Option<&Paragraph>) -> bool {
+    drops_contextual_spacing(para, next) || (para.space_after_auto && same_list(para, next))
+}
+
+/// `space_before` unless contextual or list auto spacing drops it beside `prev`.
 pub(super) fn effective_space_before(para: &Paragraph, prev: Option<&Paragraph>) -> f32 {
-    if drops_contextual_spacing(para, prev) {
+    if drops_space_before(para, prev) {
         0.0
     } else {
         para.space_before
     }
 }
 
-/// `space_after` unless contextual spacing drops it beside `next`.
+/// `space_after` unless contextual or list auto spacing drops it beside `next`.
 pub(super) fn effective_space_after(para: &Paragraph, next: Option<&Paragraph>) -> f32 {
-    if drops_contextual_spacing(para, next) {
+    if drops_space_after(para, next) {
         0.0
     } else {
         para.space_after

@@ -1811,7 +1811,7 @@ pub(super) fn hf_paragraph_gap(
     prev_space_after: f32,
     para: &Paragraph,
 ) -> f32 {
-    let after = if prev.is_some_and(|p| super::helpers::drops_contextual_spacing(p, Some(para))) {
+    let after = if prev.is_some_and(|p| super::helpers::drops_space_after(p, Some(para))) {
         0.0
     } else {
         prev_space_after
