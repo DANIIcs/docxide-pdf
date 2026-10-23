@@ -2184,21 +2184,19 @@ fn rectangular_polygon_bounds(pts: &[(f32, f32)]) -> Option<(f32, f32, f32, f32)
     if left >= right || bottom >= top {
         return None;
     }
-    let mut corners = 0u8;
     for (i, &(x, y)) in pts.iter().enumerate() {
         if !(x == left || x == right) || !(y == bottom || y == top) {
             return None;
         }
-        corners |= 1 << (usize::from(x == right) + 2 * usize::from(y == top));
         let next = pts[(i + 1) % pts.len()];
         if x != next.0 && y != next.1 {
             return None;
         }
     }
-    if corners != 15 {
-        return None;
-    }
-    Some((left, right, top, bottom))
+    [(left, bottom), (right, bottom), (left, top), (right, top)]
+        .iter()
+        .all(|c| pts.contains(c))
+        .then_some((left, right, top, bottom))
 }
 
 fn rectangular_polygon_clearance(
@@ -2212,9 +2210,9 @@ fn rectangular_polygon_clearance(
         return None;
     }
     let (left, right, top, bottom) = rectangular_polygon_bounds(zone.polygon_pts.as_ref()?)?;
-    let gap =
-        (left - zone.left_from_text - col_x).max(col_x + col_w - right - zone.right_from_text);
-    if gap >= MIN_EMPTY_STRIP {
+    if side_strip((left, right), (zone.left_from_text, zone.right_from_text), (col_x, col_w))
+        >= MIN_EMPTY_STRIP
+    {
         return None;
     }
     let Block::Paragraph(p) = block else {
@@ -5161,31 +5159,29 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if state.pb.slot_top <= clear_bottom {
                         // Already past the zone — clear it
                         state.pb.float_zone = None;
-                    } else if rect_clear
-                        .as_ref()
-                        .is_some_and(|rect| state.pb.slot_top - rect.line_h < rect.top)
-                        || (rect_clear.is_none()
-                            && (state.pb.slot_top <= fz.top_y
-                                    || (fz.para_relative && state.pb.slot_top <= fz.top_y + 30.0)
-                                    // A floating table meets a paragraph whose first
-                                    // line reaches its top: physical_education's empty
-                                    // anchor 0.05pt above a full-width table goes below
-                                    // it with its line and space after.
-                                    || (fz.from_table
-                                        && matches!(block, Block::Paragraph(p) if {
-                                            let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-                                            let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                            // An indented empty anchor can enter the float
-                                            // through its before-spacing, before its line starts.
-                                            let before = if ctx.compat_mode >= 15
-                                                && (p.indent_left != 0.0 || p.indent_right != 0.0)
-                                                && is_text_empty(&p.runs)
-                                            {
-                                                state.prev_space_after.max(p.space_before)
-                                            } else { 0.0 };
-                                            state.pb.slot_top - before - resolve_line_h(ls, fs, lhr) < fz.top_y
-                                        }))))
-                    {
+                    } else if match &rect_clear {
+                        Some(rect) => state.pb.slot_top - rect.line_h < rect.top,
+                        None => state.pb.slot_top <= fz.top_y
+                            || (fz.para_relative && state.pb.slot_top <= fz.top_y + 30.0)
+                            // A floating table meets a paragraph whose first
+                            // line reaches its top: physical_education's empty
+                            // anchor 0.05pt above a full-width table goes below
+                            // it with its line and space after.
+                            || (fz.from_table
+                                && matches!(block, Block::Paragraph(p) if {
+                                    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+                                    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                                    // An indented empty anchor can enter the float
+                                    // through its before-spacing, before its line starts.
+                                    let before = if ctx.compat_mode >= 15
+                                        && (p.indent_left != 0.0 || p.indent_right != 0.0)
+                                        && is_text_empty(&p.runs)
+                                    {
+                                        state.prev_space_after.max(p.space_before)
+                                    } else { 0.0 };
+                                    state.pb.slot_top - before - resolve_line_h(ls, fs, lhr) < fz.top_y
+                                })),
+                    } {
                         // Cursor is within, entering, or (for paragraph-relative
                         // zones) slightly above the zone.  Paragraph-relative
                         // images with a positive vertical offset create zones that
@@ -5198,7 +5194,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         // Word 2013+ requires even an empty line's indented box
                         // to fit beside a float; legacy mode ignores its indents.
                         let (space_left, space_right) = match block {
-                            Block::Paragraph(p) if ctx.compat_mode >= 15 && is_text_empty(&p.runs) => {
+                            Block::Paragraph(p)
+                                if ctx.compat_mode >= 15 && is_text_empty(&p.runs) =>
+                            {
                                 let left = col_x + p.indent_left;
                                 let right = col_x + col_w - p.indent_right;
                                 (
@@ -5920,6 +5918,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn contour_clearance_keeps_the_natural_line_phase() {
         let rect = RectangularClearance {
@@ -5960,8 +5960,6 @@ mod tests {
                 .is_none()
         );
     }
-
-    use super::*;
 
     #[test]
     fn space_only_wrapping_frame_is_empty_but_content_controls_keep_flow() {
