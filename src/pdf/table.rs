@@ -1036,7 +1036,18 @@ fn render_nested_table(
     chunk: &Chunk,
 ) {
     let table_total_w: f32 = col_widths.iter().sum();
-    let table_left = match table.alignment {
+    // A margin/text-anchored float's centre or right position overrides jc.
+    let alignment = match table
+        .position
+        .as_ref()
+        .filter(|p| p.h_anchor == "margin" && p.v_anchor == "text")
+        .map(|p| &p.h_position)
+    {
+        Some(crate::model::HorizontalPosition::AlignCenter) => TableAlignment::Center,
+        Some(crate::model::HorizontalPosition::AlignRight) => TableAlignment::Right,
+        _ => table.alignment,
+    };
+    let table_left = match alignment {
         TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
         TableAlignment::Right => available_x + available_w - table_total_w,
         TableAlignment::Left => available_x + table.table_indent,
