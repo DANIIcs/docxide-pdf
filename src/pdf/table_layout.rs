@@ -203,6 +203,7 @@ pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize
 /// gridCol preferred widths.
 /// Per-column natural (unwrapped, single-line) content width including cell
 /// horizontal padding. This is the "max" width input to Word's AutoFit.
+/// Columns holding nested tables are raised to fit them.
 fn natural_widths(
     table: &Table,
     fonts: &HashMap<String, FontEntry>,
@@ -253,6 +254,7 @@ fn natural_widths(
             }
         }
     }
+    raise_natural_for_nested_tables(table, fonts, cm, &mut natural);
     natural
 }
 
@@ -277,8 +279,7 @@ fn raise_natural_for_nested_tables(
             for block in &cell.content {
                 if let Block::Table(nt) = block {
                     let ncm = &nt.cell_margins;
-                    let mut nat = natural_widths(nt, fonts, ncm);
-                    raise_natural_for_nested_tables(nt, fonts, ncm, &mut nat);
+                    let nat = natural_widths(nt, fonts, ncm);
                     let min_cell = ncm.left + ncm.right;
                     let w: f32 = nat.iter().map(|&x| x.max(min_cell)).sum();
                     natural[grid_col] = natural[grid_col].max(w + h_pad);
@@ -497,8 +498,7 @@ pub(super) fn auto_fit_columns(
         && has_nested_table
         && let Some(avail) = fill_width.filter(|a| *a > 0.0)
     {
-        let mut natural = natural_widths(table, fonts, cm);
-        raise_natural_for_nested_tables(table, fonts, cm, &mut natural);
+        let natural = natural_widths(table, fonts, cm);
         let min_cell = cm.left + cm.right;
         let maxw: Vec<f32> = (0..ncols)
             .map(|i| natural[i].max(min_widths[i]).max(min_cell))
@@ -2374,6 +2374,34 @@ pub(super) fn find_cell_split(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nested_autofit_preserves_each_level_of_cell_padding() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+        let mut content = String::from(
+            r#"<w:p><w:r><w:rPr><w:rFonts w:ascii="TestFont" w:hAnsi="TestFont"/><w:sz w:val="20"/></w:rPr><w:t>abc def</w:t></w:r></w:p>"#,
+        );
+        let fonts = HashMap::from([("TestFont".into(), FontEntry::stub())]);
+        for levels in 1..=3 {
+            content = format!(
+                r#"<w:tbl><w:tblPr><w:tblW w:type="auto" w:w="0"/><w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>{content}</w:tc></w:tr></w:tbl>"#
+            );
+            let xml = format!(
+                r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{content}<w:sectPr/></w:body></w:document>"#
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            zip.start_file("word/document.xml", SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+            let doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            let Block::Table(table) = &doc.sections[0].blocks[0] else {
+                panic!("table");
+            };
+            let width = auto_fit_columns(table, &fonts, Some(150.0), None)[0];
+            assert!((width - (35.0 + 10.0 * levels as f32)).abs() < 0.001);
+        }
+    }
 
     #[test]
     fn natural_width_includes_merged_cell_text() {
