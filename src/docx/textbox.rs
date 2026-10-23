@@ -18,20 +18,20 @@ use super::{
     wps as find_wps,
 };
 
-struct VmlBoxStyle {
-    width: f32,
-    height: f32,
-    margin_left: f32,
-    margin_top: f32,
-    h_relative: HRelativeFrom,
-    v_relative: VRelativeFrom,
+pub(super) struct VmlBoxStyle {
+    pub(super) width: f32,
+    pub(super) height: f32,
+    pub(super) margin_left: f32,
+    pub(super) margin_top: f32,
+    pub(super) h_relative: HRelativeFrom,
+    pub(super) v_relative: VRelativeFrom,
     /// A negative z-index puts the shape behind the text.
     behind_text: bool,
 }
 
 /// Parse a VML shape `style` attribute (semicolon-separated `key:val`) into box
 /// geometry: dimensions/margins in points and the position-relative anchors.
-fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
+pub(super) fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
     let mut s = VmlBoxStyle {
         width: 0.0,
         height: 0.0,
@@ -671,7 +671,7 @@ fn parse_style_stroke_width(wsp: roxmltree::Node, theme: &ThemeFonts) -> f32 {
 /// `white [3212]` (the `[idx]` suffix is the resolved theme color we ignore in
 /// favor of the spelled-out name). Returns None for unrecognized values so the
 /// caller can fall back to a default.
-fn parse_vml_color(val: &str) -> Option<[u8; 3]> {
+pub(super) fn parse_vml_color(val: &str) -> Option<[u8; 3]> {
     let val = val.trim().split('[').next().unwrap_or("").trim();
     if let Some(hex) = val.strip_prefix('#') {
         if hex.len() == 6 {
