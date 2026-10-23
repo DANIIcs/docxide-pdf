@@ -1036,28 +1036,21 @@ fn render_nested_table(
     chunk: &Chunk,
 ) {
     let table_total_w: f32 = col_widths.iter().sum();
-    let table_left = match table.alignment {
-        TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
-        TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent,
-    };
-
-    let table_left = if let Some(pos) = table
+    // A margin/text-anchored float's centre or right position overrides jc.
+    let alignment = match table
         .position
         .as_ref()
         .filter(|p| p.h_anchor == "margin" && p.v_anchor == "text")
+        .map(|p| &p.h_position)
     {
-        match pos.h_position {
-            crate::model::HorizontalPosition::AlignCenter => {
-                available_x + (available_w - table_total_w) / 2.0
-            }
-            crate::model::HorizontalPosition::AlignRight => {
-                available_x + available_w - table_total_w
-            }
-            _ => table_left,
-        }
-    } else {
-        table_left
+        Some(crate::model::HorizontalPosition::AlignCenter) => TableAlignment::Center,
+        Some(crate::model::HorizontalPosition::AlignRight) => TableAlignment::Right,
+        _ => table.alignment,
+    };
+    let table_left = match alignment {
+        TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
+        TableAlignment::Right => available_x + available_w - table_total_w,
+        TableAlignment::Left => available_x + table.table_indent,
     };
 
     let merge_spans = compute_merge_spans(table, row_layouts);
