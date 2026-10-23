@@ -9,8 +9,8 @@
 use std::io::{Read, Seek};
 
 use crate::model::{
-    ArrowEnd, ConnectorShape, ConnectorType, EmbeddedImage, FloatingImage, HRelativeFrom,
-    HorizontalPosition, Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
+    ConnectorShape, ConnectorType, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition,
+    Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use super::images::{
@@ -18,8 +18,8 @@ use super::images::{
     read_image_from_zip,
 };
 use super::textbox::{
-    find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_color, parse_wsp_shape,
-    vml_spt,
+    find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
+    vml_style_prop,
 };
 use super::{
     PIC_NS, ParseContext, REL_NS, VML_NS, WPC_NS, WPG_NS, WPS_NS, dml, emu_attr, parse_pt,
@@ -364,7 +364,7 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
         .find(|n| n.has_tag_name((VML_NS, "group")))?;
     let style = group.attribute("style").unwrap_or("");
     let box_style = parse_vml_box_style(style);
-    let z = style_prop(style, "z-index")
+    let z = vml_style_prop(style, "z-index")
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(0);
     let base = BaseAnchor {
@@ -393,13 +393,13 @@ fn walk_vml_group<R: Read + Seek>(
         return;
     }
     let style = node.attribute("style").unwrap_or("");
-    if style_prop(style, "visibility") == Some("hidden")
-        || style_prop(style, "rotation").is_some()
-        || style_prop(style, "flip").is_some()
+    if vml_style_prop(style, "visibility") == Some("hidden")
+        || vml_style_prop(style, "rotation").is_some()
+        || vml_style_prop(style, "flip").is_some()
     {
         return;
     }
-    let number = |key: &str| style_prop(style, key).and_then(parse_pt).unwrap_or(0.0);
+    let number = |key: &str| vml_style_prop(style, key).and_then(parse_pt).unwrap_or(0.0);
     let x = number("left") + number("margin-left");
     let y = number("top") + number("margin-top");
     let w = number("width");
@@ -438,7 +438,7 @@ fn walk_vml_group<R: Read + Seek>(
     } else if node.has_tag_name((VML_NS, "shape")) || node.has_tag_name((VML_NS, "rect")) {
         let (x, y) = parent.apply(x, y);
         let (w, h) = parent.scale(w, h);
-        if let Some(mut conn) = vml_line(node) {
+        if let Some(mut conn) = parse_vml_line(node) {
             conn.width = w;
             conn.height = h;
             place_connector(&mut conn, x, y, base);
@@ -452,45 +452,6 @@ fn walk_vml_group<R: Read + Seek>(
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
         }
     }
-}
-
-/// A stroked VML line (`o:spt` 32); the caller sets its position and size.
-fn vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
-    if vml_spt(shape) != Some(32) || matches!(shape.attribute("stroked"), Some("f" | "false")) {
-        return None;
-    }
-    Some(ConnectorShape {
-        behind_doc: false,
-        h_position: HorizontalPosition::Offset(0.0),
-        h_relative_from: HRelativeFrom::default(),
-        v_position: VerticalPosition::Offset(0.0),
-        v_relative_from: VRelativeFrom::default(),
-        width: 0.0,
-        height: 0.0,
-        stroke_color: shape
-            .attribute("strokecolor")
-            .and_then(parse_vml_color)
-            .unwrap_or([0, 0, 0]),
-        stroke_width: shape
-            .attribute("strokeweight")
-            .and_then(parse_pt)
-            .filter(|v| v.is_finite() && *v > 0.0)
-            .unwrap_or(0.75),
-        connector_type: ConnectorType::Line {
-            flip_h: false,
-            flip_v: false,
-        },
-        head_end: ArrowEnd::None,
-        tail_end: ArrowEnd::None,
-        z_index: 0,
-    })
-}
-
-fn style_prop<'a>(style: &'a str, key: &str) -> Option<&'a str> {
-    style
-        .split(';')
-        .filter_map(|p| p.trim().split_once(':'))
-        .find_map(|(k, v)| (k.trim() == key).then_some(v.trim()))
 }
 
 fn pair(value: &str) -> Option<(f32, f32)> {

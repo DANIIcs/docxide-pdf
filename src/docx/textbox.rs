@@ -720,7 +720,7 @@ fn vml_shape_preset(shape: roxmltree::Node) -> Option<&'static str> {
     vml_spt_to_preset(vml_spt(shape)?)
 }
 
-pub(super) fn vml_spt(shape: roxmltree::Node) -> Option<u32> {
+fn vml_spt(shape: roxmltree::Node) -> Option<u32> {
     shape
         .attribute((OFFICE_NS, "spt"))
         .and_then(|v| v.trim().parse::<f64>().ok().map(|f| f as u32))
@@ -823,6 +823,81 @@ fn parse_vml_textbox_fill(shape: roxmltree::Node) -> Option<ShapeFill> {
         .or_else(|| fill.and_then(|n| n.attribute("color")))
         .and_then(parse_vml_color).unwrap_or([255, 255, 255]);
     Some(ShapeFill::Solid(color))
+}
+
+/// Stroke-only legacy line shapes are connectors, including zero-height
+/// horizontal rules. Do not turn unrelated VML presets into rectangles.
+pub(super) fn parse_connector_from_vml(pict: roxmltree::Node) -> Option<ConnectorShape> {
+    let shape = pict
+        .children()
+        .find(|n| n.has_tag_name((VML_NS, "shape")))?;
+    let mut line = parse_vml_line(shape)?;
+    let style = shape.attribute("style").unwrap_or("");
+    if vml_style_prop(style, "visibility") == Some("hidden") {
+        return None;
+    }
+    let b = parse_vml_box_style(style);
+    if !b.width.is_finite()
+        || !b.height.is_finite()
+        || b.width < 0.0
+        || b.height < 0.0
+        || (b.width == 0.0 && b.height == 0.0)
+    {
+        return None;
+    }
+    let z = vml_style_prop(style, "z-index")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0);
+    line.behind_doc = z < 0;
+    line.h_position = HorizontalPosition::Offset(b.margin_left);
+    line.h_relative_from = b.h_relative;
+    line.v_position = VerticalPosition::Offset(b.margin_top);
+    line.v_relative_from = b.v_relative;
+    line.width = b.width;
+    line.height = b.height;
+    line.z_index = u32::try_from(z).unwrap_or(0);
+    Some(line)
+}
+
+/// A stroked VML line (`o:spt` 32) with zeroed position and size; the caller
+/// supplies the placement.
+pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
+    if vml_spt(shape) != Some(32) || matches!(shape.attribute("stroked"), Some("f" | "false")) {
+        return None;
+    }
+    let flip = vml_style_prop(shape.attribute("style").unwrap_or(""), "flip").unwrap_or("");
+    Some(ConnectorShape {
+        behind_doc: false,
+        h_position: HorizontalPosition::Offset(0.0),
+        h_relative_from: HRelativeFrom::default(),
+        v_position: VerticalPosition::Offset(0.0),
+        v_relative_from: VRelativeFrom::default(),
+        width: 0.0,
+        height: 0.0,
+        stroke_color: shape
+            .attribute("strokecolor")
+            .and_then(parse_vml_color)
+            .unwrap_or([0, 0, 0]),
+        stroke_width: shape
+            .attribute("strokeweight")
+            .and_then(parse_pt)
+            .filter(|w| w.is_finite() && *w > 0.0)
+            .unwrap_or(0.75),
+        connector_type: ConnectorType::Line {
+            flip_h: flip.contains('x'),
+            flip_v: flip.contains('y'),
+        },
+        head_end: ArrowEnd::None,
+        tail_end: ArrowEnd::None,
+        z_index: 0,
+    })
+}
+
+pub(super) fn vml_style_prop<'a>(style: &'a str, key: &str) -> Option<&'a str> {
+    style
+        .split(';')
+        .filter_map(|p| p.trim().split_once(':'))
+        .find_map(|(k, v)| (k.trim() == key).then_some(v.trim()))
 }
 
 pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
@@ -989,6 +1064,29 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
 #[cfg(test)]
 mod connector_layer_tests {
     use super::*;
+
+    #[test]
+    fn legacy_zero_height_line_keeps_style_and_rejects_non_lines() {
+        let xml = format!(
+            r##"<w:pict xmlns:w="{WML_NS}" xmlns:v="{VML_NS}"><v:shape type="#_x0000_t32" style="width:240pt;height:0;margin-left:8pt;margin-top:4pt;z-index:42;mso-position-vertical-relative:page" strokecolor="#e36c0a [2409]" strokeweight="1.75pt"/></w:pict>"##
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let line = parse_connector_from_vml(doc.root_element()).unwrap();
+        assert_eq!((line.width, line.height), (240.0, 0.0));
+        assert_eq!(line.stroke_color, [227, 108, 10]);
+        assert_eq!(line.stroke_width, 1.75);
+        assert_eq!(line.z_index, 42);
+        assert!(matches!(line.v_relative_from, VRelativeFrom::Page));
+        for change in [
+            xml.replace("_t32", "_t87"),
+            xml.replace("height:0", "height:-1pt"),
+            xml.replace("z-index:42", "visibility:hidden"),
+            xml.replace("strokeweight=", "stroked=\"f\" strokeweight="),
+        ] {
+            let doc = roxmltree::Document::parse(&change).unwrap();
+            assert!(parse_connector_from_vml(doc.root_element()).is_none());
+        }
+    }
 
     #[test]
     fn legacy_textbox_fill_is_white_unless_disabled_or_colored() {
