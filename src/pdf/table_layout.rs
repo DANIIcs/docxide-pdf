@@ -384,7 +384,6 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                 } else {
                     h_pad + para.indent_left + para.indent_right + para.indent_first_line.max(0.0)
                 };
-                let may_join = !table.fixed_layout;
                 // A word continued from the previous run adds to its width.
                 let mut joined_width = 0.0f32;
                 let mut prev_char = None;
@@ -408,7 +407,7 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                     for (spaces, word) in super::layout::split_preserving_spaces(&text) {
                         let ww =
                             word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
-                        let continues = may_join
+                        let continues = !table.fixed_layout
                             && spaces == 0
                             && prev_char
                                 .zip(word.chars().next())
