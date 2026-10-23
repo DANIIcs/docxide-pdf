@@ -675,8 +675,7 @@ fn render_cell_content(
                         content,
                         cell_x + cm.left + floating_x_offset.unwrap_or(0.0),
                         col_w - cm.left - cm.right,
-                        cm,
-                        floating_offset.is_some(),
+                        floating_offset.map(|_| cm),
                         &mut cursor_y,
                         ctx,
                         gradient_specs,
@@ -1028,8 +1027,8 @@ fn render_nested_table(
     content: &mut Content,
     available_x: f32,
     available_w: f32,
-    parent_margins: &CellMargins,
-    is_floating: bool,
+    // The host cell's margins when this table floats in it.
+    floating_host: Option<&CellMargins>,
     cursor_y: &mut f32,
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
@@ -1041,37 +1040,31 @@ fn render_nested_table(
 ) {
     let table_total_w: f32 = col_widths.iter().sum();
     // A margin/text-anchored float's centre or right position overrides jc.
-    let alignment = match table
+    let anchored = table
         .position
         .as_ref()
-        .filter(|p| p.h_anchor == "margin" && p.v_anchor == "text")
-        .map(|p| &p.h_position)
-    {
+        .filter(|p| p.h_anchor == "margin" && p.v_anchor == "text");
+    let alignment = match anchored.map(|p| &p.h_position) {
         Some(crate::model::HorizontalPosition::AlignCenter) => TableAlignment::Center,
         Some(crate::model::HorizontalPosition::AlignRight) => TableAlignment::Right,
         _ => table.alignment,
     };
+    // Word 2013+ positions a fully over-wide, left-anchored nested float
+    // against its host cell edge rather than adding the host's left padding.
+    let edge_shift = floating_host
+        .filter(|m| {
+            ctx.compat_mode >= 15
+                && table.table_indent == 0.0
+                && table_total_w > available_w + m.left + m.right
+                && anchored.is_some_and(|p| {
+                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(x) if x == 0.0)
+                })
+        })
+        .map_or(0.0, |m| m.left);
     let table_left = match alignment {
         TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
         TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent,
-    };
-
-    // Word 2013+ positions a fully over-wide, left-anchored nested float
-    // against its host cell edge rather than adding the host's left padding.
-    let table_left = if ctx.compat_mode >= 15
-        && is_floating
-        && table.alignment == TableAlignment::Left
-        && table.table_indent == 0.0
-        && table_total_w > available_w + parent_margins.left + parent_margins.right
-        && table.position.as_ref().is_some_and(|p| {
-            p.h_anchor == "margin"
-                && p.v_anchor == "text"
-                && matches!(p.h_position, crate::model::HorizontalPosition::Offset(x) if x == 0.0)
-        }) {
-        table_left - parent_margins.left
-    } else {
-        table_left
+        TableAlignment::Left => available_x + table.table_indent - edge_shift,
     };
 
     let merge_spans = compute_merge_spans(table, row_layouts);
@@ -1308,8 +1301,7 @@ fn render_partial_cell_content(
                                 floating_x_offset.unwrap_or(0.0)
                             },
                         col_w - cm.left - cm.right,
-                        cm,
-                        floating_offset.is_some(),
+                        floating_offset.map(|_| cm),
                         &mut cursor_y,
                         ctx,
                         gradient_specs,
