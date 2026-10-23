@@ -19,10 +19,10 @@ use super::{
 };
 
 pub(super) struct VmlBoxStyle {
-    pub(super) width: f32,
-    pub(super) height: f32,
-    pub(super) margin_left: f32,
-    pub(super) margin_top: f32,
+    width: f32,
+    height: f32,
+    margin_left: f32,
+    margin_top: f32,
     pub(super) h_relative: HRelativeFrom,
     pub(super) v_relative: VRelativeFrom,
     /// A negative z-index puts the shape behind the text.
@@ -717,7 +717,11 @@ fn vml_spt_to_preset(spt: u32) -> Option<&'static str> {
 /// Resolve a VML shape's preset geometry from its `o:spt` attribute or its
 /// `type="#_x0000_t<N>"` reference.
 fn vml_shape_preset(shape: roxmltree::Node) -> Option<&'static str> {
-    let spt = shape
+    vml_spt_to_preset(vml_spt(shape)?)
+}
+
+pub(super) fn vml_spt(shape: roxmltree::Node) -> Option<u32> {
+    shape
         .attribute((OFFICE_NS, "spt"))
         .and_then(|v| v.trim().parse::<f64>().ok().map(|f| f as u32))
         .or_else(|| {
@@ -725,8 +729,7 @@ fn vml_shape_preset(shape: roxmltree::Node) -> Option<&'static str> {
                 .attribute("type")
                 .and_then(|t| t.rsplit_once('t'))
                 .and_then(|(_, n)| n.parse::<u32>().ok())
-        })?;
-    vml_spt_to_preset(spt)
+        })
 }
 
 /// Build a paragraph-less stroked textbox for a VML preset shape that has no
