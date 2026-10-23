@@ -385,7 +385,6 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                 } else {
                     h_pad + para.indent_left + para.indent_right + para.indent_first_line.max(0.0)
                 };
-                let may_join = !table.fixed_layout && para.indent_right > 0.0;
                 // A word continued from the previous run adds to its width.
                 let mut joined_width = 0.0f32;
                 let mut prev_char = None;
@@ -409,7 +408,7 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                     for (spaces, word) in super::layout::split_preserving_spaces(&text) {
                         let ww =
                             word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
-                        let continues = may_join
+                        let continues = !table.fixed_layout
                             && spaces == 0
                             && prev_char
                                 .zip(word.chars().next())
@@ -2519,8 +2518,8 @@ mod tests {
     }
 
     #[test]
-    fn indented_autofit_word_width_is_invariant_to_run_formatting() {
-        let measure = |parts: &[&str]| {
+    fn autofit_word_width_is_invariant_to_run_formatting() {
+        let measure = |parts: &[&str], indent_right| {
             let runs: Vec<crate::model::Run> = parts
                 .iter()
                 .enumerate()
@@ -2544,16 +2543,18 @@ mod tests {
             };
             table.rows[0].cells[1].content = vec![Block::Paragraph(crate::model::Paragraph {
                 runs,
-                indent_right: 11.0,
+                indent_right,
                 ..Default::default()
             })];
             table.fixed_layout = false;
             min_content_widths(&table, &fonts)[1]
         };
-        let whole = measure(&["abcdef"]);
-        assert_eq!(whole, measure(&["abc", "def"]));
-        assert!(measure(&["abc ", "def"]) < whole);
-        assert!(measure(&["abc", " def"]) < whole);
+        for indent in [0.0, 11.0] {
+            let whole = measure(&["abcdef"], indent);
+            assert_eq!(whole, measure(&["abc", "def"], indent));
+            assert!(measure(&["abc ", "def"], indent) < whole);
+            assert!(measure(&["abc", " def"], indent) < whole);
+        }
     }
 
     #[test]
