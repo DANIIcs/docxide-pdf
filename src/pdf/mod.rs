@@ -2157,6 +2157,102 @@ fn leading_full_width_picture(
         < MIN_EMPTY_STRIP
 }
 
+// Full-width rectangular contour wrapping advances through candidate lines,
+// rather than applying the square-wrap jump to image/effect bounds.
+struct RectangularClearance {
+    top: f32,
+    bottom: f32,
+    pitch: f32,
+    line_h: f32,
+}
+
+impl RectangularClearance {
+    fn cleared_y(&self, start: f32) -> f32 {
+        let steps = ((start - self.bottom) / self.pitch).ceil().max(0.0);
+        start - steps * self.pitch
+    }
+}
+
+fn rectangular_polygon_bounds(pts: &[(f32, f32)]) -> Option<(f32, f32, f32, f32)> {
+    if !(4..=5).contains(&pts.len()) {
+        return None;
+    }
+    let left = pts.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
+    let right = pts.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max);
+    let bottom = pts.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
+    let top = pts.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max);
+    if left >= right || bottom >= top {
+        return None;
+    }
+    for (i, &(x, y)) in pts.iter().enumerate() {
+        if !(x == left || x == right) || !(y == bottom || y == top) {
+            return None;
+        }
+        let next = pts[(i + 1) % pts.len()];
+        if x != next.0 && y != next.1 {
+            return None;
+        }
+    }
+    [(left, bottom), (right, bottom), (left, top), (right, top)]
+        .iter()
+        .all(|c| pts.contains(c))
+        .then_some((left, right, top, bottom))
+}
+
+fn rectangular_polygon_clearance(
+    block: &Block,
+    zone: &FloatZone,
+    prev_after: f32,
+    ctx: &RenderContext,
+    (col_x, col_w): (f32, f32),
+) -> Option<RectangularClearance> {
+    if zone.from_table || !zone.para_relative || prev_after != 0.0 {
+        return None;
+    }
+    let (left, right, top, bottom) = rectangular_polygon_bounds(zone.polygon_pts.as_ref()?)?;
+    if side_strip((left, right), (zone.left_from_text, zone.right_from_text), (col_x, col_w))
+        >= MIN_EMPTY_STRIP
+    {
+        return None;
+    }
+    let Block::Paragraph(p) = block else {
+        return None;
+    };
+    if p.space_before != 0.0
+        || p.space_before_auto
+        || p.clears_floats
+        || p.image.is_some()
+        || p.inline_chart.is_some()
+        || !p.smartart.is_empty()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || p.frame_props.is_some()
+        || p.runs
+            .iter()
+            .any(|r| r.inline_image.is_some() || r.field_code.is_some() || r.math.is_some())
+    {
+        return None;
+    }
+    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    if !matches!(ls, LineSpacing::Auto(_)) {
+        return None;
+    }
+    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+    let (fs, lhr) = if is_text_empty(&p.runs) {
+        unsized_line_metrics(p, fs, ctx.fonts)
+    } else {
+        (fs, lhr)
+    };
+    let pitch = resolve_line_h(LineSpacing::Auto(1.0), fs, lhr);
+    let line_h = resolve_line_h(ls, fs, lhr);
+    (pitch > 0.0 && pitch.is_finite()).then_some(RectangularClearance {
+        top,
+        bottom,
+        pitch,
+        line_h,
+    })
+}
+
 /// Compute effective first-line hanging indent for a paragraph.
 fn compute_text_hanging(
     para: &Paragraph,
@@ -5052,30 +5148,40 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 // If a float zone is active, decide whether to wrap text beside
                 // the object or push it below.
                 if let Some(ref fz) = state.pb.float_zone {
-                    if state.pb.slot_top <= fz.bottom_y {
+                    let rect_clear = rectangular_polygon_clearance(
+                        block,
+                        fz,
+                        state.prev_space_after,
+                        &ctx,
+                        col_geometry[state.current_col],
+                    );
+                    let clear_bottom = rect_clear.as_ref().map_or(fz.bottom_y, |rect| rect.bottom);
+                    if state.pb.slot_top <= clear_bottom {
                         // Already past the zone — clear it
                         state.pb.float_zone = None;
-                    } else if state.pb.slot_top <= fz.top_y
-                        || (fz.para_relative && state.pb.slot_top <= fz.top_y + 30.0)
-                        // A floating table meets a paragraph whose first
-                        // line reaches its top: physical_education's empty
-                        // anchor 0.05pt above a full-width table goes below
-                        // it with its line and space after.
-                        || (fz.from_table
-                            && matches!(block, Block::Paragraph(p) if {
-                                let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-                                let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                // An indented empty anchor can enter the float
-                                // through its before-spacing, before its line starts.
-                                let before = if ctx.compat_mode >= 15
-                                    && (p.indent_left != 0.0 || p.indent_right != 0.0)
-                                    && is_text_empty(&p.runs)
-                                {
-                                    state.prev_space_after.max(p.space_before)
-                                } else { 0.0 };
-                                state.pb.slot_top - before - resolve_line_h(ls, fs, lhr) < fz.top_y
-                            }))
-                    {
+                    } else if match &rect_clear {
+                        Some(rect) => state.pb.slot_top - rect.line_h < rect.top,
+                        None => state.pb.slot_top <= fz.top_y
+                            || (fz.para_relative && state.pb.slot_top <= fz.top_y + 30.0)
+                            // A floating table meets a paragraph whose first
+                            // line reaches its top: physical_education's empty
+                            // anchor 0.05pt above a full-width table goes below
+                            // it with its line and space after.
+                            || (fz.from_table
+                                && matches!(block, Block::Paragraph(p) if {
+                                    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+                                    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                                    // An indented empty anchor can enter the float
+                                    // through its before-spacing, before its line starts.
+                                    let before = if ctx.compat_mode >= 15
+                                        && (p.indent_left != 0.0 || p.indent_right != 0.0)
+                                        && is_text_empty(&p.runs)
+                                    {
+                                        state.prev_space_after.max(p.space_before)
+                                    } else { 0.0 };
+                                    state.pb.slot_top - before - resolve_line_h(ls, fs, lhr) < fz.top_y
+                                })),
+                    } {
                         // Cursor is within, entering, or (for paragraph-relative
                         // zones) slightly above the zone.  Paragraph-relative
                         // images with a positive vertical offset create zones that
@@ -5130,7 +5236,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             );
                             if !is_empty_para || !has_side_strip {
                                 table_cleared_float = matches!(block, Block::Table(_));
-                                state.pb.slot_top = fz.bottom_y;
+                                state.pb.slot_top = rect_clear
+                                    .as_ref()
+                                    .map_or(fz.bottom_y, |rect| rect.cleared_y(state.pb.slot_top));
                                 state.pb.float_zone = None;
                             }
                         }
@@ -5811,6 +5919,47 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contour_clearance_keeps_the_natural_line_phase() {
+        let rect = RectangularClearance {
+            top: 80.0,
+            bottom: 15.0,
+            pitch: 10.0,
+            line_h: 15.0,
+        };
+        assert_eq!(rect.cleared_y(100.0), 10.0);
+        assert_eq!(rect.cleared_y(98.0), 8.0);
+        assert_eq!(rect.cleared_y(15.0), 15.0);
+        assert_eq!(rect.cleared_y(10.0), 10.0);
+    }
+
+    #[test]
+    fn rectangle_bounds_reject_diagonal_and_nonrectangular_contours() {
+        let rect = [
+            (0.0, 0.0),
+            (0.0, 20.0),
+            (30.0, 20.0),
+            (30.0, 0.0),
+            (0.0, 0.0),
+        ];
+        assert_eq!(
+            rectangular_polygon_bounds(&rect),
+            Some((0.0, 30.0, 20.0, 0.0))
+        );
+        assert_eq!(
+            rectangular_polygon_bounds(&rect[..4]),
+            Some((0.0, 30.0, 20.0, 0.0))
+        );
+        assert!(
+            rectangular_polygon_bounds(&[(0.0, 0.0), (30.0, 20.0), (0.0, 20.0), (30.0, 0.0)])
+                .is_none()
+        );
+        assert!(
+            rectangular_polygon_bounds(&[(0.0, 0.0), (0.0, 20.0), (15.0, 10.0), (30.0, 0.0)])
+                .is_none()
+        );
+    }
 
     #[test]
     fn space_only_wrapping_frame_is_empty_but_content_controls_keep_flow() {
