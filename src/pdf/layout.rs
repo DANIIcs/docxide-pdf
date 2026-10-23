@@ -331,6 +331,8 @@ pub(super) struct WordChunk {
     pub(super) space_after: bool,
     /// Literal break spaces before this chunk (more than one when typed so).
     pub(super) preceding_spaces: usize,
+    /// Ordinary word-space decoration; excludes tab-stop decorations.
+    pub(super) word_space_bridge: bool,
     /// The math zone's spoken form, for its Formula (see `Run::formula`).
     pub(super) formula: Option<Arc<str>>,
     /// Pair kerning is on for this run at this size (`w:kern`); `width` already
@@ -472,6 +474,7 @@ impl WordChunk {
             lang: chunk_lang(run, word),
             space_after: false,
             preceding_spaces: 1,
+            word_space_bridge: false,
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
             checkbox: run.checkbox,
@@ -559,6 +562,7 @@ impl WordChunk {
             lang: None,
             space_after: false,
             preceding_spaces: 1,
+            word_space_bridge: false,
         }
     }
 
@@ -623,7 +627,17 @@ impl WordChunk {
             lang: None,
             space_after: false,
             preceding_spaces: 1,
+            word_space_bridge: false,
         }
+    }
+
+    fn word_space_underline(
+        entry: &FontEntry, font_size: f32, color: Option<[u8; 3]>,
+        double_underline: bool, border: Option<ParagraphBorder>, x_offset: f32, width: f32,
+    ) -> Self {
+        let mut chunk = Self::tab_underline(entry, font_size, color, double_underline, border, x_offset, width);
+        chunk.word_space_bridge = true;
+        chunk
     }
 
     /// Decoration-only chunk: no glyphs, but the underline decoration pass
@@ -692,6 +706,7 @@ impl WordChunk {
             lang: None,
             space_after: false,
             preceding_spaces: 1,
+            word_space_bridge: false,
         }
     }
 }
@@ -1480,10 +1495,9 @@ fn spaces_before_each(chunks: &[WordChunk]) -> Vec<usize> {
 
 /// Total inter-word space already on a line: the gaps between its chunks.
 fn line_space_width(chunks: &[WordChunk]) -> f32 {
-    chunks
-        .windows(2)
-        .map(|w| (w[1].x_offset - (w[0].x_offset + w[0].width)).max(0.0))
-        .sum()
+    let gaps: f32 = chunks.windows(2)
+        .map(|w| (w[1].x_offset - (w[0].x_offset + w[0].width)).max(0.0)).sum();
+    gaps + chunks.iter().filter(|chunk| chunk.word_space_bridge).map(|chunk| chunk.width).sum::<f32>()
 }
 
 /// Full-width East Asian closing punctuation whose right half is blank, which
@@ -2196,7 +2210,7 @@ pub(super) fn build_paragraph_lines(
                     word_start = 0;
                 }
                 if pending_space_underline && pending_space_w > 0.0 {
-                    current_chunks.push(WordChunk::tab_underline(
+                    current_chunks.push(WordChunk::word_space_underline(
                         entry,
                         eff_fs,
                         pending_space_color,
@@ -2359,7 +2373,7 @@ pub(super) fn build_paragraph_lines(
             // space's own run is underlined, so a continuously-underlined run
             // renders as one unbroken line rather than per-word segments.
             if pending_space_underline && !current_chunks.is_empty() && pending_space_w > 0.0 {
-                current_chunks.push(WordChunk::tab_underline(
+                current_chunks.push(WordChunk::word_space_underline(
                     entry,
                     eff_fs,
                     pending_space_color,
@@ -3012,7 +3026,7 @@ pub(super) fn build_tabbed_line(
                 if applied_space {
                     mark_space_after(&mut all_chunks);
                     if pending_space_underline && !all_chunks.is_empty() {
-                        all_chunks.push(WordChunk::tab_underline(
+                        all_chunks.push(WordChunk::word_space_underline(
                             entry,
                             eff_fs,
                             pending_space_color,
@@ -4614,6 +4628,27 @@ mod tests {
         assert_eq!(fitting_prefix_len("....", 1.0, width), Some(1));
         assert_eq!(fitting_prefix_len("é…é", 6.0, width), Some("é…".len()));
         assert_eq!(fitting_prefix_len(".", 1.0, width), None);
+    }
+
+    #[test]
+    fn underlining_word_spaces_preserves_squeeze_decisions() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let build = |underline, width| {
+            let run = Run { text: "aa aa aa aa aa".into(), underline,
+                ..make_run(10.0, VertAlign::Baseline, false) };
+            build_paragraph_lines(&[run], &fonts, width, 0.0, &HashMap::new(),
+                &HashMap::new(), None, None, None, CjkLayout {
+                    auto_space: false, compress_punct: false, squeeze_spaces: true,
+                    expand_shift_return: true, squeeze_line: false, bidi: false,
+                }).len()
+        };
+        for width in [45.0, 50.0, 55.0, 60.0, 65.0, 68.0, 70.0] {
+            assert_eq!(build(false, width), build(true, width), "width={width}");
+        }
+        let entry = FontEntry::stub();
+        let tab = WordChunk::tab_underline(&entry, 10.0, None, false, None, 0.0, 30.0);
+        let space = WordChunk::word_space_underline(&entry, 10.0, None, false, None, 30.0, 3.0);
+        assert_eq!(line_space_width(&[tab, space]), 3.0);
     }
 
     #[test]
