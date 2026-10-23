@@ -632,10 +632,23 @@ impl WordChunk {
     }
 
     fn word_space_underline(
-        entry: &FontEntry, font_size: f32, color: Option<[u8; 3]>,
-        double_underline: bool, border: Option<ParagraphBorder>, x_offset: f32, width: f32,
+        entry: &FontEntry,
+        font_size: f32,
+        color: Option<[u8; 3]>,
+        double_underline: bool,
+        border: Option<ParagraphBorder>,
+        x_offset: f32,
+        width: f32,
     ) -> Self {
-        let mut chunk = Self::tab_underline(entry, font_size, color, double_underline, border, x_offset, width);
+        let mut chunk = Self::tab_underline(
+            entry,
+            font_size,
+            color,
+            double_underline,
+            border,
+            x_offset,
+            width,
+        );
         chunk.word_space_bridge = true;
         chunk
     }
@@ -1495,9 +1508,15 @@ fn spaces_before_each(chunks: &[WordChunk]) -> Vec<usize> {
 
 /// Total inter-word space already on a line: the gaps between its chunks.
 fn line_space_width(chunks: &[WordChunk]) -> f32 {
-    let gaps: f32 = chunks.windows(2)
-        .map(|w| (w[1].x_offset - (w[0].x_offset + w[0].width)).max(0.0)).sum();
-    gaps + chunks.iter().filter(|chunk| chunk.word_space_bridge).map(|chunk| chunk.width).sum::<f32>()
+    let gaps: f32 = chunks
+        .windows(2)
+        .map(|w| (w[1].x_offset - (w[0].x_offset + w[0].width)).max(0.0))
+        .sum();
+    gaps + chunks
+        .iter()
+        .filter(|chunk| chunk.word_space_bridge)
+        .map(|chunk| chunk.width)
+        .sum::<f32>()
 }
 
 /// Full-width East Asian closing punctuation whose right half is blank, which
@@ -4634,13 +4653,31 @@ mod tests {
     fn underlining_word_spaces_preserves_squeeze_decisions() {
         let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
         let build = |underline, width| {
-            let run = Run { text: "aa aa aa aa aa".into(), underline,
-                ..make_run(10.0, VertAlign::Baseline, false) };
-            build_paragraph_lines(&[run], &fonts, width, 0.0, &HashMap::new(),
-                &HashMap::new(), None, None, None, CjkLayout {
-                    auto_space: false, compress_punct: false, squeeze_spaces: true,
-                    expand_shift_return: true, squeeze_line: false, bidi: false,
-                }).len()
+            let run = Run {
+                text: "aa aa aa aa aa".into(),
+                underline,
+                ..make_run(10.0, VertAlign::Baseline, false)
+            };
+            build_paragraph_lines(
+                &[run],
+                &fonts,
+                width,
+                0.0,
+                &HashMap::new(),
+                &HashMap::new(),
+                None,
+                None,
+                None,
+                CjkLayout {
+                    auto_space: false,
+                    compress_punct: false,
+                    squeeze_spaces: true,
+                    expand_shift_return: true,
+                    squeeze_line: false,
+                    bidi: false,
+                },
+            )
+            .len()
         };
         for width in [45.0, 50.0, 55.0, 60.0, 65.0, 68.0, 70.0] {
             assert_eq!(build(false, width), build(true, width), "width={width}");
