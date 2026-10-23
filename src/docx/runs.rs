@@ -1424,8 +1424,17 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 }
                 "pict" if field_stack.is_empty() => {
                     if let Some(result) = super::group::parse_vml_group(child, ctx) {
-                        handle_drawing_result!(Some(result), fmt, runs, floating_images,
-                            textboxes, inline_chart, smartart, connectors);
+                        handle_drawing_result!(
+                            Some(result),
+                            fmt,
+                            runs,
+                            floating_images,
+                            textboxes,
+                            inline_chart,
+                            smartart,
+                            connectors,
+                            pending_text
+                        );
                     } else if let Some(hr) = parse_vml_horizontal_rule(child) {
                         horizontal_rule = Some(hr);
                     } else if is_vml_picture(child) {

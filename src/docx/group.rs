@@ -579,6 +579,7 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
                         z_index: base.z_index,
                         anchor_seq: 0,
                         on_line: false,
+                        anchor_at_start: false,
                     }));
                 }
             }
