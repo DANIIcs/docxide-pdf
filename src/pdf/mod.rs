@@ -5159,7 +5159,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     );
                     let clear_bottom = rect_clear.as_ref().map_or(fz.bottom_y, |rect| rect.bottom);
                     if state.pb.slot_top <= clear_bottom {
-                        // Already past the zone вЂ” clear it
+                        // Already past the zone — clear it
                         state.pb.float_zone = None;
                     } else if rect_clear
                         .as_ref()
@@ -5217,7 +5217,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         };
                         if !enough_space {
                             // Empty paragraphs can be absorbed within a wide
-                            // image's vertical extent without needing wrap space вЂ”
+                            // image's vertical extent without needing wrap space —
                             // but only when a usable side strip exists for their
                             // line boxes. When the float spans the full column
                             // (sample500kB: image width == text width) Word stacks
@@ -5225,7 +5225,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             // (brazilian: ~42pt) they sit beside. 18pt threshold
                             // splits the two observed cases.
                             // Include paragraphs with only line breaks (w:br)
-                            // as "empty" вЂ” they have no visible text content.
+                            // as "empty" — they have no visible text content.
                             let has_side_strip = space_right.max(space_left) >= MIN_EMPTY_STRIP;
                             let is_empty_para = matches!(block,
                                 Block::Paragraph(p) if p.runs.iter().all(|r|
@@ -5244,7 +5244,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 state.pb.float_zone = None;
                             }
                         }
-                        // Otherwise leave zone active вЂ” paragraph layout adjusts width
+                        // Otherwise leave zone active — paragraph layout adjusts width
                     }
                 }
 
@@ -5960,9 +5960,6 @@ mod tests {
                 .is_none()
         );
     }
-
-    use super::*;
-
 
     use super::*;
 
